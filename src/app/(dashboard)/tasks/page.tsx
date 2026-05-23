@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/toast'
 import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
-import type { Task, Client, TeamMember } from '@/types'
+import type { Task, Client, TaskAssignee } from '@/types'
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
@@ -20,7 +20,7 @@ function TaskForm({
 }: {
   initial?: Partial<Task>
   clients: Client[]
-  members: TeamMember[]
+  members: TaskAssignee[]
   onSave: (d: Partial<Task>) => Promise<void>
   onCancel: () => void
 }) {
@@ -30,7 +30,7 @@ function TaskForm({
     status: initial?.status ?? 'todo',
     priority: initial?.priority ?? 'medium',
     due_date: initial?.due_date ?? '',
-    assignee_id: initial?.assignee_id ?? '',
+    assigned_to: initial?.assigned_to ?? '',
     client_id: initial?.client_id ?? '',
   })
   const [loading, setLoading] = useState(false)
@@ -76,10 +76,14 @@ function TaskForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Assignee</Label>
-          <Select value={form.assignee_id} onValueChange={(v) => set('assignee_id', v)}>
+          <Select value={form.assigned_to} onValueChange={(v) => set('assigned_to', v)}>
             <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
             <SelectContent>
-              {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.display_name ?? m.id}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -124,7 +128,7 @@ export default function TasksPage() {
   const { toast } = useToast()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Client[]>([])
-  const [members, setMembers] = useState<TeamMember[]>([])
+  const [members, setMembers] = useState<TaskAssignee[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -135,7 +139,7 @@ export default function TasksPage() {
     const [tr, cr, mr] = await Promise.all([
       fetch('/api/tasks').then((r) => r.json()),
       fetch('/api/clients').then((r) => r.json()),
-      fetch('/api/team').then((r) => r.json()),
+      fetch('/api/team-users').then((r) => r.json()),
     ])
     setTasks(Array.isArray(tr) ? tr : [])
     setClients(Array.isArray(cr) ? cr : [])
@@ -234,8 +238,8 @@ export default function TasksPage() {
                         <Calendar className="h-3 w-3" /> {formatDate(task.due_date)}
                       </span>
                     )}
-                    {(task.assignee as any)?.name && <span>@ {(task.assignee as any).name}</span>}
-                    {(task.client as any)?.name && <span>— {(task.client as any).name}</span>}
+                    {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
+                    {task.client?.name && <span>— {task.client.name}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">

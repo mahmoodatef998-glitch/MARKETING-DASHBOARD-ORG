@@ -22,13 +22,16 @@ export async function GET(req: NextRequest) {
   }
   const supabase = await createServerClient()
   const { searchParams } = new URL(req.url)
-  let query = supabase.from('tasks').select('*, assignee:team_members(*), client:clients(*)').order('created_at', { ascending: false })
+  let query = supabase
+    .from('tasks')
+    .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
+    .order('created_at', { ascending: false })
   const status = searchParams.get('status')
   const clientId = searchParams.get('client_id')
-  const assigneeId = searchParams.get('assignee_id')
+  const assignedTo = searchParams.get('assigned_to')
   if (status) query = query.eq('status', status)
   if (clientId) query = query.eq('client_id', clientId)
-  if (assigneeId) query = query.eq('assignee_id', assigneeId)
+  if (assignedTo) query = query.eq('assigned_to', assignedTo)
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
@@ -44,7 +47,9 @@ export async function POST(req: NextRequest) {
   const task: Task = {
     id: generateId(), title: body.title, description: body.description ?? null,
     status: body.status ?? 'todo', priority: body.priority ?? 'medium',
-    due_date: body.due_date ?? null, assignee_id: body.assignee_id ?? null, client_id: body.client_id ?? null,
+    due_date: body.due_date ?? null,
+    assigned_to: body.assigned_to ?? null,
+    client_id: body.client_id ?? null,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)

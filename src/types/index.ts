@@ -62,6 +62,12 @@ export interface TeamMember {
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'overdue'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
+export interface TaskAssignee {
+  id: string
+  display_name?: string
+  role?: string
+}
+
 export interface Task {
   id: string
   notion_id?: string
@@ -70,8 +76,11 @@ export interface Task {
   status: TaskStatus
   priority: TaskPriority
   due_date?: string
+  /** legacy FK → team_members (kept for backward compat) */
   assignee_id?: string
-  assignee?: TeamMember
+  /** auth user UUID — used for RLS and new assignments */
+  assigned_to?: string
+  assignee?: TaskAssignee
   client_id?: string
   client?: Client
   created_at: string
