@@ -44,10 +44,13 @@ export async function POST(req: NextRequest) {
 
   if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
 
-  // Create profile
+  // Upsert profile (trigger may have already created it)
   const { error: profileError } = await admin
     .from('profiles')
-    .insert({ id: authData.user.id, role, display_name, team_member_id, client_id })
+    .upsert(
+      { id: authData.user.id, role, display_name, team_member_id: team_member_id ?? null, client_id: client_id ?? null },
+      { onConflict: 'id' }
+    )
 
   if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 })
 

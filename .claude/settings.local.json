@@ -36,7 +36,8 @@
       "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_teams",
       "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_projects",
       "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__get_runtime_logs",
-      "Bash(git commit -m 'Fix: use createBrowserClient for cookie-based sessions + fix RLS recursion *)"
+      "Bash(git commit -m 'Fix: use createBrowserClient for cookie-based sessions + fix RLS recursion *)",
+      "Bash(git commit -m 'Fix user creation: robust trigger + upsert profile *)"
     ]
   }
 }
