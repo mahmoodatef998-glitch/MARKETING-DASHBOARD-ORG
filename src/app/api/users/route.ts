@@ -13,11 +13,13 @@ export async function GET() {
   if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
-  const { data: profiles } = await admin
+  const { data: profiles, error: profilesError } = await admin
     .from('profiles')
-    .select('*, client:clients(id,name,email), team_member:team_members(id,name)')
+    .select('*, client:clients(id,name,email)')
     .neq('role', 'admin')
     .order('created_at', { ascending: false })
+
+  if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
 
   return NextResponse.json(profiles ?? [])
 }

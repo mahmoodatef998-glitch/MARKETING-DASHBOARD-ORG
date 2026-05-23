@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   let query = supabase
     .from('tasks')
-    .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
+    .select('*, assignee:profiles(id,display_name,role), client:clients(id,name,email)')
     .order('created_at', { ascending: false })
   const status = searchParams.get('status')
   const clientId = searchParams.get('client_id')
@@ -33,8 +33,11 @@ export async function GET(req: NextRequest) {
   if (clientId) query = query.eq('client_id', clientId)
   if (assignedTo) query = query.eq('assigned_to', assignedTo)
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  if (error) {
+    console.error('[tasks GET]', error.message)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  return NextResponse.json(data ?? [])
 }
 
 export async function POST(req: NextRequest) {
@@ -47,9 +50,9 @@ export async function POST(req: NextRequest) {
   const task: Task = {
     id: generateId(), title: body.title, description: body.description ?? null,
     status: body.status ?? 'todo', priority: body.priority ?? 'medium',
-    due_date: body.due_date ?? null,
-    assigned_to: body.assigned_to ?? null,
-    client_id: body.client_id ?? null,
+    due_date: body.due_date || null,
+    assigned_to: body.assigned_to || null,
+    client_id: body.client_id || null,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)
