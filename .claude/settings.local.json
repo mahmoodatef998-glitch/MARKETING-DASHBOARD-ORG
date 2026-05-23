@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git)",
+      "Bash(npm install *)",
+      "Bash(dir \"C:\\\\Users\\\\Window\\\\Desktop\\\\CODING\\\\dashboard\" /b)",
+      "Bash(npm run *)",
+      "Bash(Start-Sleep -Seconds 5)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Window\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Window-Desktop-CODING-dashboard\\\\d094cbac-1a8a-451b-b0f2-02bb95338e82\\\\tasks\\\\b6oiumnir.output\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx kill-port *)",
+      "mcp__4a839051-0a92-4a02-906d-72131bdf570f__list_projects",
+      "mcp__4a839051-0a92-4a02-906d-72131bdf570f__apply_migration",
+      "mcp__4a839051-0a92-4a02-906d-72131bdf570f__execute_sql",
+      "Bash(node -e ' *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m 'Initial commit: Agency OS Dashboard *)"
+    ]
+  }
+}

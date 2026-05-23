@@ -1,0 +1,91 @@
+
+> dashboard@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.121:3000
+- Environments: .env.local
+✓ Ready in 1051ms
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\Window\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\Window\Desktop\CODING\dashboard\package-lock.json
+
+
+ GET / 307 in 1190ms (next.js: 771ms, application-code: 419ms)
+ GET /dashboard 200 in 195ms (next.js: 36ms, application-code: 159ms)
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/dashboard" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head headCacheNode={{rsc:{...}, ...}}>
+                    <__next_viewport_boundary__>
+                    <MetadataWrapper>
+                      <div
+                        hidden={true}
+-                       bis_skin_checked="1"
+                      >
+                    ...
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="en" suppressHydrationWarning={true}>
+                          <body
+                            className="inter_5972bc34-module__OU16Qa__className bg-slate-950 text-slate-100 antialiased"
+-                           __processed_59fbf0c0-9bea-4885-b331-d5a913e39c73__="true"
+-                           bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6Im5pbWxtZWpibW5lY25hZ2hnbWJhaG1iYWRk..."
+                          >
+                            ...
+                              <script>
+                              <script>
+                              <script>
+                              <script>
+                              <script>
+                              <script>
+                              <ClientSegmentRoot Component={function DashboardLayout} slots={{children:{...}}} ...>
+                                <DashboardLayout params={Promise}>
+                                  <div
+                                    className="min-h-screen flex items-center justify-center bg-slate-950"
+-                                   bis_skin_checked="1"
+                                  >
+                  ...
+ 
+ GET /login 200 in 175ms (next.js: 128ms, application-code: 47ms)
+ GET /dashboard 200 in 32ms (next.js: 4ms, application-code: 29ms)
+ GET /api/invoices 200 in 1024ms (next.js: 276ms, application-code: 748ms)
+ GET /api/tasks 200 in 1349ms (next.js: 235ms, application-code: 1114ms)
+ GET /api/invoices 200 in 363ms (next.js: 2ms, application-code: 360ms)
+ GET /api/clients 200 in 1404ms (next.js: 177ms, application-code: 1227ms)
+ GET /api/tasks 200 in 326ms (next.js: 3ms, application-code: 323ms)
+ GET /api/clients 200 in 476ms (next.js: 2ms, application-code: 473ms)
+ GET /clients 200 in 81ms (next.js: 40ms, application-code: 41ms)
+ GET /api/clients 200 in 470ms (next.js: 5ms, application-code: 465ms)
+ GET /api/clients 200 in 338ms (next.js: 2ms, application-code: 336ms)
+[browser] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[browser] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+ POST /api/clients 201 in 1604ms (next.js: 3ms, application-code: 1600ms)
+ GET /api/clients 200 in 329ms (next.js: 1848µs, application-code: 327ms)
