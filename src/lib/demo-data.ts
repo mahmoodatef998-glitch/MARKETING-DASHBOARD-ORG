@@ -10,11 +10,11 @@ export const DEMO_CLIENTS: Client[] = [
 ]
 
 export const DEMO_TEAM: TeamMember[] = [
-  { id: '1', name: 'Sarah Johnson', email: 'sarah@agency.com', role: 'manager', status: 'active', created_at: '2024-09-01T00:00:00Z', updated_at: '2024-09-01T00:00:00Z' },
-  { id: '2', name: 'Ahmed Al-Rashid', email: 'ahmed@agency.com', role: 'developer', status: 'active', created_at: '2024-10-01T00:00:00Z', updated_at: '2024-10-01T00:00:00Z' },
+  { id: '1', name: 'Sarah Johnson', email: 'sarah@agency.com', role: 'media_buyer', status: 'active', created_at: '2024-09-01T00:00:00Z', updated_at: '2024-09-01T00:00:00Z' },
+  { id: '2', name: 'Ahmed Al-Rashid', email: 'ahmed@agency.com', role: 'video_maker', status: 'active', created_at: '2024-10-01T00:00:00Z', updated_at: '2024-10-01T00:00:00Z' },
   { id: '3', name: 'Priya Sharma', email: 'priya@agency.com', role: 'designer', status: 'active', created_at: '2024-10-15T00:00:00Z', updated_at: '2024-10-15T00:00:00Z' },
-  { id: '4', name: 'Carlos Mendez', email: 'carlos@agency.com', role: 'developer', status: 'active', created_at: '2025-01-05T00:00:00Z', updated_at: '2025-01-05T00:00:00Z' },
-  { id: '5', name: 'Lena Fischer', email: 'lena@agency.com', role: 'accountant', status: 'active', created_at: '2025-01-20T00:00:00Z', updated_at: '2025-01-20T00:00:00Z' },
+  { id: '4', name: 'Carlos Mendez', email: 'carlos@agency.com', role: 'ai_video', status: 'active', created_at: '2025-01-05T00:00:00Z', updated_at: '2025-01-05T00:00:00Z' },
+  { id: '5', name: 'Lena Fischer', email: 'lena@agency.com', role: 'media_buyer', status: 'active', created_at: '2025-01-20T00:00:00Z', updated_at: '2025-01-20T00:00:00Z' },
 ]
 
 export const DEMO_TASKS: Task[] = [

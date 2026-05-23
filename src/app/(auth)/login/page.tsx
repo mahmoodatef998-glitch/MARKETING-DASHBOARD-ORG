@@ -25,7 +25,16 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    router.push('/dashboard')
+    // Redirect based on role
+    try {
+      const res = await fetch('/api/profile')
+      const profile = await res.json()
+      if (profile.role === 'client') router.push('/client-portal')
+      else if (profile.role === 'admin') router.push('/dashboard')
+      else router.push('/team-portal')
+    } catch {
+      router.push('/dashboard')
+    }
   }
 
   return (

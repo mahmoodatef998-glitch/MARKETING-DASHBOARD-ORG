@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -28,6 +29,7 @@ const nav = [
   { href: '/invoices',       label: 'Invoices',     icon: FileText },
   { href: '/automation',     label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',   label: 'AI Assistant', icon: Bot },
+  { href: '/users',          label: 'Users',        icon: ShieldCheck },
 ]
 
 export default function Sidebar() {

@@ -1,0 +1,27 @@
+export const dynamic = 'force-dynamic'
+import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase'
+
+export async function GET() {
+  const supabase = createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    // First time — auto-create admin profile
+    const { data: newProfile } = await supabase
+      .from('profiles')
+      .insert({ id: user.id, role: 'admin', display_name: user.email })
+      .select()
+      .single()
+    return NextResponse.json({ ...newProfile, email: user.email })
+  }
+
+  return NextResponse.json({ ...profile, email: user.email })
+}

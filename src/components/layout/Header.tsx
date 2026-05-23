@@ -10,6 +10,7 @@ const titles: Record<string, string> = {
   '/invoices': 'Invoices',
   '/automation': 'Automation',
   '/ai-assistant': 'AI Assistant',
+  '/users': 'User Management',
 }
 
 export default function Header() {

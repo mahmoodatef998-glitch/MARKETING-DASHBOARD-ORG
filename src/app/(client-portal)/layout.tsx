@@ -1,0 +1,59 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { getSupabaseClient } from '@/lib/supabase'
+import { Loader2, Building2, LogOut } from 'lucide-react'
+
+export default function ClientPortalLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const [ready, setReady] = useState(false)
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    async function check() {
+      const { data } = await getSupabaseClient().auth.getSession()
+      if (!data.session) { router.replace('/login'); return }
+      const res = await fetch('/api/profile')
+      const p = await res.json()
+      if (p.role !== 'client') { router.replace('/dashboard'); return }
+      setName(p.display_name ?? p.email ?? 'Client')
+      setReady(true)
+    }
+    check()
+  }, [router])
+
+  async function handleLogout() {
+    await getSupabaseClient().auth.signOut()
+    router.push('/login')
+  }
+
+  if (!ready) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-900">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <Building2 className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-white text-sm leading-none">{name}</p>
+            <p className="text-xs text-slate-400 mt-0.5">Client Portal</p>
+          </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-sm text-slate-400 hover:text-red-400 transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
+        </button>
+      </header>
+      <main className="max-w-3xl mx-auto p-6">{children}</main>
+    </div>
+  )
+}

@@ -16,7 +16,13 @@
       "Bash(git init *)",
       "Bash(git add *)",
       "Bash(git rm *)",
-      "Bash(git commit -m 'Initial commit: Agency OS Dashboard *)"
+      "Bash(git commit -m 'Initial commit: Agency OS Dashboard *)",
+      "Bash(git config *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(npx tsc *)",
+      "Bash(git commit -m 'Add RBAC: team portal, client portal, user management *)"
     ]
   }
 }

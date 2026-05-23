@@ -1,11 +1,29 @@
-export type UserRole = 'admin' | 'team_member'
+export type UserRole = 'admin' | 'video_maker' | 'designer' | 'ai_video' | 'media_buyer' | 'client'
+
+export interface Profile {
+  id: string
+  role: UserRole
+  team_member_id?: string
+  client_id?: string
+  display_name?: string
+  created_at: string
+}
 
 export interface AuthUser {
   id: string
   email: string
   role: UserRole
-  full_name?: string
-  avatar_url?: string
+  display_name?: string
+}
+
+export interface Message {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  read: boolean
+  created_at: string
+  sender?: { display_name?: string; email?: string }
 }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -25,7 +43,7 @@ export interface Client {
 }
 
 // ─── Team Member ─────────────────────────────────────────────────────────────
-export type TeamRole = 'developer' | 'designer' | 'manager' | 'accountant' | 'support'
+export type TeamRole = 'video_maker' | 'designer' | 'ai_video' | 'media_buyer'
 export type TeamStatus = 'active' | 'inactive'
 
 export interface TeamMember {
