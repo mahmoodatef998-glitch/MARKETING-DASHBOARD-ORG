@@ -29,8 +29,8 @@ export default function ClientPortalPage() {
         fetch('/api/tasks'),
         fetch('/api/invoices'),
       ])
-      if (tasksRes.ok) setTasks(await tasksRes.json())
-      if (invoicesRes.ok) setInvoices(await invoicesRes.json())
+      const td = await tasksRes.json(); setTasks(Array.isArray(td) ? td : [])
+      const id = await invoicesRes.json(); setInvoices(Array.isArray(id) ? id : [])
       setLoading(false)
     }
     load()

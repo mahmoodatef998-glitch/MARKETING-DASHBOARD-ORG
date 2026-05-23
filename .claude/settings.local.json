@@ -27,7 +27,16 @@
       "Bash(git commit -m 'Fix auth: use @supabase/ssr for cookie-based server sessions *)",
       "Bash(start cmd *)",
       "Bash(xargs sed -i \"s|from '@/lib/supabase'|from '@/lib/supabase-server'|g\")",
-      "Bash(git commit -m 'Split supabase into client/server modules to fix build *)"
+      "Bash(git commit -m 'Split supabase into client/server modules to fix build *)",
+      "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_deployments",
+      "Bash(npx next *)",
+      "Bash(curl -si http://localhost:3001)",
+      "Bash(curl -si http://localhost:3001/dashboard)",
+      "Bash(curl -si http://localhost:3001/api/profile)",
+      "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_teams",
+      "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_projects",
+      "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__get_runtime_logs",
+      "Bash(git commit -m 'Fix: use createBrowserClient for cookie-based sessions + fix RLS recursion *)"
     ]
   }
 }
