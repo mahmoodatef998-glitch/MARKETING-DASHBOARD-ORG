@@ -5,7 +5,7 @@ import { updateNotionTeamMember, deleteNotionPage } from '@/lib/notion'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const body = await req.json()
   const updated = { ...body, updated_at: new Date().toISOString() }
 
@@ -27,7 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data } = await supabase.from('team_members').select('notion_id').eq('id', id).single()
 
   if (data?.notion_id) {

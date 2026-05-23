@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (assigneeId) tasks = tasks.filter((t) => t.assignee_id === assigneeId)
     return NextResponse.json(tasks)
   }
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { searchParams } = new URL(req.url)
   let query = supabase.from('tasks').select('*, assignee:team_members(*), client:clients(*)').order('created_at', { ascending: false })
   const status = searchParams.get('status')
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const body = await req.json()
   const task: Task = {
     id: generateId(), title: body.title, description: body.description ?? null,

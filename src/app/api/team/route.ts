@@ -10,7 +10,7 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_TEAM)
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data, error } = await supabase.from('team_members').select('*').order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const body = await req.json()
   const member: TeamMember = {
     id: generateId(), name: body.name, email: body.email,

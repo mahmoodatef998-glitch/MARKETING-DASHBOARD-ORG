@@ -1,26 +1,18 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
-import { createClient } from '@supabase/supabase-js'
-
-function createAdminSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { createServerClient, createAdminClient } from '@/lib/supabase'
 
 // GET all team/client users
 export async function GET() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { data: profiles } = await supabase
+  const admin = createAdminClient()
+  const { data: profiles } = await admin
     .from('profiles')
     .select('*')
     .neq('role', 'admin')
@@ -31,7 +23,7 @@ export async function GET() {
 
 // POST create new team member or client user
 export async function POST(req: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -40,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const { email, password, role, display_name, team_member_id, client_id } = await req.json()
 
-  const admin = createAdminSupabase()
+  const admin = createAdminClient()
 
   // Create auth user
   const { data: authData, error: authError } = await admin.auth.admin.createUser({

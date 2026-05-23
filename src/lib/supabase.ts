@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createServerClient as createSSRClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-// Lazy singleton for browser client
+// ── Browser singleton ──────────────────────────────────────────────────────────
 let _client: SupabaseClient | null = null
 
 export function getSupabaseClient(): SupabaseClient {
@@ -13,7 +15,7 @@ export function getSupabaseClient(): SupabaseClient {
   return _client
 }
 
-// Thin proxy so auth UI pages can `import { supabase }` without eager init
+// Thin proxy for auth UI pages
 export const supabase = {
   auth: {
     getSession: () => getSupabaseClient().auth.getSession(),
@@ -26,10 +28,32 @@ export const supabase = {
   },
 }
 
-// Server-side client — always called inside request handlers
-export function createServerClient(): SupabaseClient {
+// ── Server client (reads cookies — for API routes) ─────────────────────────────
+export async function createServerClient() {
+  const cookieStore = await cookies()
+  return createSSRClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {}
+        },
+      },
+    }
+  )
+}
+
+// ── Admin client (service role — bypasses RLS) ─────────────────────────────────
+export function createAdminClient(): SupabaseClient {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   )
 }

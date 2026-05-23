@@ -10,7 +10,7 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_INVOICES)
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data, error } = await supabase.from('invoices').select('*, client:clients(*)').order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const tax = body.tax ?? 0
     return NextResponse.json({ id: generateId(), invoice_number: generateInvoiceNumber(), ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const body = await req.json()
   const items = body.items ?? []
   const subtotal = items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)

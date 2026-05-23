@@ -540,3 +540,372 @@ https://react.dev/link/hydration-mismatch
                                   >
                   ...
  
+✓ Compiled in 1201ms
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 3.2s (next.js: 2.5s, application-code: 622ms)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 78ms (next.js: 32ms, application-code: 46ms)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 76ms (next.js: 36ms, application-code: 40ms)
+ GET /tasks 500 in 96ms (next.js: 58ms, application-code: 38ms)
+[browser] Uncaught Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  1 | import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+  2 | import { createServerClient as createSSRClient } from '@supabase/ssr'
+> 3 | import { cookies } from 'next/headers'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 |
+  5 | // ── Browser singleton ──────────────────────────────────────────────────────────
+  6 | let _client: SupabaseClient | null = null
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+    at <unknown> (Error: (./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 193ms (next.js: 130ms, application-code: 62ms)
+[browser] Uncaught Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  1 | import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+  2 | import { createServerClient as createSSRClient } from '@supabase/ssr'
+> 3 | import { cookies } from 'next/headers'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 |
+  5 | // ── Browser singleton ──────────────────────────────────────────────────────────
+  6 | let _client: SupabaseClient | null = null
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+    at <unknown> (Error: (./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 100ms (next.js: 45ms, application-code: 55ms)
+[browser] Uncaught Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  1 | import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+  2 | import { createServerClient as createSSRClient } from '@supabase/ssr'
+> 3 | import { cookies } from 'next/headers'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 |
+  5 | // ── Browser singleton ──────────────────────────────────────────────────────────
+  6 | let _client: SupabaseClient | null = null
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+    at <unknown> (Error: (./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 165ms (next.js: 87ms, application-code: 77ms)
+[browser] Uncaught Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  1 | import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+  2 | import { createServerClient as createSSRClient } from '@supabase/ssr'
+> 3 | import { cookies } from 'next/headers'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 |
+  5 | // ── Browser singleton ──────────────────────────────────────────────────────────
+  6 | let _client: SupabaseClient | null = null
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+    at <unknown> (Error: (./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+⨯ ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  [90m1 |[0m [36mimport[0m { createClient, [36mtype[0m [33mSupabaseClient[0m } [36mfrom[0m [32m'@supabase/supabase-js'[0m
+  [90m2 |[0m [36mimport[0m { createServerClient [36mas[0m createSSRClient } [36mfrom[0m [32m'@supabase/ssr'[0m
+[31m[1m>[0m [90m3 |[0m [36mimport[0m { cookies } [36mfrom[0m [32m'next/headers'[0m
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [90m// ── Browser singleton ──────────────────────────────────────────────────────────[0m
+  [90m6 |[0m [36mlet[0m _client: [33mSupabaseClient[0m | [36mnull[0m = [36mnull[0m
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+ GET /tasks 500 in 49ms (next.js: 17ms, application-code: 31ms)
+[browser] Uncaught Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1
+You're importing a module that depends on "next/headers". This API is only available in Server Components in the App Router, but you are using it in the Pages Router.
+    Learn more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+  1 | import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+  2 | import { createServerClient as createSSRClient } from '@supabase/ssr'
+> 3 | import { cookies } from 'next/headers'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 |
+  5 | // ── Browser singleton ──────────────────────────────────────────────────────────
+  6 | let _client: SupabaseClient | null = null
+
+Ecmascript file had an error
+
+Import traces:
+  Client Component Browser:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component Browser]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./Desktop/CODING/dashboard/src/lib/supabase.ts [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Client Component SSR]
+    ./Desktop/CODING/dashboard/src/app/(dashboard)/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)
+    at <unknown> (Error: (./Desktop/CODING/dashboard/src/lib/supabase.ts:3:1)

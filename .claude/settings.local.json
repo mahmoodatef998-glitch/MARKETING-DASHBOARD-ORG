@@ -22,7 +22,9 @@
       "Bash(git branch *)",
       "Bash(git push *)",
       "Bash(npx tsc *)",
-      "Bash(git commit -m 'Add RBAC: team portal, client portal, user management *)"
+      "Bash(git commit -m 'Add RBAC: team portal, client portal, user management *)",
+      "Bash(npm ls *)",
+      "Bash(git commit -m 'Fix auth: use @supabase/ssr for cookie-based server sessions *)"
     ]
   }
 }

@@ -7,7 +7,7 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_LOGS)
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data, error } = await supabase.from('automation_logs').select('*').order('created_at', { ascending: false }).limit(100)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)

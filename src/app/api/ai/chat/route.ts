@@ -4,7 +4,7 @@ import { createServerClient } from '@/lib/supabase'
 import { chatWithAssistant } from '@/lib/gemini'
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { message, history } = await req.json()
 
   const [{ data: clients }, { data: tasks }, { data: invoices }] = await Promise.all([
