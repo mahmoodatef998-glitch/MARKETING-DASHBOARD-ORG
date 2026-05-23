@@ -24,7 +24,10 @@
       "Bash(npx tsc *)",
       "Bash(git commit -m 'Add RBAC: team portal, client portal, user management *)",
       "Bash(npm ls *)",
-      "Bash(git commit -m 'Fix auth: use @supabase/ssr for cookie-based server sessions *)"
+      "Bash(git commit -m 'Fix auth: use @supabase/ssr for cookie-based server sessions *)",
+      "Bash(start cmd *)",
+      "Bash(xargs sed -i \"s|from '@/lib/supabase'|from '@/lib/supabase-server'|g\")",
+      "Bash(git commit -m 'Split supabase into client/server modules to fix build *)"
     ]
   }
 }

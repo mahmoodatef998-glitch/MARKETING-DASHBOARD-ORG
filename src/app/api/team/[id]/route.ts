@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionTeamMember, deleteNotionPage } from '@/lib/notion'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 // GET all team/client users
 export async function GET() {

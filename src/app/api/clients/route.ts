@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 import { createNotionClient } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
 import { DEMO_CLIENTS } from '@/lib/demo-data'

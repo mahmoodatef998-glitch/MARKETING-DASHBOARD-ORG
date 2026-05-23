@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 import { DEMO_LOGS } from '@/lib/demo-data'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
