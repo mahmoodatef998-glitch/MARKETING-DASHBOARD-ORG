@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         // Fire first invoice immediately (non-blocking — don't fail user creation if email fails)
         generateAndSendInvoice({
           supabase:      admin,
-          clientId:      resolvedClientId,
+          clientId:      resolvedClientId!,
           clientEmail:   email,
           clientName:    display_name,
           amount,
