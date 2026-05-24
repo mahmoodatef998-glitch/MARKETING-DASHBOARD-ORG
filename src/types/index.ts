@@ -116,6 +116,22 @@ export interface Invoice {
   updated_at: string
 }
 
+// ─── Billing ──────────────────────────────────────────────────────────────────
+export type BillingCycle = 'monthly' | 'biweekly' | 'every_10_days' | 'custom_days' | 'manual'
+
+export interface BillingPlan {
+  id: string
+  client_id: string
+  cycle_type: BillingCycle
+  amount: number
+  currency: string
+  custom_days?: number
+  next_invoice_date: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ─── AI Chat ─────────────────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string

@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Plus, Loader2, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Loader2, Pencil, Trash2, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import type { BillingCycle } from '@/types'
 
 type UserRole = 'video_maker' | 'designer' | 'ai_video' | 'media_buyer' | 'client'
 
@@ -32,6 +33,14 @@ const ROLE_COLORS: Record<string, string> = {
   client:      'bg-green-500/10 text-green-400 border-green-500/20',
 }
 
+const BILLING_CYCLES: { value: BillingCycle; label: string }[] = [
+  { value: 'manual',        label: 'Manual (no auto-billing)' },
+  { value: 'monthly',       label: 'Monthly' },
+  { value: 'biweekly',      label: 'Every 2 Weeks' },
+  { value: 'every_10_days', label: 'Every 10 Days' },
+  { value: 'custom_days',   label: 'Custom (specify days)' },
+]
+
 const TEAM_ROLES: UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer']
 const ALL_ROLES:  UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'client']
 
@@ -39,6 +48,11 @@ const EMPTY_FORM = {
   display_name: '', email: '', password: '',
   role: 'designer' as UserRole,
   phone: '', country: '', notes: '',
+  // billing
+  billing_cycle:       'manual' as BillingCycle,
+  billing_amount:      '',
+  billing_currency:    'USD',
+  billing_custom_days: '',
 }
 
 export default function UsersPage() {
@@ -70,13 +84,10 @@ export default function UsersPage() {
   function openEdit(u: AppUser) {
     setEditing(u)
     setForm({
+      ...EMPTY_FORM,
       display_name: u.display_name ?? '',
       email:        u.client?.email ?? '',
-      password:     '',
       role:         u.role,
-      phone:        '',
-      country:      '',
-      notes:        '',
     })
     setError('')
     setShowForm(true)
@@ -88,21 +99,27 @@ export default function UsersPage() {
     setError('')
   }
 
+  // ── Create ──────────────────────────────────────────────────────────────────
   async function createUser(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true); setError('')
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        billing_custom_days: form.billing_custom_days ? Number(form.billing_custom_days) : undefined,
+      }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); setSaving(false); return }
-    setUsers(prev => [data, ...prev])
+    // Reload from DB to get correct role & created_at (fixes team section bug)
+    await loadUsers()
     closeForm()
     setSaving(false)
   }
 
+  // ── Update ──────────────────────────────────────────────────────────────────
   async function updateUser(e: React.FormEvent) {
     e.preventDefault()
     if (!editing) return
@@ -125,6 +142,7 @@ export default function UsersPage() {
     setSaving(false)
   }
 
+  // ── Delete ──────────────────────────────────────────────────────────────────
   async function deleteUser(id: string) {
     if (!confirm('Delete this user? This cannot be undone.')) return
     setDeleting(id)
@@ -133,8 +151,9 @@ export default function UsersPage() {
     setDeleting(null)
   }
 
-  const isClient   = form.role === 'client'
-  const teamUsers  = users.filter(u => TEAM_ROLES.includes(u.role))
+  const isClient    = form.role === 'client'
+  const hasAutoBill = isClient && form.billing_cycle !== 'manual'
+  const teamUsers   = users.filter(u => TEAM_ROLES.includes(u.role))
   const clientUsers = users.filter(u => u.role === 'client')
 
   return (
@@ -152,8 +171,8 @@ export default function UsersPage() {
 
       {/* ── Modal ─────────────────────────────────────────────────────────────── */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl my-8">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-800">
               <h3 className="font-semibold text-white text-lg">
                 {editing ? `Edit — ${editing.display_name ?? editing.id}` : 'New User'}
@@ -163,8 +182,8 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <form onSubmit={editing ? updateUser : createUser} className="p-6 space-y-4">
-              {/* Role buttons */}
+            <form onSubmit={editing ? updateUser : createUser} className="p-6 space-y-5">
+              {/* Role selector */}
               <div>
                 <Label className="mb-2 block">Role</Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -185,6 +204,7 @@ export default function UsersPage() {
                 </div>
               </div>
 
+              {/* Basic fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>{isClient ? 'Client Name' : 'Display Name'}</Label>
@@ -199,8 +219,7 @@ export default function UsersPage() {
                 {!editing && (
                   <div className="space-y-1.5">
                     <Label>Email</Label>
-                    <Input
-                      type="email" placeholder="user@example.com"
+                    <Input type="email" placeholder="user@example.com"
                       value={form.email}
                       onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                       required
@@ -211,8 +230,7 @@ export default function UsersPage() {
                 {!editing && (
                   <div className="space-y-1.5">
                     <Label>Password</Label>
-                    <Input
-                      type="password" placeholder="min 6 characters"
+                    <Input type="password" placeholder="min 6 characters"
                       value={form.password}
                       onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
                       required minLength={6}
@@ -220,28 +238,26 @@ export default function UsersPage() {
                   </div>
                 )}
 
+                {/* Client extra fields */}
                 {isClient && (
                   <>
                     <div className="space-y-1.5">
                       <Label>Phone <span className="text-slate-500">(optional)</span></Label>
-                      <Input
-                        placeholder="+20 1xx xxx xxxx"
+                      <Input placeholder="+20 1xx xxx xxxx"
                         value={form.phone}
                         onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Country <span className="text-slate-500">(optional)</span></Label>
-                      <Input
-                        placeholder="Egypt"
+                      <Input placeholder="Egypt"
                         value={form.country}
                         onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-1.5 col-span-2">
                       <Label>Notes <span className="text-slate-500">(optional)</span></Label>
-                      <Input
-                        placeholder="Any notes about this client…"
+                      <Input placeholder="Any notes about this client…"
                         value={form.notes}
                         onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                       />
@@ -249,6 +265,79 @@ export default function UsersPage() {
                   </>
                 )}
               </div>
+
+              {/* ── Billing section (clients only, create only) ────────────────── */}
+              {isClient && !editing && (
+                <div className="border border-slate-700 rounded-xl p-4 space-y-4 bg-slate-800/40">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-yellow-400" />
+                    <span className="text-sm font-semibold text-white">Auto-Billing</span>
+                    <span className="text-xs text-slate-400 ml-1">— invoices sent automatically</span>
+                  </div>
+
+                  {/* Cycle */}
+                  <div className="space-y-1.5">
+                    <Label>Billing Cycle</Label>
+                    <select
+                      value={form.billing_cycle}
+                      onChange={e => setForm(p => ({ ...p, billing_cycle: e.target.value as BillingCycle }))}
+                      className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 transition-colors"
+                    >
+                      {BILLING_CYCLES.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Amount + Currency (only when auto-billing selected) */}
+                  {hasAutoBill && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2 space-y-1.5">
+                        <Label>Amount</Label>
+                        <Input
+                          type="number" min="1" step="0.01" placeholder="1500"
+                          value={form.billing_amount}
+                          onChange={e => setForm(p => ({ ...p, billing_amount: e.target.value }))}
+                          required={hasAutoBill}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Currency</Label>
+                        <select
+                          value={form.billing_currency}
+                          onChange={e => setForm(p => ({ ...p, billing_currency: e.target.value }))}
+                          className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                        >
+                          <option value="USD">USD $</option>
+                          <option value="EGP">EGP</option>
+                          <option value="EUR">EUR €</option>
+                          <option value="GBP">GBP £</option>
+                          <option value="AED">AED</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom days */}
+                  {form.billing_cycle === 'custom_days' && (
+                    <div className="space-y-1.5">
+                      <Label>Every how many days?</Label>
+                      <Input
+                        type="number" min="1" max="365" placeholder="e.g. 21"
+                        value={form.billing_custom_days}
+                        onChange={e => setForm(p => ({ ...p, billing_custom_days: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {hasAutoBill && (
+                    <p className="text-xs text-yellow-400/80">
+                      ⚡ First invoice will be sent to the client immediately upon account creation.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {!editing && isClient && (
                 <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3 text-sm text-indigo-300">
@@ -278,7 +367,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* ── User lists ────────────────────────────────────────────────────────── */}
+      {/* ── Lists ─────────────────────────────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center h-40">
           <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
@@ -310,20 +399,13 @@ export default function UsersPage() {
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[u.role]}`}>
                           {ROLE_LABELS[u.role]}
                         </span>
-                        <button
-                          onClick={() => openEdit(u)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                        >
+                        <button onClick={() => openEdit(u)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => deleteUser(u.id)}
-                          disabled={deleting === u.id}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                        >
-                          {deleting === u.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Trash2 className="h-3.5 w-3.5" />}
+                        <button onClick={() => deleteUser(u.id)} disabled={deleting === u.id}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50">
+                          {deleting === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     </div>
@@ -359,20 +441,13 @@ export default function UsersPage() {
                         <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-400 border-green-500/20">
                           Client Portal
                         </span>
-                        <button
-                          onClick={() => openEdit(u)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                        >
+                        <button onClick={() => openEdit(u)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => deleteUser(u.id)}
-                          disabled={deleting === u.id}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                        >
-                          {deleting === u.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Trash2 className="h-3.5 w-3.5" />}
+                        <button onClick={() => deleteUser(u.id)} disabled={deleting === u.id}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50">
+                          {deleting === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     </div>
@@ -381,7 +456,6 @@ export default function UsersPage() {
               )
             }
           </div>
-
         </div>
       )}
     </div>

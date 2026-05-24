@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { generateId } from '@/lib/utils'
+import { generateAndSendInvoice, nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
 
 // GET all team/client users
 export async function GET() {
@@ -33,7 +34,11 @@ export async function POST(req: NextRequest) {
   const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { email, password, role, display_name, phone, country, notes } = await req.json()
+  const {
+    email, password, role, display_name, phone, country, notes,
+    // billing (clients only)
+    billing_cycle, billing_amount, billing_currency, billing_custom_days,
+  } = await req.json()
   const admin = createAdminClient()
 
   // Create auth user
@@ -73,6 +78,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create client record: ' + clientErr.message }, { status: 500 })
     }
     resolvedClientId = newClient.id
+
+    // Create billing plan if billing settings provided
+    if (billing_cycle && billing_amount && billing_cycle !== 'manual') {
+      const cycle = billing_cycle as CycleType
+      const amount = Number(billing_amount)
+      const currency = billing_currency ?? 'USD'
+      const customDays = billing_custom_days ? Number(billing_custom_days) : undefined
+      const today = new Date()
+
+      const billingPlanRecord = {
+        id:                  generateId(),
+        client_id:           resolvedClientId,
+        cycle_type:          cycle,
+        amount,
+        currency,
+        custom_days:         customDays ?? null,
+        next_invoice_date:   toDateStr(today),   // first invoice today
+        is_active:           true,
+        created_at:          today.toISOString(),
+        updated_at:          today.toISOString(),
+      }
+
+      const { data: billingPlan, error: billingErr } = await admin
+        .from('billing_plans')
+        .insert(billingPlanRecord)
+        .select('id')
+        .single()
+
+      if (!billingErr && billingPlan) {
+        // Fire first invoice immediately (non-blocking — don't fail user creation if email fails)
+        generateAndSendInvoice({
+          supabase:      admin,
+          clientId:      resolvedClientId,
+          clientEmail:   email,
+          clientName:    display_name,
+          amount,
+          currency,
+          billingPlanId: billingPlan.id,
+          cycleType:     cycle,
+          customDays,
+        }).catch(err => console.error('[billing] first invoice failed:', err.message))
+      }
+    }
   }
 
   // Upsert profile
