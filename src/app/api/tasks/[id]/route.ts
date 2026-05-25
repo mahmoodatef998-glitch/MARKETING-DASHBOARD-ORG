@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
+import { sendEmail } from '@/lib/gmail'
+import { generateEmailContent } from '@/lib/gemini'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -9,17 +11,79 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json()
   const updated = { ...body, updated_at: new Date().toISOString() }
 
+  // Fetch old status before update so we know if it changed to 'done'
+  const { data: oldTask } = await supabase
+    .from('tasks')
+    .select('status, client_id, title, description, priority, due_date, assigned_to')
+    .eq('id', id)
+    .single()
+
   const { data, error } = await supabase
     .from('tasks')
     .update(updated)
     .eq('id', id)
-    .select()
+    .select('*, client:clients(id, name, email), assignee:profiles(id, display_name)')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (data?.notion_id) {
     try { await updateNotionTask(data.notion_id, updated) } catch {}
+  }
+
+  // ── When task is marked done → notify client ───────────────────────────────
+  const justCompleted = oldTask?.status !== 'done' && body.status === 'done'
+  if (justCompleted && data?.client?.email) {
+    const admin = createAdminClient()
+    const clientName = data.client.name
+    const clientEmail = data.client.email
+
+    // Get team member name for the email
+    let memberName = data.assignee?.display_name ?? 'Your team member'
+    if (!data.assignee && data.assigned_to) {
+      const { data: authUser } = await admin.auth.admin.getUserById(data.assigned_to).catch(() => ({ data: null }))
+      if (authUser?.user?.email) memberName = authUser.user.email
+    }
+
+    const details = [
+      `Task: ${data.title}`,
+      data.description ? `Description: ${data.description}` : null,
+      `Priority: ${data.priority}`,
+      data.due_date ? `Due date: ${data.due_date}` : null,
+      `Completed by: ${memberName}`,
+      `Completed on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+    ].filter(Boolean).join('\n')
+
+    try {
+      const { subject, body: emailBody } = await generateEmailContent({
+        type:          'task_completed',
+        recipientName: clientName,
+        details,
+      })
+
+      await sendEmail({ to: clientEmail, subject, body: emailBody })
+
+      await admin.from('automation_logs').insert({
+        type:            'task_completed',
+        recipient_email: clientEmail,
+        subject,
+        status:          'sent',
+        task_id:         id,
+        created_at:      new Date().toISOString(),
+      })
+    } catch (err: any) {
+      // Non-blocking — don't fail the status update if email fails
+      await admin.from('automation_logs').insert({
+        type:            'task_completed',
+        recipient_email: clientEmail,
+        subject:         `Task "${data.title}" completed`,
+        status:          'failed',
+        error:           err.message,
+        task_id:         id,
+        created_at:      new Date().toISOString(),
+      })
+      console.error('[tasks] completion email failed:', err.message)
+    }
   }
 
   return NextResponse.json(data)

@@ -141,13 +141,22 @@ export interface ChatMessage {
 }
 
 // ─── Automation ───────────────────────────────────────────────────────────────
+export type AutomationLogType =
+  | 'payment_reminder'
+  | 'task_reminder'
+  | 'task_reminder_48h'
+  | 'task_reminder_24h'
+  | 'task_confirmation'
+  | 'task_completed'
+
 export interface AutomationLog {
   id: string
-  type: 'payment_reminder' | 'task_reminder'
+  type: AutomationLogType
   recipient_email: string
   subject: string
   status: 'sent' | 'failed'
   error?: string
+  task_id?: string
   created_at: string
 }
 

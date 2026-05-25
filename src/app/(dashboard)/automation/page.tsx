@@ -3,9 +3,27 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast'
-import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText } from 'lucide-react'
+import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText, Bell, AlarmClock, CheckSquare } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
-import type { AutomationLog } from '@/types'
+import type { AutomationLog, AutomationLogType } from '@/types'
+
+const LOG_LABELS: Record<AutomationLogType, string> = {
+  payment_reminder:  'Payment Reminder',
+  task_reminder:     'Overdue Task',
+  task_reminder_48h: '48h Task Reminder',
+  task_reminder_24h: '24h Task Reminder',
+  task_confirmation: 'Deadline Confirmation',
+  task_completed:    'Task Completed → Client',
+}
+
+const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
+  payment_reminder:  FileText,
+  task_reminder:     Bell,
+  task_reminder_48h: AlarmClock,
+  task_reminder_24h: AlarmClock,
+  task_confirmation: Send,
+  task_completed:    CheckSquare,
+}
 
 export default function AutomationPage() {
   const { toast } = useToast()
@@ -40,10 +58,11 @@ export default function AutomationPage() {
     setRunning(false)
   }
 
-  const sentCount = logs.filter((l) => l.status === 'sent').length
-  const failedCount = logs.filter((l) => l.status === 'failed').length
-  const paymentLogs = logs.filter((l) => l.type === 'payment_reminder')
-  const taskLogs = logs.filter((l) => l.type === 'task_reminder')
+  const sentCount    = logs.filter((l) => l.status === 'sent').length
+  const failedCount  = logs.filter((l) => l.status === 'failed').length
+  const paymentLogs  = logs.filter((l) => l.type === 'payment_reminder')
+  const taskLogs     = logs.filter((l) => l.type.startsWith('task_'))
+  const completedLog = logs.filter((l) => l.type === 'task_completed')
 
   return (
     <div className="space-y-6">
@@ -105,14 +124,48 @@ export default function AutomationPage() {
               color: 'text-yellow-400',
               bg: 'bg-yellow-400/10',
               title: 'Payment Reminder',
-              desc: 'Auto-emails clients when invoice status is "sent" and past due date. Updates invoice to "overdue".',
+              desc: 'Auto-emails clients when invoice is past due. Updates invoice to "overdue".',
+              timing: 'Daily 9AM',
+            },
+            {
+              icon: AlarmClock,
+              color: 'text-indigo-400',
+              bg: 'bg-indigo-400/10',
+              title: '48h Task Reminder',
+              desc: 'Emails the assigned team member with full task & client details 2 days before the due date.',
+              timing: '48h before',
+            },
+            {
+              icon: AlarmClock,
+              color: 'text-orange-400',
+              bg: 'bg-orange-400/10',
+              title: '24h Task Reminder',
+              desc: 'Sends an urgent reminder to the team member 1 day before the deadline.',
+              timing: '24h before',
             },
             {
               icon: Send,
               color: 'text-blue-400',
               bg: 'bg-blue-400/10',
-              title: 'Task Deadline Reminder',
+              title: 'Deadline Confirmation',
+              desc: 'On the due date: asks the team member to confirm completion and update the task status to Done.',
+              timing: 'Due date',
+            },
+            {
+              icon: CheckSquare,
+              color: 'text-green-400',
+              bg: 'bg-green-400/10',
+              title: 'Task Completed → Client',
+              desc: 'When a team member marks a task as Done, the linked client instantly receives a completion notification.',
+              timing: 'On status change',
+            },
+            {
+              icon: Bell,
+              color: 'text-red-400',
+              bg: 'bg-red-400/10',
+              title: 'Overdue Task Alert',
               desc: 'Auto-emails assigned team member when task is past due and not completed. Updates task to "overdue".',
+              timing: 'Daily 9AM',
             },
           ].map((rule) => (
             <div key={rule.title} className="flex items-start gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700">
@@ -127,7 +180,7 @@ export default function AutomationPage() {
                 <p className="text-xs text-slate-400 mt-1">{rule.desc}</p>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
-                <Clock className="h-3.5 w-3.5" /> Daily 9AM
+                <Clock className="h-3.5 w-3.5" /> {rule.timing}
               </div>
             </div>
           ))}
@@ -164,23 +217,28 @@ export default function AutomationPage() {
             <p className="text-sm text-slate-500 text-center py-8">No automation logs yet. Logs appear after the cron job runs.</p>
           ) : (
             <div className="space-y-2">
-              {logs.map((log) => (
-                <div key={log.id} className="flex items-start gap-3 py-2.5 border-b border-slate-800 last:border-0">
-                  {log.status === 'sent' ? (
-                    <CheckCircle className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-200 font-medium">{log.subject}</p>
-                    <p className="text-xs text-slate-400">
-                      {log.type.replace('_', ' ')} → {log.recipient_email}
-                    </p>
-                    {log.error && <p className="text-xs text-red-400 mt-0.5">{log.error}</p>}
+              {logs.map((log) => {
+                const Icon = LOG_ICONS[log.type] ?? Mail
+                return (
+                  <div key={log.id} className="flex items-start gap-3 py-2.5 border-b border-slate-800 last:border-0">
+                    <div className="shrink-0 mt-0.5 flex items-center gap-1">
+                      {log.status === 'sent'
+                        ? <CheckCircle className="h-4 w-4 text-green-400" />
+                        : <XCircle    className="h-4 w-4 text-red-400" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-200 font-medium">{log.subject}</p>
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                        <Icon className="h-3 w-3 shrink-0" />
+                        {LOG_LABELS[log.type] ?? log.type} → {log.recipient_email}
+                      </p>
+                      {log.error && <p className="text-xs text-red-400 mt-0.5">Error: {log.error}</p>}
+                    </div>
+                    <span className="text-xs text-slate-500 shrink-0">{formatDate(log.created_at)}</span>
                   </div>
-                  <span className="text-xs text-slate-500 shrink-0">{formatDate(log.created_at)}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>

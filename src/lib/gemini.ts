@@ -2,14 +2,22 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
+export type EmailType =
+  | 'payment_reminder'
+  | 'task_reminder'
+  | 'task_reminder_48h'
+  | 'task_reminder_24h'
+  | 'task_confirmation'
+  | 'task_completed'
+
 export async function generateEmailContent(opts: {
-  type: 'payment_reminder' | 'task_reminder'
+  type: EmailType
   recipientName: string
   details: string
 }): Promise<{ subject: string; body: string }> {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-  const prompts = {
+  const prompts: Record<EmailType, string> = {
     payment_reminder: `Write a professional, friendly payment reminder email.
 Recipient: ${opts.recipientName}
 Details: ${opts.details}
@@ -21,6 +29,30 @@ Recipient: ${opts.recipientName}
 Details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Keep it concise and action-oriented. Plain text body, no HTML.`,
+
+    task_reminder_48h: `Write a professional task reminder email for a team member. The task is due in 48 hours.
+Recipient (team member): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Tone: friendly but focused. Mention the 48-hour countdown clearly. Include all task details. Plain text body, no HTML.`,
+
+    task_reminder_24h: `Write an urgent task reminder email for a team member. The task is due in 24 hours — tomorrow.
+Recipient (team member): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Tone: more urgent. Stress the 24-hour deadline. Encourage final preparations. Plain text body, no HTML.`,
+
+    task_confirmation: `Write a task confirmation request email. Today is the task's due date.
+Recipient (team member): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Ask the team member to confirm whether they completed the task today. Remind them to update the task status to "Done" in the dashboard. Plain text body, no HTML.`,
+
+    task_completed: `Write a professional task completion notification email to a client.
+Recipient (client): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Inform the client that their task has been completed. Be positive and professional. Invite them to review the work and reach out with feedback. Plain text body, no HTML.`,
   }
 
   const result = await model.generateContent(prompts[opts.type])
