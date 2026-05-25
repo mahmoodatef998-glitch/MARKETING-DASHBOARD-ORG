@@ -12,6 +12,7 @@ interface AppUser {
   id: string
   role: UserRole
   display_name?: string
+  email?: string           // merged from auth.users by the API
   client_id?: string
   client?: { id: string; name: string; email: string }
   created_at: string
@@ -86,7 +87,7 @@ export default function UsersPage() {
     setForm({
       ...EMPTY_FORM,
       display_name: u.display_name ?? '',
-      email:        u.client?.email ?? '',
+      email:        u.email ?? u.client?.email ?? '',
       role:         u.role,
     })
     setError('')
@@ -216,16 +217,22 @@ export default function UsersPage() {
                   />
                 </div>
 
-                {!editing && (
-                  <div className="space-y-1.5">
-                    <Label>Email</Label>
-                    <Input type="email" placeholder="user@example.com"
-                      value={form.email}
-                      onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                      required
-                    />
-                  </div>
-                )}
+                {/* Email — always visible; required on create, optional change on edit */}
+                <div className="space-y-1.5">
+                  <Label>
+                    Email
+                    {editing && (
+                      <span className="text-slate-500 font-normal ml-1 text-xs">(leave unchanged to keep current)</span>
+                    )}
+                  </Label>
+                  <Input
+                    type="email"
+                    placeholder="user@example.com"
+                    value={form.email}
+                    onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                    required={!editing}
+                  />
+                </div>
 
                 {!editing && (
                   <div className="space-y-1.5">
@@ -392,7 +399,9 @@ export default function UsersPage() {
                         </div>
                         <div>
                           <p className="font-medium text-white text-sm">{u.display_name ?? '—'}</p>
-                          <p className="text-xs text-slate-500">{new Date(u.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500">
+                            {u.email ? `${u.email} · ` : ''}{new Date(u.created_at).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

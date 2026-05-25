@@ -22,7 +22,17 @@ export async function GET() {
 
   if (profilesError) return NextResponse.json({ error: profilesError.message }, { status: 500 })
 
-  return NextResponse.json(profiles ?? [])
+  // Merge auth emails into each profile (email lives in auth.users, not profiles)
+  const { data: { users: authUsers } } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const emailMap: Record<string, string> = {}
+  for (const u of authUsers) emailMap[u.id] = u.email ?? ''
+
+  const enriched = (profiles ?? []).map(p => ({
+    ...p,
+    email: emailMap[p.id] ?? p.client?.email ?? '',
+  }))
+
+  return NextResponse.json(enriched)
 }
 
 // POST create new user (team member or client)
