@@ -82,6 +82,7 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
 
   // Send email
   const currencySymbol = currency === 'EGP' ? 'EGP ' : currency === 'EUR' ? '€' : '$'
+  const emailSubject = `Invoice ${invoiceNumber} — ${currencySymbol}${amount.toLocaleString()} due ${new Date(due).toLocaleDateString()}`
   const emailBody = [
     `Dear ${clientName},`,
     '',
@@ -98,18 +99,24 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
     '— Agency OS',
   ].join('\n')
 
-  await sendEmail({
-    to:      clientEmail,
-    subject: `Invoice ${invoiceNumber} — ${currencySymbol}${amount.toLocaleString()} due ${new Date(due).toLocaleDateString()}`,
-    body:    emailBody,
-  })
+  let emailStatus: 'sent' | 'failed' = 'sent'
+  let emailError: string | undefined
 
-  // Log the automation
+  try {
+    await sendEmail({ to: clientEmail, subject: emailSubject, body: emailBody })
+  } catch (err: any) {
+    emailStatus = 'failed'
+    emailError  = err.message ?? 'Unknown email error'
+    console.error('[invoice-automation] sendEmail failed:', emailError)
+  }
+
+  // Log the automation (always, even on email failure)
   await supabase.from('automation_logs').insert({
     type:            'payment_reminder',
     recipient_email: clientEmail,
     subject:         `Invoice ${invoiceNumber}`,
-    status:          'sent',
+    status:          emailStatus,
+    ...(emailError ? { error: emailError } : {}),
     created_at:      now.toISOString(),
   })
 

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,10 +8,17 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Loader2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Loader2, UserPlus } from 'lucide-react'
 import type { TeamMember } from '@/types'
 
-const ROLES = ['developer', 'designer', 'manager', 'accountant', 'support'] as const
+// Must match the UserRole values used in profiles table
+const ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer'] as const
+const ROLE_LABELS: Record<string, string> = {
+  video_maker: 'Video Maker',
+  designer:    'Designer',
+  ai_video:    'AI Video',
+  media_buyer: 'Media Buyer',
+}
 
 function TeamForm({
   initial, onSave, onCancel,
@@ -50,7 +58,7 @@ function TeamForm({
           <Select value={form.role} onValueChange={(v) => set('role', v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {ROLES.map((r) => <SelectItem key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</SelectItem>)}
+              {ROLES.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -76,15 +84,15 @@ function TeamForm({
 }
 
 const roleColors: Record<string, string> = {
-  developer: 'bg-blue-500/20 text-blue-400',
-  designer: 'bg-pink-500/20 text-pink-400',
-  manager: 'bg-purple-500/20 text-purple-400',
-  accountant: 'bg-green-500/20 text-green-400',
-  support: 'bg-orange-500/20 text-orange-400',
+  video_maker: 'bg-purple-500/20 text-purple-400',
+  designer:    'bg-pink-500/20 text-pink-400',
+  ai_video:    'bg-cyan-500/20 text-cyan-400',
+  media_buyer: 'bg-orange-500/20 text-orange-400',
 }
 
 export default function TeamPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -100,18 +108,14 @@ export default function TeamPage() {
   useEffect(() => { load() }, [])
 
   async function handleSave(data: Partial<TeamMember>) {
-    if (editing) {
-      const res = await fetch(`/api/team/${editing.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-      })
-      if (res.ok) { toast('Member updated', 'success'); setOpen(false); load() }
-      else toast('Failed to update', 'error')
-    } else {
-      const res = await fetch('/api/team', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-      })
-      if (res.ok) { toast('Member added', 'success'); setOpen(false); load() }
-      else toast('Failed to add member', 'error')
+    if (!editing) return
+    const res = await fetch(`/api/team/${editing.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    })
+    if (res.ok) { toast('Member updated', 'success'); setOpen(false); load() }
+    else {
+      const err = await res.json().catch(() => ({}))
+      toast(err.error ?? 'Failed to update', 'error')
     }
   }
 
@@ -133,10 +137,16 @@ export default function TeamPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search team…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true) }}>
-          <Plus className="h-4 w-4" /> Add Member
+        <Button onClick={() => router.push('/users')}>
+          <UserPlus className="h-4 w-4" /> Add Member
         </Button>
       </div>
+
+      <p className="text-xs text-slate-500">
+        Team members are created from the{' '}
+        <button onClick={() => router.push('/users')} className="text-indigo-400 hover:underline">Users page</button>
+        {' '}— assign the Video Maker, Designer, AI Video, or Media Buyer role.
+      </p>
 
       <div className="flex gap-4 text-sm text-slate-400">
         <span>{members.length} total</span>
@@ -160,7 +170,7 @@ export default function TeamPage() {
                     <div>
                       <h3 className="font-semibold text-slate-100 text-sm">{m.name}</h3>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColors[m.role] ?? 'bg-slate-700 text-slate-400'}`}>
-                        {m.role}
+                        {ROLE_LABELS[m.role] ?? m.role}
                       </span>
                     </div>
                   </div>

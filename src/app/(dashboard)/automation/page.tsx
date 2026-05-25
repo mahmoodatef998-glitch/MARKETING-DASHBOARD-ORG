@@ -25,15 +25,14 @@ export default function AutomationPage() {
   async function runNow() {
     setRunning(true)
     try {
-      const res = await fetch('/api/cron/daily', {
-        headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? 'dev'}` },
-      })
+      // No Authorization header needed — server validates admin session via cookie
+      const res = await fetch('/api/cron/daily')
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
         toast(`Automation ran: ${data.processed} emails processed`, 'success')
         loadLogs()
       } else {
-        toast('Automation failed or unauthorized', 'error')
+        toast(data.error ?? 'Automation failed', 'error')
       }
     } catch {
       toast('Failed to run automation', 'error')
@@ -138,7 +137,7 @@ export default function AutomationPage() {
               {running ? <><RefreshCw className="h-4 w-4 animate-spin" /> Running…</> : <><RefreshCw className="h-4 w-4" /> Run Now (Manual)</>}
             </Button>
             <p className="text-xs text-slate-500 mt-2">
-              Manual run requires CRON_SECRET header. In production this is called automatically by Vercel Cron.
+              Manual run is available to admin users. In production this also runs automatically via Vercel Cron at 9:00 AM UTC.
             </p>
           </div>
         </CardContent>

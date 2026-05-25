@@ -1,35 +1,45 @@
 export const dynamic = 'force-dynamic'
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
-import { createNotionTeamMember } from '@/lib/notion'
-import { generateId } from '@/lib/utils'
-import { DEMO_TEAM } from '@/lib/demo-data'
-import type { TeamMember } from '@/types'
+import { NextResponse } from 'next/server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
-const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+const TEAM_ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer']
 
+// GET — returns team member profiles (sourced from profiles table, NOT legacy team_members)
 export async function GET() {
-  if (DEMO) return NextResponse.json(DEMO_TEAM)
   const supabase = await createServerClient()
-  const { data, error } = await supabase.from('team_members').select('*').order('created_at', { ascending: false })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
-}
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-export async function POST(req: NextRequest) {
-  if (DEMO) {
-    const body = await req.json()
-    return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
-  }
-  const supabase = await createServerClient()
-  const body = await req.json()
-  const member: TeamMember = {
-    id: generateId(), name: body.name, email: body.email,
-    role: body.role ?? 'developer', status: body.status ?? 'active',
-    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-  }
-  const { error } = await supabase.from('team_members').insert(member)
+  const { data: callerProfile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single()
+  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const admin = createAdminClient()
+
+  // Get team member profiles
+  const { data: profiles, error } = await admin
+    .from('profiles')
+    .select('id, role, display_name, created_at')
+    .in('role', TEAM_ROLES)
+    .order('created_at', { ascending: false })
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  try { const notionId = await createNotionTeamMember(member); await supabase.from('team_members').update({ notion_id: notionId }).eq('id', member.id) } catch {}
-  return NextResponse.json(member, { status: 201 })
+
+  // Get auth user emails for each profile
+  const { data: { users: authUsers } } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const emailMap: Record<string, string> = {}
+  for (const u of authUsers) emailMap[u.id] = u.email ?? ''
+
+  // Return in TeamMember-compatible shape so the team page doesn't need changes
+  const members = (profiles ?? []).map(p => ({
+    id:         p.id,
+    name:       p.display_name ?? emailMap[p.id] ?? 'Unknown',
+    email:      emailMap[p.id] ?? '',
+    role:       p.role,
+    status:     'active' as const,
+    created_at: p.created_at,
+    updated_at: p.created_at,
+  }))
+
+  return NextResponse.json(members)
 }

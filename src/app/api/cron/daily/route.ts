@@ -10,8 +10,16 @@ import { generateAndSendInvoice, type CycleType } from '@/lib/invoice-automation
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const isVercelCron = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
+
+  if (!isVercelCron) {
+    // Allow logged-in admin users to trigger manually (for "Run Now" button)
+    const { createServerClient } = await import('@/lib/supabase-server')
+    const serverSupabase = await createServerClient()
+    const { data: { user } } = await serverSupabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: profile } = await serverSupabase.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const supabase = createAdminClient()

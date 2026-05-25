@@ -1,40 +1,58 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
-import { updateNotionTeamMember, deleteNotionPage } from '@/lib/notion'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+type Ctx = { params: Promise<{ id: string }> }
+
+// PUT — update a team member's profile (display_name, role)
+export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params
   const supabase = await createServerClient()
-  const body = await req.json()
-  const updated = { ...body, updated_at: new Date().toISOString() }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
-    .from('team_members')
-    .update(updated)
+  const { data: caller } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (caller?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  const admin = createAdminClient()
+
+  const updates: Record<string, string> = { updated_at: new Date().toISOString() }
+  if (body.name)  updates.display_name = body.name
+  if (body.role)  updates.role         = body.role
+
+  const { data, error } = await admin
+    .from('profiles')
+    .update(updates)
     .eq('id', id)
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (data?.notion_id) {
-    try { await updateNotionTeamMember(data.notion_id, updated) } catch {}
+  // Also sync auth user metadata
+  if (body.name) {
+    await admin.auth.admin.updateUserById(id, {
+      user_metadata: { display_name: body.name },
+    }).catch(() => {})
   }
 
   return NextResponse.json(data)
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// DELETE — permanently removes the auth user (cascades to profile)
+export async function DELETE(_: NextRequest, { params }: Ctx) {
   const { id } = await params
   const supabase = await createServerClient()
-  const { data } = await supabase.from('team_members').select('notion_id').eq('id', id).single()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (data?.notion_id) {
-    try { await deleteNotionPage(data.notion_id) } catch {}
-  }
+  const { data: caller } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (caller?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { error } = await supabase.from('team_members').delete().eq('id', id)
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.deleteUser(id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
   return NextResponse.json({ success: true })
 }
