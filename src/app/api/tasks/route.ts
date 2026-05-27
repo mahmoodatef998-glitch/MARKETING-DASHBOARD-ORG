@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
   const task: Task = {
     id: generateId(), title: body.title, description: body.description ?? null,
     status: body.status ?? 'todo', priority: body.priority ?? 'medium',
+    task_type: body.task_type || null,
     due_date: body.due_date || null,
     assigned_to: body.assigned_to || null,
     client_id: body.client_id || null,

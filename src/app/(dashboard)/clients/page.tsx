@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ClientForm from '@/components/clients/ClientForm'
+import ClientProfileModal from '@/components/clients/ClientProfileModal'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard } from 'lucide-react'
 import type { Client } from '@/types'
 
 export default function ClientsPage() {
@@ -16,6 +17,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
+  const [profileClient, setProfileClient] = useState<Client | null>(null)
 
   async function load() {
     const res = await fetch('/api/clients')
@@ -60,8 +62,8 @@ export default function ClientsPage() {
   )
 
   const statusColor = (s: string) =>
-    s === 'active' ? 'bg-green-500/20 text-green-400' :
-    s === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+    s === 'active'   ? 'bg-green-500/20 text-green-400' :
+    s === 'pending'  ? 'bg-yellow-500/20 text-yellow-400' :
     'bg-slate-700 text-slate-400'
 
   return (
@@ -109,7 +111,11 @@ export default function ClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((client) => (
-            <Card key={client.id} className="hover:border-slate-600 transition-colors">
+            <Card
+              key={client.id}
+              className="hover:border-slate-600 transition-colors group cursor-pointer"
+              onClick={() => setProfileClient(client)}
+            >
               <CardContent className="pt-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
@@ -123,11 +129,21 @@ export default function ClientsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(client); setOpen(true) }}>
+                  {/* Action buttons — stop propagation so card click doesn't fire */}
+                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                      title="View Profile"
+                      onClick={() => setProfileClient(client)}
+                    >
+                      <LayoutDashboard className="h-3.5 w-3.5 text-indigo-400" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                      onClick={() => { setEditing(client); setOpen(true) }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400" onClick={() => handleDelete(client.id)}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400 opacity-0 group-hover:opacity-100"
+                      onClick={() => handleDelete(client.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -157,13 +173,18 @@ export default function ClientsPage() {
                     {client.notes}
                   </p>
                 )}
+
+                {/* Hint */}
+                <div className="mt-3 pt-2 border-t border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-xs text-indigo-400">Click to view profile & packages →</p>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Edit/Create Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -176,6 +197,13 @@ export default function ClientsPage() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Profile Modal */}
+      <ClientProfileModal
+        client={profileClient}
+        open={!!profileClient}
+        onClose={() => setProfileClient(null)}
+      />
     </div>
   )
 }

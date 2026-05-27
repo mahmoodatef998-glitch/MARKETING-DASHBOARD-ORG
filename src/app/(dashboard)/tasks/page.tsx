@@ -14,6 +14,13 @@ import type { Task, Client, TaskAssignee } from '@/types'
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
+const TASK_TYPE_OPTIONS = [
+  { value: 'reel_video', label: 'Reel / Short Video' },
+  { value: 'design',     label: 'Design' },
+  { value: 'ai_video',   label: 'AI Video' },
+  { value: 'post',       label: 'Social Media Post' },
+  { value: 'custom',     label: 'Custom / Other' },
+] as const
 
 function TaskForm({
   initial, clients, members, onSave, onCancel,
@@ -29,6 +36,7 @@ function TaskForm({
     description: initial?.description ?? '',
     status: initial?.status ?? 'todo',
     priority: initial?.priority ?? 'medium',
+    task_type: initial?.task_type ?? '',
     due_date: initial?.due_date ?? '',
     assigned_to: initial?.assigned_to ?? '',
     client_id: initial?.client_id ?? '',
@@ -75,14 +83,12 @@ function TaskForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Assignee</Label>
-          <Select value={form.assigned_to} onValueChange={(v) => set('assigned_to', v)}>
-            <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+          <Label>Task Type</Label>
+          <Select value={form.task_type} onValueChange={(v) => set('task_type', v)}>
+            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
             <SelectContent>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.display_name ?? m.id}
-                </SelectItem>
+              {TASK_TYPE_OPTIONS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -96,6 +102,19 @@ function TaskForm({
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Assignee</Label>
+        <Select value={form.assigned_to} onValueChange={(v) => set('assigned_to', v)}>
+          <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+          <SelectContent>
+            {members.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.display_name ?? m.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-2">
         <Label>Due Date</Label>
@@ -230,6 +249,11 @@ export default function TasksPage() {
                       {task.priority === 'urgent' && <AlertTriangle className="h-3 w-3" />}
                       {task.priority}
                     </span>
+                    {task.task_type && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 font-medium">
+                        {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
+                      </span>
+                    )}
                   </div>
                   {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">

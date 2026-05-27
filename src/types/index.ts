@@ -58,6 +58,35 @@ export interface TeamMember {
   updated_at: string
 }
 
+// ─── Client Package ───────────────────────────────────────────────────────────
+export type TaskType = 'reel_video' | 'design' | 'ai_video' | 'post' | 'custom'
+
+export interface PackageItem {
+  id: string
+  package_id: string
+  label: string
+  task_type: TaskType | string
+  total_quantity: number
+  sort_order: number
+  /** computed: count of done tasks matching this type in the current period */
+  used?: number
+}
+
+export interface ClientPackage {
+  id: string
+  client_id: string
+  name: string
+  price: number
+  renewal_type: 'monthly' | 'one_time'
+  start_date: string
+  end_date?: string
+  is_active: boolean
+  notes?: string
+  items: PackageItem[]
+  created_at: string
+  updated_at: string
+}
+
 // ─── Task ─────────────────────────────────────────────────────────────────────
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'overdue'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
@@ -75,6 +104,7 @@ export interface Task {
   description?: string
   status: TaskStatus
   priority: TaskPriority
+  task_type?: TaskType
   due_date?: string
   /** legacy FK → team_members (kept for backward compat) */
   assignee_id?: string
