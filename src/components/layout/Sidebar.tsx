@@ -18,11 +18,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  BarChart2,
 } from 'lucide-react'
 import { useState } from 'react'
 
 const nav = [
   { href: '/dashboard',      label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/reports',        label: 'Reports',      icon: BarChart2 },
   { href: '/clients',        label: 'Clients',      icon: Users },
   { href: '/team',           label: 'Team',         icon: UserCheck },
   { href: '/tasks',          label: 'Tasks',        icon: CheckSquare },

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/toast'
 import { Plus, Search, Pencil, Trash2, Download, Loader2, X } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { generateInvoiceHTML } from '@/lib/pdf'
+import { printInvoicePDF } from '@/lib/pdf'
 import type { Invoice, Client, InvoiceItem } from '@/types'
 
 function InvoiceForm({
@@ -145,14 +145,7 @@ const statusColors: Record<string, string> = {
 }
 
 function downloadInvoice(invoice: Invoice) {
-  const html = generateInvoiceHTML(invoice)
-  const blob = new Blob([html], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `invoice-${invoice.invoice_number}.html`
-  a.click()
-  URL.revokeObjectURL(url)
+  printInvoicePDF(invoice)
 }
 
 export default function InvoicesPage() {

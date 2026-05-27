@@ -1,6 +1,17 @@
 import type { Invoice } from '@/types'
 
-// Generates an HTML string for the invoice (used for print/PDF via browser)
+// Opens a print-ready window so the user can save the invoice as PDF
+export function printInvoicePDF(invoice: Invoice): void {
+  const html = generateInvoiceHTML(invoice)
+  const win = window.open('', '_blank', 'width=900,height=700')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print() }, 400)
+}
+
+// Generates a print-optimised HTML invoice
 export function generateInvoiceHTML(invoice: Invoice): string {
   const itemRows = invoice.items
     .map(
@@ -21,6 +32,19 @@ export function generateInvoiceHTML(invoice: Invoice): string {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px; }
+    @media print {
+      body { background: #fff; color: #1e293b; padding: 0; }
+      .container { background: #fff; color: #1e293b; box-shadow: none; border: 1px solid #e2e8f0; }
+      .brand { color: #4f46e5 !important; }
+      .label { color: #64748b !important; }
+      .value { color: #1e293b !important; }
+      thead tr { background: #f1f5f9 !important; }
+      th { color: #64748b !important; }
+      td { color: #1e293b !important; border-color: #e2e8f0 !important; }
+      .footer { color: #94a3b8 !important; border-color: #e2e8f0 !important; }
+      .total-row { color: #475569 !important; }
+      .total-row.grand { color: #1e293b !important; border-color: #e2e8f0 !important; }
+    }
     .container { max-width: 800px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 48px; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 48px; }
     .brand { font-size: 28px; font-weight: 800; color: #6366f1; letter-spacing: -1px; }
