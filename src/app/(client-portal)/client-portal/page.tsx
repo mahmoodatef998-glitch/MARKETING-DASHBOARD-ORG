@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { CheckSquare, Clock, AlertTriangle, Loader2, FileText } from 'lucide-react'
-import type { Task, Invoice } from '@/types'
+import PackageProgress from '@/components/clients/PackageProgress'
+import type { Task, Invoice, ClientPackage } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   todo:        { label: 'To Do',       color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
@@ -18,26 +19,29 @@ const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
 }
 
 export default function ClientPortalPage() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks]     = useState<Task[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [pkg, setPkg]         = useState<ClientPackage | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'tasks' | 'invoices'>('tasks')
+  const [tab, setTab]         = useState<'tasks' | 'invoices'>('tasks')
 
   useEffect(() => {
     async function load() {
-      const [tasksRes, invoicesRes] = await Promise.all([
+      const [tasksRes, invoicesRes, pkgRes] = await Promise.all([
         fetch('/api/tasks'),
         fetch('/api/invoices'),
+        fetch('/api/packages/mine'),
       ])
-      const td = await tasksRes.json(); setTasks(Array.isArray(td) ? td : [])
-      const id = await invoicesRes.json(); setInvoices(Array.isArray(id) ? id : [])
+      const td = await tasksRes.json()
+      const id = await invoicesRes.json()
+      const pd = await pkgRes.json()
+      setTasks(Array.isArray(td) ? td : [])
+      setInvoices(Array.isArray(id) ? id : [])
+      setPkg(pd && !pd.error ? pd : null)
       setLoading(false)
     }
     load()
   }, [])
-
-  const doneTasks = tasks.filter(t => t.status === 'done').length
-  const progress = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -45,25 +49,32 @@ export default function ClientPortalPage() {
     </div>
   )
 
+  const doneTasks = tasks.filter(t => t.status === 'done').length
+  const fallbackPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0
+
   return (
     <div className="space-y-6">
       {/* Welcome */}
       <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/10 border border-indigo-500/20 rounded-xl p-6">
         <h2 className="text-xl font-bold text-white mb-1">Welcome to your portal 👋</h2>
-        <p className="text-slate-400 text-sm">Track your project tasks and invoices in one place.</p>
+        <p className="text-slate-400 text-sm">Track your deliverables, tasks, and invoices in one place.</p>
       </div>
 
-      {/* Progress */}
-      {tasks.length > 0 && (
+      {/* Package progress dashboard */}
+      {pkg ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <PackageProgress pkg={pkg} />
+        </div>
+      ) : tasks.length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-slate-300">Project Progress</p>
-            <p className="text-sm font-bold text-white">{progress}%</p>
+            <p className="text-sm font-bold text-white">{fallbackPct}%</p>
           </div>
           <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${fallbackPct}%` }}
             />
           </div>
           <p className="text-xs text-slate-500 mt-2">{doneTasks} of {tasks.length} tasks completed</p>

@@ -13,6 +13,7 @@ import {
   Mail, Phone, Globe, CalendarDays, DollarSign, RefreshCw, FileText,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import PackageProgress from '@/components/clients/PackageProgress'
 import type { Client, ClientPackage, PackageItem } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -460,12 +461,17 @@ export default function ClientProfileModal({ client, open, onClose }: Props) {
               ) : (
                 <>
                   {activePackages.map((pkg) => (
-                    <PackageCard
-                      key={pkg.id}
-                      pkg={pkg}
-                      onEdit={() => { setEditingPkg(pkg); setPkgOpen(true) }}
-                      onDelete={() => handleDeletePackage(pkg.id)}
-                    />
+                    <div key={pkg.id} className="border border-slate-700 rounded-xl p-4 bg-slate-800/30 space-y-4">
+                      <PackageProgress pkg={pkg} />
+                      <div className="flex justify-end gap-1 pt-3 border-t border-slate-700/60">
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingPkg(pkg); setPkgOpen(true) }}>
+                          <Pencil className="h-3 w-3 mr-1" /> Edit
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs hover:text-red-400" onClick={() => handleDeletePackage(pkg.id)}>
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                   {inactivePackages.length > 0 && (
                     <details className="group">
