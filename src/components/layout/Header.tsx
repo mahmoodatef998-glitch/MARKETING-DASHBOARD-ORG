@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, Zap, X, CheckCheck } from 'lucide-react'
+import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
+import { useTheme } from '@/lib/theme'
 
 const titles: Record<string, string> = {
   '/dashboard':    'Dashboard',
@@ -59,6 +60,7 @@ export default function Header() {
     setOpen(false)
   }
 
+  const { theme, toggle } = useTheme()
   const visible = notifications.filter((n) => !dismissed.has(n.id))
   const unread = visible.length
 
@@ -67,6 +69,14 @@ export default function Header() {
       <h1 className="text-xl font-semibold text-slate-100">{title}</h1>
 
       <div className="flex items-center gap-3" ref={panelRef}>
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+          aria-label="Toggle theme"
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
         {/* Bell */}
         <div className="relative">
           <button

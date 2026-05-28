@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import ClientForm from '@/components/clients/ClientForm'
 import ClientProfileModal from '@/components/clients/ClientProfileModal'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard, Download } from 'lucide-react'
 import type { Client } from '@/types'
 
 export default function ClientsPage() {
@@ -55,6 +55,10 @@ export default function ClientsPage() {
     else toast('Failed to delete', 'error')
   }
 
+  function exportCSV() {
+    window.open('/api/export?type=clients', '_blank')
+  }
+
   const filtered = clients.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -79,6 +83,9 @@ export default function ClientsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> Add Client
         </Button>

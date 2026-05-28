@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { Task, Client, TaskAssignee } from '@/types'
 
@@ -166,6 +166,7 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
 
@@ -206,6 +207,43 @@ export default function TasksPage() {
     else toast('Failed to delete', 'error')
   }
 
+  function exportCSV() {
+    window.open('/api/export?type=tasks', '_blank')
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map((t) => t.id)))
+    }
+  }
+
+  async function bulkDelete() {
+    if (!confirm(`Delete ${selected.size} task(s)?`)) return
+    await Promise.all([...selected].map((id) => fetch(`/api/tasks/${id}`, { method: 'DELETE' })))
+    toast(`${selected.size} task(s) deleted`, 'success')
+    setSelected(new Set())
+    load()
+  }
+
+  async function bulkSetStatus(status: string) {
+    await Promise.all([...selected].map((id) =>
+      fetch(`/api/tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+    ))
+    toast(`${selected.size} task(s) updated`, 'success')
+    setSelected(new Set())
+    load()
+  }
+
   const filtered = tasks
     .filter((t) => {
       const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
@@ -233,13 +271,51 @@ export default function TasksPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Task
         </Button>
       </div>
 
-      {/* Status filter chips */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Bulk action toolbar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
+          <span className="text-sm font-medium text-indigo-300">{selected.size} selected</span>
+          <div className="flex-1" />
+          <Select onValueChange={bulkSetStatus}>
+            <SelectTrigger className="w-36 h-8 text-xs border-indigo-500/40 bg-slate-800">
+              <SelectValue placeholder="Set status…" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="ghost" onClick={bulkDelete} className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10">
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+          <button onClick={() => setSelected(new Set())} className="p-1 rounded text-slate-500 hover:text-slate-300">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Status filter chips with select-all */}
+      <div className="flex gap-2 flex-wrap items-center">
+        {filtered.length > 0 && (
+          <button
+            onClick={toggleSelectAll}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {selected.size === filtered.length && filtered.length > 0
+              ? <CheckSquare className="h-4 w-4 text-indigo-400" />
+              : <Square className="h-4 w-4" />}
+            <span className="text-xs">All</span>
+          </button>
+        )}
         {(['all', ...STATUS_OPTIONS] as const).map((s) => {
           const count = s === 'all' ? tasks.length : countByStatus(s)
           const active = filterStatus === s
@@ -275,8 +351,16 @@ export default function TasksPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((task) => (
-            <Card key={task.id} className="hover:border-slate-600 transition-colors">
-              <CardContent className="py-4 flex items-start gap-4">
+            <Card key={task.id} className={`hover:border-slate-600 transition-colors ${selected.has(task.id) ? 'border-indigo-500/40 bg-indigo-500/5' : ''}`}>
+              <CardContent className="py-4 flex items-start gap-3">
+                <button
+                  onClick={() => toggleSelect(task.id)}
+                  className="mt-0.5 shrink-0 text-slate-500 hover:text-indigo-400 transition-colors"
+                >
+                  {selected.has(task.id)
+                    ? <CheckSquare className="h-4 w-4 text-indigo-400" />
+                    : <Square className="h-4 w-4" />}
+                </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-medium text-slate-100 text-sm">{task.title}</h3>

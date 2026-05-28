@@ -148,6 +148,10 @@ function downloadInvoice(invoice: Invoice) {
   printInvoicePDF(invoice)
 }
 
+function exportCSV() {
+  window.open('/api/export?type=invoices', '_blank')
+}
+
 export default function InvoicesPage() {
   const { toast } = useToast()
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -225,6 +229,9 @@ export default function InvoicesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search invoices…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Invoice
         </Button>

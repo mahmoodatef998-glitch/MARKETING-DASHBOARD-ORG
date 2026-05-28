@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Script from 'next/script'
+import { ThemeProvider } from '@/lib/theme'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased`}>
+        <ThemeProvider>
         {children}
+        </ThemeProvider>
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(() => {});
