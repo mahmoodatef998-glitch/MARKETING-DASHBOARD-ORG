@@ -12,7 +12,7 @@ import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2 } from '
 import { formatDate } from '@/lib/utils'
 import type { Task, Client, TaskAssignee } from '@/types'
 
-const STATUS_OPTIONS = ['todo', 'in_progress', 'done', 'overdue'] as const
+const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
 const TASK_TYPE_OPTIONS = [
   { value: 'reel_video', label: 'Reel / Short Video' },
@@ -133,8 +133,23 @@ function TaskForm({
 const statusColors: Record<string, string> = {
   todo: 'bg-blue-500/20 text-blue-400',
   in_progress: 'bg-purple-500/20 text-purple-400',
+  review: 'bg-amber-500/20 text-amber-400',
   done: 'bg-green-500/20 text-green-400',
   overdue: 'bg-red-500/20 text-red-400',
+}
+
+const statusFilterStyle: Record<string, string> = {
+  all:         'bg-slate-700 text-slate-200 border-slate-600',
+  todo:        'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  in_progress: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  review:      'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  done:        'bg-green-500/20 text-green-300 border-green-500/40',
+  overdue:     'bg-red-500/20 text-red-300 border-red-500/40',
+}
+
+const statusLabel: Record<string, string> = {
+  all: 'All', todo: 'To Do', in_progress: 'In Progress',
+  review: 'Review', done: 'Done', overdue: 'Overdue',
 }
 const priorityColors: Record<string, string> = {
   low: 'text-slate-400',
@@ -191,38 +206,61 @@ export default function TasksPage() {
     else toast('Failed to delete', 'error')
   }
 
-  const filtered = tasks.filter((t) => {
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || t.status === filterStatus
-    return matchSearch && matchStatus
-  })
+  const filtered = tasks
+    .filter((t) => {
+      const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
+      const matchStatus = filterStatus === 'all' || t.status === filterStatus
+      return matchSearch && matchStatus
+    })
+    .sort((a, b) => {
+      // Overdue always first
+      if (a.status === 'overdue' && b.status !== 'overdue') return -1
+      if (b.status === 'overdue' && a.status !== 'overdue') return 1
+      // Then by due_date ascending (no date goes last)
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+    })
+
+  const countByStatus = (s: string) => tasks.filter((t) => t.status === s).length
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Top bar: search + new button */}
+      <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
-          </SelectContent>
-        </Select>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Task
         </Button>
       </div>
 
-      <div className="flex gap-4 text-sm text-slate-400 flex-wrap">
-        <span>{tasks.length} total</span>
-        {STATUS_OPTIONS.map((s) => (
-          <span key={s} className={statusColors[s].split(' ')[1]}>
-            {tasks.filter((t) => t.status === s).length} {s.replace('_', ' ')}
-          </span>
-        ))}
+      {/* Status filter chips */}
+      <div className="flex gap-2 flex-wrap">
+        {(['all', ...STATUS_OPTIONS] as const).map((s) => {
+          const count = s === 'all' ? tasks.length : countByStatus(s)
+          const active = filterStatus === s
+          return (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all
+                ${active
+                  ? `${statusFilterStyle[s]} ring-2 ring-offset-2 ring-offset-slate-950 ring-current shadow-lg scale-105`
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 bg-transparent'
+                }`}
+            >
+              {statusLabel[s]}
+              <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold
+                ${active ? 'bg-white/20' : 'bg-slate-700 text-slate-400'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {loading ? (
