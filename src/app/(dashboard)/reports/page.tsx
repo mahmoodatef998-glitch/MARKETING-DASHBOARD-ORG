@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
 import {
-  TrendingUp, DollarSign, CheckSquare, Users,
-  Target, Clock, AlertCircle, BarChart2,
+  TrendingUp, TrendingDown, DollarSign, CheckSquare, Users,
+  Target, Clock, AlertCircle, BarChart2, Trophy, UserCheck, Zap, Calendar, CreditCard,
 } from 'lucide-react'
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ function DonutChart({
   )
 }
 
-function BarChartSVG({ data }: { data: { label: string; value: number }[] }) {
+function BarChartSVG({ data, currency = true }: { data: { label: string; value: number }[], currency?: boolean }) {
   const max = Math.max(...data.map((d) => d.value), 1)
   const barW = 38
   const gap = 16
@@ -118,7 +118,7 @@ function BarChartSVG({ data }: { data: { label: string; value: number }[] }) {
                   fontSize={9}
                   fill="#94a3b8"
                 >
-                  {d.value >= 1000 ? `$${(d.value / 1000).toFixed(1)}k` : `$${d.value}`}
+                  {currency ? (d.value >= 1000 ? `$${(d.value / 1000).toFixed(1)}k` : `$${d.value}`) : d.value}
                 </text>
               )}
               <text
@@ -195,12 +195,98 @@ function RateRing({ pct, color, label }: { pct: number; color: string; label: st
   )
 }
 
+// ─── Team Performance ─────────────────────────────────────────────────────────
+
+const ROLE_LABELS: Record<string, string> = {
+  video_maker: 'Video Maker',
+  designer:    'Designer',
+  ai_video:    'AI Video',
+  media_buyer: 'Media Buyer',
+  admin:       'Admin',
+}
+
+interface MemberStats {
+  id: string; name: string; role: string
+  total: number; done: number; inProgress: number; review: number; overdue: number
+  completionRate: number; doneThisMonth: number
+}
+
+function MemberRow({ m, isTop }: { m: MemberStats; isTop: boolean }) {
+  const barPct   = m.total > 0 ? Math.round((m.done / m.total) * 100) : 0
+  const barColor = barPct >= 75 ? 'from-emerald-500 to-green-400'
+                 : barPct >= 40 ? 'from-indigo-500 to-purple-500'
+                 : 'from-amber-500 to-orange-500'
+
+  return (
+    <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+      <div className="relative shrink-0">
+        <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-sm font-bold text-indigo-300 border border-indigo-500/20">
+          {m.name.charAt(0).toUpperCase()}
+        </div>
+        {isTop && (
+          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+            <Trophy className="h-2.5 w-2.5 text-white" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-semibold text-slate-200">{m.name}</span>
+          {m.role && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 font-medium">
+              {ROLE_LABELS[m.role] ?? m.role}
+            </span>
+          )}
+          {isTop && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold">
+              Top Performer
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-700`}
+              style={{ width: `${barPct}%` }}
+            />
+          </div>
+          <span className="text-xs text-slate-400 shrink-0 w-20 text-right">
+            {m.done}/{m.total} tasks
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-1.5 text-[11px]">
+          <span className="text-emerald-400">✅ {m.done} done</span>
+          {m.inProgress > 0 && <span className="text-purple-400">🔄 {m.inProgress} active</span>}
+          {m.review > 0    && <span className="text-amber-400">⏳ {m.review} review</span>}
+          {m.overdue > 0   && <span className="text-red-400">⚠️ {m.overdue} overdue</span>}
+          {m.doneThisMonth > 0 && (
+            <span className="text-slate-500 ml-auto">{m.doneThisMonth} this month</span>
+          )}
+        </div>
+      </div>
+
+      <div className="shrink-0 text-center w-14">
+        <div className={`text-xl font-extrabold ${
+          barPct >= 75 ? 'text-emerald-400' : barPct >= 40 ? 'text-indigo-400' : 'text-amber-400'
+        }`}>
+          {barPct}%
+        </div>
+        <div className="text-[10px] text-slate-600 mt-0.5">complete</div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ReportData {
+  teamPerformance: MemberStats[]
   monthlyRevenue: { label: string; value: number }[]
   invoiceStatus: { label: string; value: number; color: string }[]
   taskStatus: { label: string; value: number; color: string }[]
+  tasksByPriority: { label: string; value: number; color: string }[]
+  newClientsOverTime: { label: string; value: number }[]
   topClients: { name: string; revenue: number }[]
   kpis: {
     totalRevenue: number
@@ -211,6 +297,9 @@ interface ReportData {
     activeClients: number
     totalTasks: number
     completedTasks: number
+    monthlyGrowthPct: number
+    avgClientLTV: number
+    avgDaysToPayment: number
   }
 }
 
@@ -284,6 +373,41 @@ export default function ReportsPage() {
       icon: TrendingUp,
       color: 'text-indigo-400',
       bg: 'bg-indigo-400/10',
+    },
+  ]
+
+  const advancedKpis = [
+    {
+      title: 'Monthly Growth',
+      value: `${data.kpis.monthlyGrowthPct > 0 ? '+' : ''}${data.kpis.monthlyGrowthPct}%`,
+      sub: 'vs last month revenue',
+      icon: data.kpis.monthlyGrowthPct >= 0 ? TrendingUp : TrendingDown,
+      color: data.kpis.monthlyGrowthPct >= 0 ? 'text-emerald-400' : 'text-red-400',
+      bg:    data.kpis.monthlyGrowthPct >= 0 ? 'bg-emerald-400/10' : 'bg-red-400/10',
+    },
+    {
+      title: 'Avg Client LTV',
+      value: formatCurrency(data.kpis.avgClientLTV),
+      sub: 'Lifetime value per paying client',
+      icon: CreditCard,
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-400/10',
+    },
+    {
+      title: 'Avg Payment Terms',
+      value: `${data.kpis.avgDaysToPayment}d`,
+      sub: 'Avg days issued → due',
+      icon: Calendar,
+      color: 'text-orange-400',
+      bg: 'bg-orange-400/10',
+    },
+    {
+      title: 'Task Completion',
+      value: `${data.kpis.taskCompletionRate}%`,
+      sub: `${data.kpis.completedTasks} of ${data.kpis.totalTasks} done`,
+      icon: Zap,
+      color: 'text-yellow-400',
+      bg: 'bg-yellow-400/10',
     },
   ]
 
@@ -415,6 +539,97 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Advanced Analytics */}
+      <div>
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-3">Advanced Analytics</h2>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+          {advancedKpis.map((k) => (
+            <Card key={k.title}>
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs text-slate-400">{k.title}</p>
+                    <p className="text-2xl font-bold text-slate-100 mt-1">{k.value}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p>
+                  </div>
+                  <div className={`p-2.5 rounded-xl ${k.bg}`}>
+                    <k.icon className={`h-5 w-5 ${k.color}`} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Target className="h-4 w-4 text-orange-400" />
+                Task Priority Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <DonutChart segments={data.tasksByPriority ?? []} />
+                <div className="space-y-2 flex-1">
+                  {(data.tasksByPriority ?? []).map((s) => (
+                    <div key={s.label} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                        <span className="text-xs text-slate-400">{s.label}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-300">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4 text-cyan-400" />
+                New Clients Over Time
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChartSVG data={data.newClientsOverTime ?? []} currency={false} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Team Performance */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserCheck className="h-4 w-4 text-indigo-400" />
+              Team Performance
+            </CardTitle>
+            {data.teamPerformance.length > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-400 font-medium">
+                <Trophy className="h-3.5 w-3.5" />
+                {data.teamPerformance[0].name}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {data.teamPerformance.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-6">
+              No team tasks assigned yet
+            </p>
+          ) : (
+            data.teamPerformance.map((m, i) => (
+              <MemberRow key={m.id} m={m} isTop={i === 0} />
+            ))
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   )
