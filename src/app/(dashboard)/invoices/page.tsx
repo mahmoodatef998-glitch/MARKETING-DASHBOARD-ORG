@@ -159,11 +159,11 @@ export default function InvoicesPage() {
 
   async function load() {
     const [ir, cr] = await Promise.all([
-      fetch('/api/invoices').then((r) => r.json()),
-      fetch('/api/clients').then((r) => r.json()),
+      fetch('/api/invoices?limit=200').then((r) => r.json()),
+      fetch('/api/clients?page=all').then((r) => r.json()),
     ])
-    setInvoices(Array.isArray(ir) ? ir : [])
-    setClients(Array.isArray(cr) ? cr : [])
+    setInvoices(Array.isArray(ir) ? ir : (ir.data ?? []))
+    setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
     setLoading(false)
   }
 

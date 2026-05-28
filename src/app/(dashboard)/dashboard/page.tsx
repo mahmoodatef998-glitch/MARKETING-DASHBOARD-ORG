@@ -23,14 +23,14 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       const [cr, tr, ir] = await Promise.all([
-        fetch('/api/clients').then((r) => r.json()),
-        fetch('/api/tasks').then((r) => r.json()),
-        fetch('/api/invoices').then((r) => r.json()),
+        fetch('/api/clients?page=all').then((r) => r.json()),
+        fetch('/api/tasks?limit=200').then((r) => r.json()),
+        fetch('/api/invoices?limit=200').then((r) => r.json()),
       ])
 
-      const clients: Client[] = Array.isArray(cr) ? cr : []
-      const tasks: Task[] = Array.isArray(tr) ? tr : []
-      const invoices: Invoice[] = Array.isArray(ir) ? ir : []
+      const clients: Client[] = Array.isArray(cr) ? cr : (cr.data ?? [])
+      const tasks: Task[]     = Array.isArray(tr) ? tr : (tr.data ?? [])
+      const invoices: Invoice[] = Array.isArray(ir) ? ir : (ir.data ?? [])
 
       setRecentClients(clients.slice(0, 5))
       setRecentTasks(tasks.slice(0, 5))

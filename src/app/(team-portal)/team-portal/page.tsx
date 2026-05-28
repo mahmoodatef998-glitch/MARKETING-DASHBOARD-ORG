@@ -37,9 +37,9 @@ export default function TeamPortalPage() {
       setMyId(profile.id)
 
       // Get my tasks
-      const tasksRes = await fetch('/api/tasks')
+      const tasksRes = await fetch('/api/tasks?limit=200')
       const tasksData = await tasksRes.json()
-      setTasks(Array.isArray(tasksData) ? tasksData : [])
+      setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
 
       // Get admin user id (first admin profile)
       const adminRes = await fetch('/api/admin-id')

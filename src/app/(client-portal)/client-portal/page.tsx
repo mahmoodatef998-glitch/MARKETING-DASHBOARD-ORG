@@ -152,15 +152,15 @@ export default function ClientPortalPage() {
 
   async function load() {
     const [tasksRes, invoicesRes, pkgRes] = await Promise.all([
-      fetch('/api/tasks'),
-      fetch('/api/invoices'),
+      fetch('/api/tasks?limit=200'),
+      fetch('/api/invoices?limit=200'),
       fetch('/api/packages/mine'),
     ])
     const td = await tasksRes.json()
     const id = await invoicesRes.json()
     const pd = await pkgRes.json()
-    setTasks(Array.isArray(td) ? td : [])
-    setInvoices(Array.isArray(id) ? id : [])
+    setTasks(Array.isArray(td) ? td : (td.data ?? []))
+    setInvoices(Array.isArray(id) ? id : (id.data ?? []))
     setPkg(pd && !pd.error ? pd : null)
     setLoading(false)
   }

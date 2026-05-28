@@ -227,12 +227,12 @@ export default function TasksPage() {
 
   async function load() {
     const [tr, cr, mr] = await Promise.all([
-      fetch('/api/tasks').then((r) => r.json()),
-      fetch('/api/clients').then((r) => r.json()),
+      fetch('/api/tasks?limit=200').then((r) => r.json()),
+      fetch('/api/clients?page=all').then((r) => r.json()),
       fetch('/api/team-users').then((r) => r.json()),
     ])
-    setTasks(Array.isArray(tr) ? tr : [])
-    setClients(Array.isArray(cr) ? cr : [])
+    setTasks(Array.isArray(tr) ? tr : (tr.data ?? []))
+    setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
     setMembers(Array.isArray(mr) ? mr : [])
     setLoading(false)
   }
