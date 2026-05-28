@@ -35,24 +35,28 @@ function DonutChart({
     )
   }
 
-  let currentAngle = 0
   const paths = segments
     .filter((s) => s.value > 0)
-    .map((seg) => {
-      const angle = (seg.value / total) * 360
-      const startA = currentAngle
-      currentAngle += angle
-      const endA = currentAngle
-      const s = polarToCartesian(cx, cy, r, startA)
-      const e = polarToCartesian(cx, cy, r, endA)
-      const si = polarToCartesian(cx, cy, innerR, startA)
-      const ei = polarToCartesian(cx, cy, innerR, endA)
-      const large = angle > 180 ? 1 : 0
-      return {
-        color: seg.color,
-        d: `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} L ${ei.x} ${ei.y} A ${innerR} ${innerR} 0 ${large} 0 ${si.x} ${si.y} Z`,
-      }
-    })
+    .reduce<{ list: { color: string; d: string }[]; angle: number }>(
+      (acc, seg) => {
+        const angle = (seg.value / total) * 360
+        const startA = acc.angle
+        const endA = acc.angle + angle
+        const s = polarToCartesian(cx, cy, r, startA)
+        const e = polarToCartesian(cx, cy, r, endA)
+        const si = polarToCartesian(cx, cy, innerR, startA)
+        const ei = polarToCartesian(cx, cy, innerR, endA)
+        const large = angle > 180 ? 1 : 0
+        return {
+          angle: endA,
+          list: [...acc.list, {
+            color: seg.color,
+            d: `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} L ${ei.x} ${ei.y} A ${innerR} ${innerR} 0 ${large} 0 ${si.x} ${si.y} Z`,
+          }],
+        }
+      },
+      { list: [], angle: 0 }
+    ).list
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>

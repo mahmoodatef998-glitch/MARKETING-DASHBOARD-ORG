@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import type { Task, Message } from '@/types'
 
 const PRIORITY_COLOR: Record<string, string> = {

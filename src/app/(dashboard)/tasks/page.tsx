@@ -181,7 +181,7 @@ export default function TasksPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   async function handleSave(data: Partial<Task>) {
     if (editing) {

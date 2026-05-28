@@ -71,18 +71,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         task_id:         id,
         created_at:      new Date().toISOString(),
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Non-blocking — don't fail the status update if email fails
+      const msg = err instanceof Error ? err.message : String(err)
       await admin.from('automation_logs').insert({
         type:            'task_completed',
         recipient_email: clientEmail,
         subject:         `Task "${data.title}" completed`,
         status:          'failed',
-        error:           err.message,
+        error:           msg,
         task_id:         id,
         created_at:      new Date().toISOString(),
       })
-      console.error('[tasks] completion email failed:', err.message)
+      console.error('[tasks] completion email failed:', msg)
     }
   }
 

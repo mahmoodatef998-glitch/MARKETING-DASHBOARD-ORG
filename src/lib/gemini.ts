@@ -65,9 +65,9 @@ export async function chatWithAssistant(opts: {
   message: string
   history: Array<{ role: 'user' | 'model'; parts: string }>
   context: {
-    clients: any[]
-    tasks: any[]
-    invoices: any[]
+    clients: Record<string, unknown>[]
+    tasks: Record<string, unknown>[]
+    invoices: Record<string, unknown>[]
   }
 }): Promise<string> {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })

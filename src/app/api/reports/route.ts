@@ -83,7 +83,7 @@ export async function GET() {
 
   for (const t of teamTasks) {
     const uid  = t.assigned_to as string
-    const info = (t as any).assignee as { display_name?: string; role?: string } | null
+    const info = (t as { assigned_to: string; status: string; updated_at: string; assignee: { display_name?: string; role?: string } | null }).assignee
     if (!memberMap[uid]) {
       memberMap[uid] = {
         id: uid,

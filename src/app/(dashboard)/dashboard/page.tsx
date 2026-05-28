@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
-import { Users, CheckSquare, FileText, TrendingUp, AlertCircle, Clock } from 'lucide-react'
+import { Users, CheckSquare, TrendingUp, AlertCircle, Clock } from 'lucide-react'
 import type { Client, Task, Invoice } from '@/types'
 
 interface Stats {

@@ -104,9 +104,9 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
 
   try {
     await sendEmail({ to: clientEmail, subject: emailSubject, body: emailBody })
-  } catch (err: any) {
+  } catch (err: unknown) {
     emailStatus = 'failed'
-    emailError  = err.message ?? 'Unknown email error'
+    emailError  = err instanceof Error ? err.message : 'Unknown email error'
     console.error('[invoice-automation] sendEmail failed:', emailError)
   }
 

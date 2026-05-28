@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
@@ -18,7 +18,7 @@ function InvoiceForm({
 }: {
   initial?: Partial<Invoice>
   clients: Client[]
-  onSave: (d: any) => Promise<void>
+  onSave: (d: Partial<Invoice> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -33,8 +33,8 @@ function InvoiceForm({
   )
   const [loading, setLoading] = useState(false)
 
-  function setField(k: string, v: any) { setForm((f) => ({ ...f, [k]: v })) }
-  function setItem(i: number, k: string, v: any) {
+  function setField(k: string, v: string | number) { setForm((f) => ({ ...f, [k]: v })) }
+  function setItem(i: number, k: string, v: string | number) {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [k]: v } : item))
   }
   function addItem() { setItems((prev) => [...prev, { description: '', quantity: 1, unit_price: 0 }]) }
@@ -167,9 +167,9 @@ export default function InvoicesPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
-  async function handleSave(data: any) {
+  async function handleSave(data: Partial<Invoice> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) {
     if (editing) {
       const res = await fetch(`/api/invoices/${editing.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -195,7 +195,7 @@ export default function InvoicesPage() {
   const filtered = invoices.filter(
     (inv) =>
       inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
-      (inv.client as any)?.name?.toLowerCase().includes(search.toLowerCase())
+      (inv.client as { name?: string } | null)?.name?.toLowerCase().includes(search.toLowerCase())
   )
 
   const totalRevenue = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0)
@@ -235,7 +235,7 @@ export default function InvoicesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((inv) => {
-            const client = inv.client as any
+            const client = inv.client as { name?: string; email?: string } | null
             return (
               <Card key={inv.id} className="hover:border-slate-600 transition-colors">
                 <CardContent className="py-4 flex items-center gap-4">

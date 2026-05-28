@@ -26,7 +26,7 @@ export default function ClientsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   async function handleSave(data: Partial<Client>) {
     if (editing) {

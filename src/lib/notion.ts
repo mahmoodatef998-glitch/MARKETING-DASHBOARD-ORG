@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client } from '@notionhq/client'
 import type { Client as AgencyClient, TeamMember, Task, Invoice } from '@/types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const notion = new Client({ auth: process.env.NOTION_API_KEY }) as any
 
 const DB = {
