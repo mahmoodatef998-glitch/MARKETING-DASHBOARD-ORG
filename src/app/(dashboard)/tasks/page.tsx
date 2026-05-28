@@ -8,8 +8,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import TaskDetailModal from '@/components/tasks/TaskDetailModal'
 import type { Task, Client, TaskAssignee } from '@/types'
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'done', 'overdue'] as const
@@ -40,6 +41,7 @@ function TaskForm({
     due_date: initial?.due_date ?? '',
     assigned_to: initial?.assigned_to ?? '',
     client_id: initial?.client_id ?? '',
+    delivery_url: initial?.delivery_url ?? '',
   })
   const [loading, setLoading] = useState(false)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
@@ -120,6 +122,15 @@ function TaskForm({
         <Label>Due Date</Label>
         <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
       </div>
+      <div className="space-y-2">
+        <Label>Delivery Link <span className="text-slate-500 font-normal text-xs">(Google Drive, WeTransfer…)</span></Label>
+        <Input
+          value={form.delivery_url}
+          onChange={(e) => set('delivery_url', e.target.value)}
+          placeholder="https://drive.google.com/…"
+          type="url"
+        />
+      </div>
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={loading}>
@@ -153,6 +164,7 @@ export default function TasksPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
+  const [detailTask, setDetailTask] = useState<Task | null>(null)
 
   async function load() {
     const [tr, cr, mr] = await Promise.all([
@@ -237,7 +249,11 @@ export default function TasksPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((task) => (
-            <Card key={task.id} className="hover:border-slate-600 transition-colors">
+            <Card
+              key={task.id}
+              className="hover:border-slate-600 transition-colors cursor-pointer"
+              onClick={() => setDetailTask(task)}
+            >
               <CardContent className="py-4 flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -254,6 +270,11 @@ export default function TasksPage() {
                         {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
                       </span>
                     )}
+                    {task.delivery_url && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3" /> Delivery
+                      </span>
+                    )}
                   </div>
                   {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
@@ -264,9 +285,12 @@ export default function TasksPage() {
                     )}
                     {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
                     {task.client?.name && <span>— {task.client.name}</span>}
+                    <span className="flex items-center gap-1 text-slate-600">
+                      <MessageSquare className="h-3 w-3" /> Comments
+                    </span>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(task); setOpen(true) }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
@@ -288,6 +312,12 @@ export default function TasksPage() {
           <TaskForm initial={editing ?? undefined} clients={clients} members={members} onSave={handleSave} onCancel={() => setOpen(false)} />
         </DialogContent>
       </Dialog>
+
+      <TaskDetailModal
+        task={detailTask}
+        open={!!detailTask}
+        onClose={() => setDetailTask(null)}
+      />
     </div>
   )
 }

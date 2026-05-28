@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     due_date: body.due_date || null,
     assigned_to: body.assigned_to || null,
     client_id: body.client_id || null,
+    delivery_url: body.delivery_url || null,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)

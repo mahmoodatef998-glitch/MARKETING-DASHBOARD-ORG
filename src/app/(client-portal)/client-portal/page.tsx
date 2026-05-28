@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { CheckSquare, Clock, AlertTriangle, Loader2, FileText } from 'lucide-react'
+import { CheckSquare, Clock, AlertTriangle, Loader2, FileText, ExternalLink } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
+import TaskDetailModal from '@/components/tasks/TaskDetailModal'
 import type { Task, Invoice, ClientPackage } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -24,6 +25,7 @@ export default function ClientPortalPage() {
   const [pkg, setPkg]         = useState<ClientPackage | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab]         = useState<'tasks' | 'invoices'>('tasks')
+  const [detailTask, setDetailTask] = useState<Task | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -114,29 +116,52 @@ export default function ClientPortalPage() {
             const cfg = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.todo
             const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done'
             return (
-              <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <div
+                key={task.id}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-4 cursor-pointer hover:border-slate-600 transition-colors"
+                onClick={() => setDetailTask(task)}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-white">{task.title}</h3>
                     {task.description && (
-                      <p className="text-sm text-slate-400 mt-1">{task.description}</p>
+                      <p className="text-sm text-slate-400 mt-1 line-clamp-2">{task.description}</p>
                     )}
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${cfg.color}`}>
                     {cfg.label}
                   </span>
                 </div>
-                {task.due_date && (
-                  <div className={`flex items-center gap-1 text-xs mt-3 ${isOverdue ? 'text-red-400' : 'text-slate-500'}`}>
-                    {isOverdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                    Due: {new Date(task.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </div>
-                )}
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                  {task.due_date && (
+                    <div className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-red-400' : 'text-slate-500'}`}>
+                      {isOverdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                      Due: {new Date(task.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </div>
+                  )}
+                  {task.delivery_url && (
+                    <a
+                      href={task.delivery_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 font-medium hover:bg-emerald-500/25 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> View Delivery
+                    </a>
+                  )}
+                </div>
               </div>
             )
           })}
         </div>
       )}
+
+      <TaskDetailModal
+        task={detailTask}
+        open={!!detailTask}
+        onClose={() => setDetailTask(null)}
+      />
 
       {/* Invoices */}
       {tab === 'invoices' && (

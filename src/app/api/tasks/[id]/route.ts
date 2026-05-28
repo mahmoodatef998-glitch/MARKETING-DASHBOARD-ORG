@@ -4,6 +4,7 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
+import { sendWhatsApp } from '@/lib/whatsapp'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,7 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Fetch old status before update so we know if it changed to 'done'
   const { data: oldTask } = await supabase
     .from('tasks')
-    .select('status, client_id, title, description, priority, due_date, assigned_to')
+    .select('status, client_id, title, description, priority, due_date, assigned_to, delivery_url')
     .eq('id', id)
     .single()
 
@@ -45,6 +46,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (authUser?.user?.email) memberName = authUser.user.email
     }
 
+    const deliveryUrl  = updated.delivery_url || oldTask?.delivery_url || null
+    const deliveryLine = deliveryUrl ? `\nDelivery link: ${deliveryUrl}` : ''
+
     const details = [
       `Task: ${data.title}`,
       data.description ? `Description: ${data.description}` : null,
@@ -52,7 +56,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data.due_date ? `Due date: ${data.due_date}` : null,
       `Completed by: ${memberName}`,
       `Completed on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+      deliveryUrl ? `Delivery link: ${deliveryUrl}` : null,
     ].filter(Boolean).join('\n')
+
+    // WhatsApp notification (non-blocking)
+    const clientRes = await admin.from('clients').select('phone').eq('id', data.client?.id ?? '').maybeSingle()
+    const clientRow = clientRes.data
+    if (clientRow?.phone) {
+      const waMsg = `✅ *${data.title}* has been completed!\n${deliveryUrl ? `\n📎 View delivery: ${deliveryUrl}\n` : ''}\nCompleted by: ${memberName}`
+      sendWhatsApp(clientRow.phone, waMsg).catch(() => {})
+    }
 
     try {
       const { subject, body: emailBody } = await generateEmailContent({
@@ -61,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         details,
       })
 
-      await sendEmail({ to: clientEmail, subject, body: emailBody })
+      await sendEmail({ to: clientEmail, subject, body: emailBody + deliveryLine })
 
       await admin.from('automation_logs').insert({
         type:            'task_completed',
