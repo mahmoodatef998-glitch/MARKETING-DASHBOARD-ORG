@@ -8,10 +8,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare, Upload, UploadCloud } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare, Upload, UploadCloud, LayoutList, Columns } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
-import type { Task, Client, TaskAssignee } from '@/types'
+import KanbanView from '@/components/tasks/KanbanView'
+import { getSupabaseClient } from '@/lib/supabase'
+import type { Task, Client, TaskAssignee, TaskStatus } from '@/types'
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
@@ -224,6 +226,7 @@ export default function TasksPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
+  const [view, setView] = useState<'list' | 'kanban'>('list')
 
   async function load() {
     try {
@@ -243,6 +246,27 @@ export default function TasksPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Real-time updates via Supabase Realtime
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    const channel = supabase
+      .channel('tasks-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setTasks((prev) => {
+            if (prev.find(t => t.id === (payload.new as Task).id)) return prev
+            return [payload.new as Task, ...prev]
+          })
+        } else if (payload.eventType === 'UPDATE') {
+          setTasks((prev) => prev.map(t => t.id === (payload.new as Task).id ? { ...t, ...payload.new as Task } : t))
+        } else if (payload.eventType === 'DELETE') {
+          setTasks((prev) => prev.filter(t => t.id !== (payload.old as Task).id))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   async function handleSave(data: Partial<Task>) {
     if (editing) {
@@ -267,6 +291,18 @@ export default function TasksPage() {
     else toast('Failed to delete', 'error')
   }
 
+  async function handleStatusChange(taskId: string, status: TaskStatus) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (res.ok) {
+      setTasks((prev) => prev.map(t => t.id === taskId ? { ...t, status } : t))
+    } else {
+      toast('Failed to update status', 'error')
+    }
+  }
+
   const filtered = tasks.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'all' || t.status === filterStatus
@@ -287,6 +323,23 @@ export default function TasksPage() {
             {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
           </SelectContent>
         </Select>
+        {/* View toggle */}
+        <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
+          <button
+            onClick={() => setView('list')}
+            className={`p-1.5 rounded-md transition-colors ${view === 'list' ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'}`}
+            title="List view"
+          >
+            <LayoutList className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setView('kanban')}
+            className={`p-1.5 rounded-md transition-colors ${view === 'kanban' ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'}`}
+            title="Kanban view"
+          >
+            <Columns className="h-4 w-4" />
+          </button>
+        </div>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Task
         </Button>
@@ -303,6 +356,12 @@ export default function TasksPage() {
 
       {loading ? (
         <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+      ) : view === 'kanban' ? (
+        <KanbanView
+          tasks={filtered}
+          onStatusChange={handleStatusChange}
+          onTaskClick={setDetailTask}
+        />
       ) : filtered.length === 0 ? (
         <Card><CardContent className="py-16 text-center">
           <p className="text-slate-400 text-sm">No tasks found.</p>

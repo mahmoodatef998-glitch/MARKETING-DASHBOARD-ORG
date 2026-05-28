@@ -145,7 +145,8 @@ const statusColors: Record<string, string> = {
 }
 
 function downloadInvoice(invoice: Invoice) {
-  printInvoicePDF(invoice)
+  // Open print-ready HTML page in new tab — browser prints/saves as PDF
+  window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')
 }
 
 export default function InvoicesPage() {
