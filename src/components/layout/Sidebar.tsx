@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ShieldCheck,
   BarChart2,
+  CreditCard,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -29,6 +30,7 @@ const nav = [
   { href: '/team',           label: 'Team',         icon: UserCheck },
   { href: '/tasks',          label: 'Tasks',        icon: CheckSquare },
   { href: '/invoices',       label: 'Invoices',     icon: FileText },
+  { href: '/billing',        label: 'Billing',      icon: CreditCard },
   { href: '/automation',     label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',   label: 'AI Assistant', icon: Bot },
   { href: '/users',          label: 'Users',        icon: ShieldCheck },
