@@ -19,8 +19,9 @@ import {
   ChevronRight,
   ShieldCheck,
   BarChart2,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const nav = [
   { href: '/dashboard',      label: 'Dashboard',    icon: LayoutDashboard },
@@ -34,30 +35,49 @@ const nav = [
   { href: '/users',          label: 'Users',        icon: ShieldCheck },
 ]
 
-export default function Sidebar() {
+interface Props {
+  mobileOpen?: boolean
+  onMobileClose?: () => void
+}
+
+export default function Sidebar({ mobileOpen = false, onMobileClose }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    onMobileClose?.()
+  }, [pathname])
 
   async function handleLogout() {
     if (!DEMO) await supabase.auth.signOut()
     router.push('/login')
   }
 
-  return (
+  const sidebarContent = (
     <aside
       className={cn(
-        'relative flex flex-col h-screen bg-slate-900 border-r border-slate-800 transition-all duration-300 shrink-0',
+        'relative flex flex-col h-full bg-slate-900 border-r border-slate-800 transition-all duration-300',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800">
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800 shrink-0">
         <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
           <Building2 className="h-4 w-4 text-white" />
         </div>
         {!collapsed && (
           <span className="font-bold text-white text-lg tracking-tight">Agency OS</span>
+        )}
+        {/* Mobile close button */}
+        {onMobileClose && (
+          <button
+            onClick={onMobileClose}
+            className="ml-auto p-1 rounded text-slate-400 hover:text-slate-100 md:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
         )}
       </div>
 
@@ -71,7 +91,7 @@ export default function Sidebar() {
               href={href}
               title={collapsed ? label : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                 active
                   ? 'bg-indigo-600/20 text-indigo-400'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
@@ -88,7 +108,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="p-2 border-t border-slate-800 space-y-1">
+      <div className="p-2 border-t border-slate-800 space-y-1 shrink-0">
         <button
           onClick={handleLogout}
           title={collapsed ? 'Sign Out' : undefined}
@@ -99,13 +119,37 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Collapse toggle */}
+      {/* Collapse toggle — desktop only */}
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
+        className="absolute -right-3 top-20 z-10 hidden md:flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>
     </aside>
+  )
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex h-screen shrink-0">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onMobileClose}
+          />
+          {/* Drawer */}
+          <div className="relative h-full">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   )
 }

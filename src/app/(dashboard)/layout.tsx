@@ -11,7 +11,8 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [ready, setReady] = useState(DEMO) // skip check in demo mode
+  const [ready, setReady] = useState(DEMO)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     if (DEMO) return
@@ -32,10 +33,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <ToastProvider>
       <div className="flex h-screen overflow-hidden bg-slate-950">
-        <Sidebar />
+        <Sidebar
+          mobileOpen={mobileNavOpen}
+          onMobileClose={() => setMobileNavOpen(false)}
+        />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6 animate-fade-in">
+          <Header onMenuClick={() => setMobileNavOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
             {children}
           </main>
         </div>
