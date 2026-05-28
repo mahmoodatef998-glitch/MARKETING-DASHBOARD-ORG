@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { filename, contentType } = await req.json()
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  const { filename, contentType } = raw
   if (!filename || !contentType) {
     return NextResponse.json({ error: 'filename and contentType are required' }, { status: 400 })
   }

@@ -5,7 +5,13 @@ import { chatWithAssistant } from '@/lib/gemini'
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
-  const { message, history } = await req.json()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  const { message, history } = raw
+  if (!message?.trim()) return NextResponse.json({ error: 'message is required' }, { status: 400 })
 
   const [{ data: clients }, { data: tasks }, { data: invoices }] = await Promise.all([
     supabase.from('clients').select('id, name, email, status, country').limit(50),

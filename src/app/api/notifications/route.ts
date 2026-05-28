@@ -12,6 +12,8 @@ export interface Notification {
 
 export async function GET() {
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json([], { status: 200 }) // return empty — header bell stays quiet
 
   const today = new Date().toISOString().split('T')[0]
 

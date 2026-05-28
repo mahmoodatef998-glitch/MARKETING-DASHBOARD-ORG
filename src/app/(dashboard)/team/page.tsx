@@ -100,9 +100,15 @@ export default function TeamPage() {
   const [editing, setEditing] = useState<TeamMember | null>(null)
 
   async function load() {
-    const res = await fetch('/api/team')
-    setMembers(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch('/api/team')
+      const data = await res.json()
+      setMembers(Array.isArray(data) ? data : [])
+    } catch {
+      setMembers([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])

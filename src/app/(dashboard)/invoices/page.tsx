@@ -158,13 +158,18 @@ export default function InvoicesPage() {
   const [editing, setEditing] = useState<Invoice | null>(null)
 
   async function load() {
-    const [ir, cr] = await Promise.all([
-      fetch('/api/invoices?limit=200').then((r) => r.json()),
-      fetch('/api/clients?page=all').then((r) => r.json()),
-    ])
-    setInvoices(Array.isArray(ir) ? ir : (ir.data ?? []))
-    setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
-    setLoading(false)
+    try {
+      const [ir, cr] = await Promise.all([
+        fetch('/api/invoices?limit=200').then((r) => r.json()),
+        fetch('/api/clients?page=all').then((r) => r.json()),
+      ])
+      setInvoices(Array.isArray(ir) ? ir : (ir.data ?? []))
+      setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
+    } catch {
+      setInvoices([]); setClients([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])

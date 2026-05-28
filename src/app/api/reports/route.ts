@@ -4,6 +4,8 @@ import { createServerClient } from '@/lib/supabase-server'
 
 export async function GET() {
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [invoicesRes, tasksRes, clientsRes, teamTasksRes] = await Promise.all([
     supabase.from('invoices').select('id, total, status, issued_date, client_id'),

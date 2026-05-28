@@ -6,7 +6,8 @@ import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
+  if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   const updated = { ...body, updated_at: new Date().toISOString() }
 
   const { data, error } = await supabase

@@ -226,15 +226,20 @@ export default function TasksPage() {
   const [detailTask, setDetailTask] = useState<Task | null>(null)
 
   async function load() {
-    const [tr, cr, mr] = await Promise.all([
-      fetch('/api/tasks?limit=200').then((r) => r.json()),
-      fetch('/api/clients?page=all').then((r) => r.json()),
-      fetch('/api/team-users').then((r) => r.json()),
-    ])
-    setTasks(Array.isArray(tr) ? tr : (tr.data ?? []))
-    setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
-    setMembers(Array.isArray(mr) ? mr : [])
-    setLoading(false)
+    try {
+      const [tr, cr, mr] = await Promise.all([
+        fetch('/api/tasks?limit=200').then((r) => r.json()),
+        fetch('/api/clients?page=all').then((r) => r.json()),
+        fetch('/api/team-users').then((r) => r.json()),
+      ])
+      setTasks(Array.isArray(tr) ? tr : (tr.data ?? []))
+      setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
+      setMembers(Array.isArray(mr) ? mr : [])
+    } catch {
+      // keep empty arrays — page shows "no tasks" instead of spinning forever
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
