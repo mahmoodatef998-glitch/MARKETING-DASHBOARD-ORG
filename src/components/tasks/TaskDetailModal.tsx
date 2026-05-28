@@ -143,6 +143,13 @@ export default function TaskDetailModal({ task, open, onClose }: Props) {
             </p>
           )}
 
+          {task.revision_notes && (
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3">
+              <p className="text-xs font-semibold text-amber-400 mb-1">🔄 Revision Requested</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{task.revision_notes}</p>
+            </div>
+          )}
+
           {/* Delivery Link */}
           {task.delivery_url ? (
             <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3.5 flex items-center gap-3">

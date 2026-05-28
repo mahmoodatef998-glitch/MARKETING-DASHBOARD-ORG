@@ -88,7 +88,7 @@ export interface ClientPackage {
 }
 
 // ─── Task ─────────────────────────────────────────────────────────────────────
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'overdue'
+export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'overdue'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
 export interface TaskAssignee {
@@ -107,6 +107,9 @@ export interface Task {
   task_type?: TaskType
   due_date?: string
   delivery_url?: string
+  revision_notes?: string
+  publish_platforms?: string[]
+  published_at?: string
   /** legacy FK → team_members (kept for backward compat) */
   assignee_id?: string
   /** auth user UUID — used for RLS and new assignments */

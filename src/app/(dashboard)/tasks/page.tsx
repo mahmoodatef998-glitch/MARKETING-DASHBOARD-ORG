@@ -8,12 +8,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare, Upload, UploadCloud } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
 import type { Task, Client, TaskAssignee } from '@/types'
 
-const STATUS_OPTIONS = ['todo', 'in_progress', 'done', 'overdue'] as const
+const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
 const TASK_TYPE_OPTIONS = [
   { value: 'reel_video', label: 'Reel / Short Video' },
@@ -43,8 +43,48 @@ function TaskForm({
     client_id: initial?.client_id ?? '',
     delivery_url: initial?.delivery_url ?? '',
   })
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(0)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadPct(0)
+    try {
+      // Get presigned URL
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      })
+      if (!presignRes.ok) throw new Error('Storage not configured')
+      const { uploadUrl, fileUrl } = await presignRes.json()
+
+      // Upload directly to R2 using XHR for progress tracking
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', uploadUrl)
+        xhr.setRequestHeader('Content-Type', file.type)
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100))
+        }
+        xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`))
+        xhr.onerror = () => reject(new Error('Upload network error'))
+        xhr.send(file)
+      })
+
+      set('delivery_url', fileUrl)
+      setUploadPct(100)
+    } catch (err: any) {
+      alert(err.message ?? 'Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -123,13 +163,31 @@ function TaskForm({
         <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
       </div>
       <div className="space-y-2">
-        <Label>Delivery Link <span className="text-slate-500 font-normal text-xs">(Google Drive, WeTransfer…)</span></Label>
-        <Input
-          value={form.delivery_url}
-          onChange={(e) => set('delivery_url', e.target.value)}
-          placeholder="https://drive.google.com/…"
-          type="url"
-        />
+        <Label>Delivery <span className="text-slate-500 font-normal text-xs">(paste link or upload file)</span></Label>
+        <div className="flex gap-2">
+          <Input
+            value={form.delivery_url}
+            onChange={(e) => set('delivery_url', e.target.value)}
+            placeholder="https://drive.google.com/… or upload →"
+            type="url"
+            className="flex-1"
+          />
+          <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
+            uploading ? 'bg-slate-700 text-slate-400' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+          }`}>
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+            {uploading ? `${uploadPct}%` : 'Upload'}
+            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+          </label>
+        </div>
+        {form.delivery_url && (
+          <p className="text-xs text-emerald-400 flex items-center gap-1">
+            <ExternalLink className="h-3 w-3" />
+            <a href={form.delivery_url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate max-w-[300px]">
+              {form.delivery_url}
+            </a>
+          </p>
+        )}
       </div>
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -142,10 +200,11 @@ function TaskForm({
 }
 
 const statusColors: Record<string, string> = {
-  todo: 'bg-blue-500/20 text-blue-400',
+  todo:        'bg-blue-500/20 text-blue-400',
   in_progress: 'bg-purple-500/20 text-purple-400',
-  done: 'bg-green-500/20 text-green-400',
-  overdue: 'bg-red-500/20 text-red-400',
+  review:      'bg-amber-500/20 text-amber-400',
+  done:        'bg-green-500/20 text-green-400',
+  overdue:     'bg-red-500/20 text-red-400',
 }
 const priorityColors: Record<string, string> = {
   low: 'text-slate-400',
