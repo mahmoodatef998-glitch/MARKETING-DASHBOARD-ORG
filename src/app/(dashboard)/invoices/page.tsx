@@ -18,7 +18,7 @@ function InvoiceForm({
 }: {
   initial?: Partial<Invoice>
   clients: Client[]
-  onSave: (d: Partial<Invoice> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) => Promise<void>
+  onSave: (d: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -173,7 +173,7 @@ export default function InvoicesPage() {
 
   useEffect(() => { void load() }, [])
 
-  async function handleSave(data: Partial<Invoice> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) {
+  async function handleSave(data: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) {
     if (editing) {
       const res = await fetch(`/api/invoices/${editing.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -264,7 +264,7 @@ export default function InvoicesPage() {
                     {inv.tax ? <p className="text-xs text-slate-500">incl. {inv.tax}% tax</p> : null}
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" title="Download" onClick={() => downloadInvoice({ ...inv, client })}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" title="Download" onClick={() => downloadInvoice(inv)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(inv); setOpen(true) }}>
