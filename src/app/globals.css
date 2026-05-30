@@ -4,16 +4,16 @@
   /* ── Theme tokens ─────────────────────────────────────────── */
   :root, [data-theme="dark"] {
     --radius: 0.5rem;
-    --bg-page:   #020817;
-    --bg-panel:  #0f172a;
-    --bg-card:   #1e293b;
-    --bg-input:  rgba(30,41,59,.5);
-    --border:    #1e293b;
+    --bg-page:   #000000;
+    --bg-panel:  #0a0a0a;
+    --bg-card:   #111111;
+    --bg-input:  rgba(17,17,17,.8);
+    --border:    #222222;
     --text-1:    #f1f5f9;
     --text-2:    #94a3b8;
     --text-3:    #475569;
-    --scrollbar: #334155;
-    --scrollbar-hover: #475569;
+    --scrollbar: #333333;
+    --scrollbar-hover: #555555;
   }
 
   [data-theme="light"] {
@@ -39,6 +39,24 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     transition: background-color 0.2s, color 0.2s;
   }
+
+  /* Dark mode surface overrides — true black */
+  :root .bg-slate-950, [data-theme="dark"] .bg-slate-950 { background-color: #000000 !important; }
+  :root .bg-slate-900, [data-theme="dark"] .bg-slate-900 { background-color: #0a0a0a !important; }
+  :root .bg-slate-800\/50,
+  :root .bg-slate-800\/40,
+  :root .bg-slate-800\/60,
+  :root .bg-slate-800,
+  [data-theme="dark"] .bg-slate-800\/50,
+  [data-theme="dark"] .bg-slate-800\/40,
+  [data-theme="dark"] .bg-slate-800\/60,
+  [data-theme="dark"] .bg-slate-800 { background-color: #111111 !important; }
+  :root .border-slate-800,
+  :root .border-slate-700,
+  [data-theme="dark"] .border-slate-800,
+  [data-theme="dark"] .border-slate-700 { border-color: #222222 !important; }
+  :root header,  [data-theme="dark"] header  { background-color: rgba(0,0,0,.85) !important; border-color: #222222 !important; }
+  :root nav,     [data-theme="dark"] nav     { background-color: #0a0a0a !important; border-color: #222222 !important; }
 
   /* Light mode surface overrides */
   [data-theme="light"] .bg-slate-950 { background-color: var(--bg-page) !important; }
