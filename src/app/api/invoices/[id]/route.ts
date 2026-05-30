@@ -9,7 +9,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const supabase = await createServerClient()
   const body = await req.json()
 
-  let updated: any = { ...body, updated_at: new Date().toISOString() }
+  let updated: any = { ...body, updated_at: new Date().toISOString(), due_date: body.due_date || null }
 
   if (body.items) {
     const subtotal = body.items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)

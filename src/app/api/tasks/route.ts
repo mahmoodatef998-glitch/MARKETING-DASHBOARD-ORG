@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   let query = supabase
     .from('tasks')
-    .select('*, assignee:profiles(id,display_name,role), client:clients(id,name,email)')
+    .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
     .order('created_at', { ascending: false })
   const status = searchParams.get('status')
   const clientId = searchParams.get('client_id')

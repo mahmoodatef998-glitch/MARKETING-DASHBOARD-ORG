@@ -9,7 +9,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createServerClient()
   const body = await req.json()
-  const updated = { ...body, updated_at: new Date().toISOString() }
+
+  // Normalize empty strings to null for optional FK / enum / date columns.
+  // The form sends '' for unset selects; Supabase rejects them against CHECK/FK constraints.
+  const updated: Record<string, unknown> = {
+    title:       body.title,
+    description: body.description || null,
+    status:      body.status,
+    priority:    body.priority,
+    task_type:   body.task_type   || null,
+    due_date:    body.due_date    || null,
+    assigned_to: body.assigned_to || null,
+    client_id:   body.client_id   || null,
+    updated_at:  new Date().toISOString(),
+  }
 
   // Fetch old status before update so we know if it changed to 'done'
   const { data: oldTask } = await supabase
@@ -22,7 +35,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .from('tasks')
     .update(updated)
     .eq('id', id)
-    .select('*, client:clients(id, name, email), assignee:profiles(id, display_name)')
+    .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
