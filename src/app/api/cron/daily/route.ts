@@ -100,16 +100,34 @@ export async function GET(req: NextRequest) {
   for (const plan of duePlans ?? []) {
     if (!plan.client?.email) continue
     try {
+      // Calculate period start to fetch completed tasks
+      const periodStart = new Date(now)
+      switch (plan.cycle_type as CycleType) {
+        case 'monthly':       periodStart.setMonth(periodStart.getMonth() - 1); break
+        case 'biweekly':      periodStart.setDate(periodStart.getDate() - 14); break
+        case 'every_10_days': periodStart.setDate(periodStart.getDate() - 10); break
+        case 'custom_days':   periodStart.setDate(periodStart.getDate() - (plan.custom_days ?? 30)); break
+        default:              periodStart.setDate(periodStart.getDate() - 30);
+      }
+
+      const { data: doneTasks } = await supabase
+        .from('tasks')
+        .select('title, task_type, due_date')
+        .eq('client_id', plan.client_id)
+        .eq('status', 'done')
+        .gte('updated_at', toDateStr(periodStart))
+
       await generateAndSendInvoice({
         supabase,
-        clientId:      plan.client_id,
-        clientEmail:   plan.client.email,
-        clientName:    plan.client.name,
-        amount:        plan.amount,
-        currency:      plan.currency,
-        billingPlanId: plan.id,
-        cycleType:     plan.cycle_type as CycleType,
-        customDays:    plan.custom_days ?? undefined,
+        clientId:       plan.client_id,
+        clientEmail:    plan.client.email,
+        clientName:     plan.client.name,
+        amount:         plan.amount,
+        currency:       plan.currency,
+        billingPlanId:  plan.id,
+        cycleType:      plan.cycle_type as CycleType,
+        customDays:     plan.custom_days ?? undefined,
+        completedTasks: doneTasks ?? [],
       })
       results.push({ type: 'auto_invoice', recipient: plan.client.email, status: 'sent' })
     } catch (err: any) {

@@ -14,11 +14,37 @@ function buildRawEmail(opts: {
   to: string
   subject: string
   body: string
+  html?: string
   from?: string
 }): string {
   const from = opts.from ?? process.env.GMAIL_SENDER_EMAIL ?? 'noreply@agencyos.app'
+
+  if (opts.html) {
+    const boundary = 'boundary_pixelmkt_' + Date.now()
+    const raw = [
+      `From: Pixel Marketing Agency <${from}>`,
+      `To: ${opts.to}`,
+      `Subject: ${opts.subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      opts.body,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      opts.html,
+      '',
+      `--${boundary}--`,
+    ].join('\n')
+    return Buffer.from(raw).toString('base64url')
+  }
+
   const raw = [
-    `From: Agency OS <${from}>`,
+    `From: Pixel Marketing Agency <${from}>`,
     `To: ${opts.to}`,
     `Subject: ${opts.subject}`,
     'MIME-Version: 1.0',
@@ -34,6 +60,7 @@ export async function sendEmail(opts: {
   to: string
   subject: string
   body: string
+  html?: string
 }): Promise<void> {
   const gmail = getGmailClient()
   await gmail.users.messages.send({
