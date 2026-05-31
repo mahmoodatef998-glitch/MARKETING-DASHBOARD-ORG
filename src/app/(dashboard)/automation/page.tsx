@@ -38,7 +38,7 @@ export default function AutomationPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadLogs() }, [])
+  useEffect(() => { void loadLogs() }, [])
 
   async function runNow() {
     setRunning(true)
@@ -61,8 +61,6 @@ export default function AutomationPage() {
   const sentCount    = logs.filter((l) => l.status === 'sent').length
   const failedCount  = logs.filter((l) => l.status === 'failed').length
   const paymentLogs  = logs.filter((l) => l.type === 'payment_reminder')
-  const taskLogs     = logs.filter((l) => l.type.startsWith('task_'))
-  const completedLog = logs.filter((l) => l.type === 'task_completed')
 
   return (
     <div className="space-y-6">

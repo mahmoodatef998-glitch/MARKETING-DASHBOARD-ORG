@@ -8,12 +8,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, ExternalLink, MessageSquare, Upload, UploadCloud, LayoutList, Columns } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
-import TaskDetailModal from '@/components/tasks/TaskDetailModal'
-import KanbanView from '@/components/tasks/KanbanView'
-import { getSupabaseClient } from '@/lib/supabase'
-import type { Task, Client, TaskAssignee, TaskStatus } from '@/types'
+import type { Task, Client, TaskAssignee } from '@/types'
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const
@@ -43,50 +40,9 @@ function TaskForm({
     due_date: initial?.due_date ?? '',
     assigned_to: initial?.assigned_to ?? '',
     client_id: initial?.client_id ?? '',
-    delivery_url: initial?.delivery_url ?? '',
   })
-  const [loading, setLoading]   = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [uploadPct, setUploadPct] = useState(0)
+  const [loading, setLoading] = useState(false)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
-
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    setUploadPct(0)
-    try {
-      // Get presigned URL
-      const presignRes = await fetch('/api/upload/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, contentType: file.type }),
-      })
-      if (!presignRes.ok) throw new Error('Storage not configured')
-      const { uploadUrl, fileUrl } = await presignRes.json()
-
-      // Upload directly to R2 using XHR for progress tracking
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('PUT', uploadUrl)
-        xhr.setRequestHeader('Content-Type', file.type)
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100))
-        }
-        xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`))
-        xhr.onerror = () => reject(new Error('Upload network error'))
-        xhr.send(file)
-      })
-
-      set('delivery_url', fileUrl)
-      setUploadPct(100)
-    } catch (err: any) {
-      alert(err.message ?? 'Upload failed')
-    } finally {
-      setUploading(false)
-      e.target.value = ''
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -164,33 +120,6 @@ function TaskForm({
         <Label>Due Date</Label>
         <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
       </div>
-      <div className="space-y-2">
-        <Label>Delivery <span className="text-slate-500 font-normal text-xs">(paste link or upload file)</span></Label>
-        <div className="flex gap-2">
-          <Input
-            value={form.delivery_url}
-            onChange={(e) => set('delivery_url', e.target.value)}
-            placeholder="https://drive.google.com/… or upload →"
-            type="url"
-            className="flex-1"
-          />
-          <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
-            uploading ? 'bg-slate-700 text-slate-400' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-          }`}>
-            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-            {uploading ? `${uploadPct}%` : 'Upload'}
-            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-          </label>
-        </div>
-        {form.delivery_url && (
-          <p className="text-xs text-emerald-400 flex items-center gap-1">
-            <ExternalLink className="h-3 w-3" />
-            <a href={form.delivery_url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate max-w-[300px]">
-              {form.delivery_url}
-            </a>
-          </p>
-        )}
-      </div>
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={loading}>
@@ -202,11 +131,25 @@ function TaskForm({
 }
 
 const statusColors: Record<string, string> = {
-  todo:        'bg-blue-500/20 text-blue-400',
+  todo: 'bg-blue-500/20 text-blue-400',
   in_progress: 'bg-purple-500/20 text-purple-400',
-  review:      'bg-amber-500/20 text-amber-400',
-  done:        'bg-green-500/20 text-green-400',
-  overdue:     'bg-red-500/20 text-red-400',
+  review: 'bg-amber-500/20 text-amber-400',
+  done: 'bg-green-500/20 text-green-400',
+  overdue: 'bg-red-500/20 text-red-400',
+}
+
+const statusFilterStyle: Record<string, string> = {
+  all:         'bg-slate-700 text-slate-200 border-slate-600',
+  todo:        'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  in_progress: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  review:      'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  done:        'bg-green-500/20 text-green-300 border-green-500/40',
+  overdue:     'bg-red-500/20 text-red-300 border-red-500/40',
+}
+
+const statusLabel: Record<string, string> = {
+  all: 'All', todo: 'To Do', in_progress: 'In Progress',
+  review: 'Review', done: 'Done', overdue: 'Overdue',
 }
 const priorityColors: Record<string, string> = {
   low: 'text-slate-400',
@@ -223,50 +166,23 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
-  const [detailTask, setDetailTask] = useState<Task | null>(null)
-  const [view, setView] = useState<'list' | 'kanban'>('list')
 
   async function load() {
-    try {
-      const [tr, cr, mr] = await Promise.all([
-        fetch('/api/tasks?limit=200').then((r) => r.json()),
-        fetch('/api/clients?page=all').then((r) => r.json()),
-        fetch('/api/team-users').then((r) => r.json()),
-      ])
-      setTasks(Array.isArray(tr) ? tr : (tr.data ?? []))
-      setClients(Array.isArray(cr) ? cr : (cr.data ?? []))
-      setMembers(Array.isArray(mr) ? mr : [])
-    } catch {
-      // keep empty arrays — page shows "no tasks" instead of spinning forever
-    } finally {
-      setLoading(false)
-    }
+    const [tr, cr, mr] = await Promise.all([
+      fetch('/api/tasks').then((r) => r.json()),
+      fetch('/api/clients').then((r) => r.json()),
+      fetch('/api/team-users').then((r) => r.json()),
+    ])
+    setTasks(Array.isArray(tr) ? tr : [])
+    setClients(Array.isArray(cr) ? cr : [])
+    setMembers(Array.isArray(mr) ? mr : [])
+    setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
-
-  // Real-time updates via Supabase Realtime
-  useEffect(() => {
-    const supabase = getSupabaseClient()
-    const channel = supabase
-      .channel('tasks-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setTasks((prev) => {
-            if (prev.find(t => t.id === (payload.new as Task).id)) return prev
-            return [payload.new as Task, ...prev]
-          })
-        } else if (payload.eventType === 'UPDATE') {
-          setTasks((prev) => prev.map(t => t.id === (payload.new as Task).id ? { ...t, ...payload.new as Task } : t))
-        } else if (payload.eventType === 'DELETE') {
-          setTasks((prev) => prev.filter(t => t.id !== (payload.old as Task).id))
-        }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [])
+  useEffect(() => { void load() }, [])
 
   async function handleSave(data: Partial<Task>) {
     if (editing) {
@@ -291,77 +207,140 @@ export default function TasksPage() {
     else toast('Failed to delete', 'error')
   }
 
-  async function handleStatusChange(taskId: string, status: TaskStatus) {
-    const res = await fetch(`/api/tasks/${taskId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+  function exportCSV() {
+    window.open('/api/export?type=tasks', '_blank')
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
+      return next
     })
-    if (res.ok) {
-      setTasks((prev) => prev.map(t => t.id === taskId ? { ...t, status } : t))
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
     } else {
-      toast('Failed to update status', 'error')
+      setSelected(new Set(filtered.map((t) => t.id)))
     }
   }
 
-  const filtered = tasks.filter((t) => {
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || t.status === filterStatus
-    return matchSearch && matchStatus
-  })
+  async function bulkDelete() {
+    if (!confirm(`Delete ${selected.size} task(s)?`)) return
+    await Promise.all([...selected].map((id) => fetch(`/api/tasks/${id}`, { method: 'DELETE' })))
+    toast(`${selected.size} task(s) deleted`, 'success')
+    setSelected(new Set())
+    load()
+  }
+
+  async function bulkSetStatus(status: string) {
+    await Promise.all([...selected].map((id) =>
+      fetch(`/api/tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+    ))
+    toast(`${selected.size} task(s) updated`, 'success')
+    setSelected(new Set())
+    load()
+  }
+
+  const filtered = tasks
+    .filter((t) => {
+      const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
+      const matchStatus = filterStatus === 'all' || t.status === filterStatus
+      return matchSearch && matchStatus
+    })
+    .sort((a, b) => {
+      // Overdue always first
+      if (a.status === 'overdue' && b.status !== 'overdue') return -1
+      if (b.status === 'overdue' && a.status !== 'overdue') return 1
+      // Then by due_date ascending (no date goes last)
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+    })
+
+  const countByStatus = (s: string) => tasks.filter((t) => t.status === s).length
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Top bar: search + new button */}
+      <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {/* View toggle */}
-        <div className="flex items-center bg-slate-800 rounded-lg p-0.5 gap-0.5">
-          <button
-            onClick={() => setView('list')}
-            className={`p-1.5 rounded-md transition-colors ${view === 'list' ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'}`}
-            title="List view"
-          >
-            <LayoutList className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setView('kanban')}
-            className={`p-1.5 rounded-md transition-colors ${view === 'kanban' ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'}`}
-            title="Kanban view"
-          >
-            <Columns className="h-4 w-4" />
-          </button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Task
         </Button>
       </div>
 
-      <div className="flex gap-4 text-sm text-slate-400 flex-wrap">
-        <span>{tasks.length} total</span>
-        {STATUS_OPTIONS.map((s) => (
-          <span key={s} className={statusColors[s].split(' ')[1]}>
-            {tasks.filter((t) => t.status === s).length} {s.replace('_', ' ')}
-          </span>
-        ))}
+      {/* Bulk action toolbar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
+          <span className="text-sm font-medium text-indigo-300">{selected.size} selected</span>
+          <div className="flex-1" />
+          <Select onValueChange={bulkSetStatus}>
+            <SelectTrigger className="w-36 h-8 text-xs border-indigo-500/40 bg-slate-800">
+              <SelectValue placeholder="Set status…" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="ghost" onClick={bulkDelete} className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10">
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+          <button onClick={() => setSelected(new Set())} className="p-1 rounded text-slate-500 hover:text-slate-300">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Status filter chips with select-all */}
+      <div className="flex gap-2 flex-wrap items-center">
+        {filtered.length > 0 && (
+          <button
+            onClick={toggleSelectAll}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {selected.size === filtered.length && filtered.length > 0
+              ? <CheckSquare className="h-4 w-4 text-indigo-400" />
+              : <Square className="h-4 w-4" />}
+            <span className="text-xs">All</span>
+          </button>
+        )}
+        {(['all', ...STATUS_OPTIONS] as const).map((s) => {
+          const count = s === 'all' ? tasks.length : countByStatus(s)
+          const active = filterStatus === s
+          return (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all
+                ${active
+                  ? `${statusFilterStyle[s]} ring-2 ring-offset-2 ring-offset-slate-950 ring-current shadow-lg scale-105`
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 bg-transparent'
+                }`}
+            >
+              {statusLabel[s]}
+              <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold
+                ${active ? 'bg-white/20' : 'bg-slate-700 text-slate-400'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {loading ? (
         <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
-      ) : view === 'kanban' ? (
-        <KanbanView
-          tasks={filtered}
-          onStatusChange={handleStatusChange}
-          onTaskClick={setDetailTask}
-        />
       ) : filtered.length === 0 ? (
         <Card><CardContent className="py-16 text-center">
           <p className="text-slate-400 text-sm">No tasks found.</p>
@@ -372,12 +351,16 @@ export default function TasksPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((task) => (
-            <Card
-              key={task.id}
-              className="hover:border-slate-600 transition-colors cursor-pointer"
-              onClick={() => setDetailTask(task)}
-            >
-              <CardContent className="py-4 flex items-start gap-4">
+            <Card key={task.id} className={`hover:border-slate-600 transition-colors ${selected.has(task.id) ? 'border-indigo-500/40 bg-indigo-500/5' : ''}`}>
+              <CardContent className="py-4 flex items-start gap-3">
+                <button
+                  onClick={() => toggleSelect(task.id)}
+                  className="mt-0.5 shrink-0 text-slate-500 hover:text-indigo-400 transition-colors"
+                >
+                  {selected.has(task.id)
+                    ? <CheckSquare className="h-4 w-4 text-indigo-400" />
+                    : <Square className="h-4 w-4" />}
+                </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-medium text-slate-100 text-sm">{task.title}</h3>
@@ -393,11 +376,6 @@ export default function TasksPage() {
                         {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
                       </span>
                     )}
-                    {task.delivery_url && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" /> Delivery
-                      </span>
-                    )}
                   </div>
                   {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
@@ -408,12 +386,9 @@ export default function TasksPage() {
                     )}
                     {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
                     {task.client?.name && <span>— {task.client.name}</span>}
-                    <span className="flex items-center gap-1 text-slate-600">
-                      <MessageSquare className="h-3 w-3" /> Comments
-                    </span>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(task); setOpen(true) }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
@@ -435,12 +410,6 @@ export default function TasksPage() {
           <TaskForm initial={editing ?? undefined} clients={clients} members={members} onSave={handleSave} onCancel={() => setOpen(false)} />
         </DialogContent>
       </Dialog>
-
-      <TaskDetailModal
-        task={detailTask}
-        open={!!detailTask}
-        onClose={() => setDetailTask(null)}
-      />
     </div>
   )
 }

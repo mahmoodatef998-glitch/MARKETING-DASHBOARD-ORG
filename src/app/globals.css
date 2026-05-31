@@ -1,8 +1,32 @@
 @import "tailwindcss";
 
 @layer base {
-  :root {
+  /* ── Theme tokens ─────────────────────────────────────────── */
+  :root, [data-theme="dark"] {
     --radius: 0.5rem;
+    --bg-page:   #000000;
+    --bg-panel:  #0a0a0a;
+    --bg-card:   #111111;
+    --bg-input:  rgba(17,17,17,.8);
+    --border:    #222222;
+    --text-1:    #f1f5f9;
+    --text-2:    #94a3b8;
+    --text-3:    #475569;
+    --scrollbar: #333333;
+    --scrollbar-hover: #555555;
+  }
+
+  [data-theme="light"] {
+    --bg-page:   #f8fafc;
+    --bg-panel:  #f1f5f9;
+    --bg-card:   #ffffff;
+    --bg-input:  #ffffff;
+    --border:    #e2e8f0;
+    --text-1:    #0f172a;
+    --text-2:    #475569;
+    --text-3:    #94a3b8;
+    --scrollbar: #cbd5e1;
+    --scrollbar-hover: #94a3b8;
   }
 
   * {
@@ -10,10 +34,47 @@
   }
 
   body {
-    background-color: #020817;
-    color: #f1f5f9;
+    background-color: var(--bg-page);
+    color: var(--text-1);
     font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.2s, color 0.2s;
   }
+
+  /* Dark mode surface overrides — true black */
+  :root .bg-slate-950, [data-theme="dark"] .bg-slate-950 { background-color: #000000 !important; }
+  :root .bg-slate-900, [data-theme="dark"] .bg-slate-900 { background-color: #0a0a0a !important; }
+  :root .bg-slate-800\/50,
+  :root .bg-slate-800\/40,
+  :root .bg-slate-800\/60,
+  :root .bg-slate-800,
+  [data-theme="dark"] .bg-slate-800\/50,
+  [data-theme="dark"] .bg-slate-800\/40,
+  [data-theme="dark"] .bg-slate-800\/60,
+  [data-theme="dark"] .bg-slate-800 { background-color: #111111 !important; }
+  :root .border-slate-800,
+  :root .border-slate-700,
+  [data-theme="dark"] .border-slate-800,
+  [data-theme="dark"] .border-slate-700 { border-color: #222222 !important; }
+  :root header,  [data-theme="dark"] header  { background-color: rgba(0,0,0,.85) !important; border-color: #222222 !important; }
+  :root nav,     [data-theme="dark"] nav     { background-color: #0a0a0a !important; border-color: #222222 !important; }
+
+  /* Light mode surface overrides */
+  [data-theme="light"] .bg-slate-950 { background-color: var(--bg-page) !important; }
+  [data-theme="light"] .bg-slate-900 { background-color: var(--bg-panel) !important; }
+  [data-theme="light"] .bg-slate-800\/50,
+  [data-theme="light"] .bg-slate-800\/40,
+  [data-theme="light"] .bg-slate-800\/60,
+  [data-theme="light"] .bg-slate-800 { background-color: var(--bg-card) !important; }
+  [data-theme="light"] .border-slate-800,
+  [data-theme="light"] .border-slate-700 { border-color: var(--border) !important; }
+  [data-theme="light"] .text-slate-100 { color: var(--text-1) !important; }
+  [data-theme="light"] .text-slate-200 { color: #1e293b !important; }
+  [data-theme="light"] .text-slate-300 { color: #334155 !important; }
+  [data-theme="light"] .text-slate-400,
+  [data-theme="light"] .text-slate-500 { color: var(--text-2) !important; }
+  [data-theme="light"] .text-slate-600 { color: var(--text-3) !important; }
+  [data-theme="light"] header { background-color: rgba(248,250,252,.9) !important; border-color: var(--border) !important; }
+  [data-theme="light"] nav    { background-color: var(--bg-panel) !important; border-color: var(--border) !important; }
 
   [dir="rtl"] {
     direction: rtl;
@@ -22,9 +83,9 @@
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #0f172a; }
-  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  ::-webkit-scrollbar-track { background: var(--bg-panel); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 }
 
 @layer utilities {

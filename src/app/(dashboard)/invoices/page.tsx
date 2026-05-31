@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
@@ -18,7 +18,7 @@ function InvoiceForm({
 }: {
   initial?: Partial<Invoice>
   clients: Client[]
-  onSave: (d: any) => Promise<void>
+  onSave: (d: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -33,8 +33,8 @@ function InvoiceForm({
   )
   const [loading, setLoading] = useState(false)
 
-  function setField(k: string, v: any) { setForm((f) => ({ ...f, [k]: v })) }
-  function setItem(i: number, k: string, v: any) {
+  function setField(k: string, v: string | number) { setForm((f) => ({ ...f, [k]: v })) }
+  function setItem(i: number, k: string, v: string | number) {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [k]: v } : item))
   }
   function addItem() { setItems((prev) => [...prev, { description: '', quantity: 1, unit_price: 0 }]) }
@@ -149,6 +149,10 @@ function downloadInvoice(invoice: Invoice) {
   window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')
 }
 
+function exportCSV() {
+  window.open('/api/export?type=invoices', '_blank')
+}
+
 export default function InvoicesPage() {
   const { toast } = useToast()
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -173,9 +177,9 @@ export default function InvoicesPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
-  async function handleSave(data: any) {
+  async function handleSave(data: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) {
     if (editing) {
       const res = await fetch(`/api/invoices/${editing.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -201,7 +205,7 @@ export default function InvoicesPage() {
   const filtered = invoices.filter(
     (inv) =>
       inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
-      (inv.client as any)?.name?.toLowerCase().includes(search.toLowerCase())
+      (inv.client as { name?: string } | null)?.name?.toLowerCase().includes(search.toLowerCase())
   )
 
   const totalRevenue = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0)
@@ -231,6 +235,9 @@ export default function InvoicesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search invoices…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> New Invoice
         </Button>
@@ -241,7 +248,7 @@ export default function InvoicesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((inv) => {
-            const client = inv.client as any
+            const client = inv.client as { name?: string; email?: string } | null
             return (
               <Card key={inv.id} className="hover:border-slate-600 transition-colors">
                 <CardContent className="py-4 flex items-center gap-4">
@@ -263,7 +270,7 @@ export default function InvoicesPage() {
                     {inv.tax ? <p className="text-xs text-slate-500">incl. {inv.tax}% tax</p> : null}
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" title="Download" onClick={() => downloadInvoice({ ...inv, client })}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" title="Download" onClick={() => downloadInvoice(inv)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(inv); setOpen(true) }}>

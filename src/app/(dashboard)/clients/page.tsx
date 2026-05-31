@@ -4,11 +4,31 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import ClientForm from '@/components/clients/ClientForm'
+import ClientForm, { type BillingFormData } from '@/components/clients/ClientForm'
 import ClientProfileModal from '@/components/clients/ClientProfileModal'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard, Download, CreditCard } from 'lucide-react'
 import type { Client } from '@/types'
+
+const CYCLE_LABELS: Record<string, string> = {
+  monthly:       'Monthly',
+  biweekly:      'Every 2 Weeks',
+  every_10_days: 'Every 10 Days',
+  custom_days:   'Custom',
+  manual:        'After Package',
+}
+
+function billingLabel(client: Client): string | null {
+  const plan = client.billing_plans?.find((p) => p.is_active)
+  if (!plan) return null
+  const cycle = plan.cycle_type === 'custom_days' && plan.custom_days === 15
+    ? 'Every 15 Days'
+    : plan.cycle_type === 'custom_days' && plan.custom_days
+    ? `Every ${plan.custom_days} days`
+    : CYCLE_LABELS[plan.cycle_type] ?? plan.cycle_type
+  const sym = plan.currency === 'EGP' ? 'EGP ' : plan.currency === 'EUR' ? '€' : plan.currency === 'GBP' ? '£' : '$'
+  return `${cycle} · ${sym}${plan.amount.toLocaleString()}`
+}
 
 export default function ClientsPage() {
   const { toast } = useToast()
@@ -31,14 +51,15 @@ export default function ClientsPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
-  async function handleSave(data: Partial<Client>) {
+  async function handleSave(data: Partial<Client>, billing?: BillingFormData) {
+    const body = { ...data, billing_plan: billing ?? null }
     if (editing) {
       const res = await fetch(`/api/clients/${editing.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       })
       if (res.ok) { toast('Client updated', 'success'); setOpen(false); load() }
       else toast('Failed to update client', 'error')
@@ -46,7 +67,7 @@ export default function ClientsPage() {
       const res = await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       })
       if (res.ok) { toast('Client created', 'success'); setOpen(false); load() }
       else toast('Failed to create client', 'error')
@@ -58,6 +79,10 @@ export default function ClientsPage() {
     const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' })
     if (res.ok) { toast('Client deleted', 'success'); load() }
     else toast('Failed to delete', 'error')
+  }
+
+  function exportCSV() {
+    window.open('/api/export?type=clients', '_blank')
   }
 
   const filtered = clients.filter(
@@ -84,6 +109,9 @@ export default function ClientsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+          <Download className="h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="h-4 w-4" /> Add Client
         </Button>
@@ -179,8 +207,16 @@ export default function ClientsPage() {
                   </p>
                 )}
 
+                {/* Billing badge */}
+                {billingLabel(client) && (
+                  <div className="mt-3 flex items-center gap-1.5 text-xs text-indigo-300 border-t border-slate-800 pt-3">
+                    <CreditCard className="h-3 w-3 shrink-0" />
+                    <span>{billingLabel(client)}</span>
+                  </div>
+                )}
+
                 {/* Hint */}
-                <div className="mt-3 pt-2 border-t border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`mt-3 pt-2 border-t border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity ${billingLabel(client) ? '' : 'mt-0'}`}>
                   <p className="text-xs text-indigo-400">Click to view profile & packages →</p>
                 </div>
               </CardContent>

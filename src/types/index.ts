@@ -40,6 +40,8 @@ export interface Client {
   notes?: string
   created_at: string
   updated_at: string
+  /** joined from billing_plans table */
+  billing_plans?: BillingPlan[]
 }
 
 // ─── Team Member ─────────────────────────────────────────────────────────────

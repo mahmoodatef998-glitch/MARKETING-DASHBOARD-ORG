@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { generateId } from '@/lib/utils'
-import { generateAndSendInvoice, nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
 
 // GET all team/client users
 export async function GET() {

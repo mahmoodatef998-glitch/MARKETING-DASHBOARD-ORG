@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
     message,
     history: history ?? [],
     context: {
-      clients: (clients ?? []) as any[],
-      tasks: (tasks ?? []) as any[],
-      invoices: (invoices ?? []) as any[],
+      clients: (clients ?? []) as Record<string, unknown>[],
+      tasks: (tasks ?? []) as Record<string, unknown>[],
+      invoices: (invoices ?? []) as Record<string, unknown>[],
     },
   })
 

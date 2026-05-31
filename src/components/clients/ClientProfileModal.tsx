@@ -6,11 +6,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast'
 import {
-  Plus, Pencil, Trash2, X, Loader2, Package, CheckCircle2,
-  Mail, Phone, Globe, CalendarDays, DollarSign, RefreshCw, FileText,
+  Plus, Pencil, Trash2, X, Loader2, Package,
+  Mail, Phone, Globe, CalendarDays, DollarSign,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import PackageProgress from '@/components/clients/PackageProgress'
@@ -75,11 +74,11 @@ function PackageForm({
   })
   const [loading, setLoading] = useState(false)
 
-  function setField(k: keyof PackageFormData, v: any) {
+  function setField(k: keyof PackageFormData, v: PackageFormData[keyof PackageFormData]) {
     setForm((f) => ({ ...f, [k]: v }))
   }
 
-  function setItem(idx: number, k: keyof PackageItem, v: any) {
+  function setItem(idx: number, k: keyof PackageItem, v: PackageItem[keyof PackageItem]) {
     setForm((f) => ({
       ...f,
       items: f.items.map((item, i) => i === idx ? { ...item, [k]: v } : item),
@@ -121,7 +120,7 @@ function PackageForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Renewal Type</Label>
-          <Select value={form.renewal_type} onValueChange={(v) => setField('renewal_type', v as any)}>
+          <Select value={form.renewal_type} onValueChange={(v) => setField('renewal_type', v as 'monthly' | 'one_time')}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="monthly">Monthly (auto-renews)</SelectItem>
@@ -361,11 +360,12 @@ export default function ClientProfileModal({ client, open, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (open && client) loadPackages()
+    if (open && client) void loadPackages()
     else setPackages([])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client?.id])
 
-  async function handleSavePackage(form: any) {
+  async function handleSavePackage(form: PackageFormData) {
     const url = editingPkg ? `/api/packages/${editingPkg.id}` : '/api/packages'
     const method = editingPkg ? 'PUT' : 'POST'
     const res = await fetch(url, {

@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionInvoice, deleteNotionPage } from '@/lib/notion'
@@ -9,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  let updated: any = { ...body, updated_at: new Date().toISOString() }
+  let updated: any = { ...body, updated_at: new Date().toISOString(), due_date: body.due_date || null }
 
   if (body.items) {
     const subtotal = body.items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)

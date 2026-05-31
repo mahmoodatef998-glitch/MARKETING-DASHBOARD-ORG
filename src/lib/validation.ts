@@ -1,16 +1,20 @@
 import { z } from 'zod'
 
+// Pre-process: convert empty strings to null so optional/nullable fields work correctly
+// when the form sends '' for uncleared selects and date inputs.
+const e2n = (schema: z.ZodTypeAny) => z.preprocess((v) => (v === '' ? null : v), schema)
+
 // ── Task ──────────────────────────────────────────────────────────────────────
 export const TaskCreateSchema = z.object({
   title:        z.string().min(1).max(255),
-  description:  z.string().max(2000).optional().nullable(),
+  description:  e2n(z.string().max(2000).nullable().optional()),
   status:       z.enum(['todo', 'in_progress', 'review', 'done', 'overdue']).optional(),
   priority:     z.enum(['low', 'medium', 'high', 'urgent']).optional(),
-  task_type:    z.enum(['reel_video', 'design', 'ai_video', 'post', 'custom']).optional().nullable(),
-  due_date:     z.string().datetime({ offset: true }).optional().nullable(),
-  assigned_to:  z.string().uuid().optional().nullable(),
-  client_id:    z.string().uuid().optional().nullable(),
-  delivery_url: z.string().url().max(2048).optional().nullable(),
+  task_type:    e2n(z.enum(['reel_video', 'design', 'ai_video', 'post', 'custom']).nullable().optional()),
+  due_date:     e2n(z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullable().optional()),
+  assigned_to:  e2n(z.string().uuid().nullable().optional()),
+  client_id:    e2n(z.string().uuid().nullable().optional()),
+  delivery_url: e2n(z.string().url().max(2048).nullable().optional()),
 })
 
 export const TaskUpdateSchema = TaskCreateSchema.partial()
@@ -39,7 +43,7 @@ export const InvoiceCreateSchema = z.object({
   items:          z.array(InvoiceItemSchema).min(1),
   tax:            z.number().min(0).max(100).optional(),
   status:         z.enum(['draft', 'sent', 'paid', 'overdue']).optional(),
-  due_date:       z.string().datetime({ offset: true }).optional().nullable(),
+  due_date:       e2n(z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullable().optional()),
   notes:          z.string().max(2000).optional().nullable(),
   invoice_number: z.string().max(50).optional(),
 })

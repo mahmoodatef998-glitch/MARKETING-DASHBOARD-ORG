@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Loader2, UserPlus } from 'lucide-react'
+import { Search, Pencil, Trash2, Mail, Loader2, UserPlus } from 'lucide-react'
 import type { TeamMember } from '@/types'
 
 // Must match the UserRole values used in profiles table
@@ -111,7 +111,7 @@ export default function TeamPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   async function handleSave(data: Partial<TeamMember>) {
     if (!editing) return
