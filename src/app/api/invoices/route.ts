@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
     client_id: body.client_id,
     items: items.map((i) => ({ id: generateId(), description: i.description, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price })),
     subtotal, tax, total, status: body.status ?? 'draft',
-    ...(body.due_date ? { due_date: body.due_date } : {}),
-    ...(body.notes    ? { notes:    body.notes    } : {}),
+    ...(body.due_date ? { due_date: body.due_date as string } : {}),
+    ...(body.notes    ? { notes:    body.notes    as string } : {}),
     issued_date: new Date().toISOString(),
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }
