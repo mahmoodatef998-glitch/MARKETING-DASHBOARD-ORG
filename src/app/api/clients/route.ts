@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionClient } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
+import { parseBody, ClientCreateSchema } from '@/lib/validation'
 import { DEMO_CLIENTS } from '@/lib/demo-data'
 import type { Client } from '@/types'
 
@@ -25,12 +26,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
-  const body = await req.json()
-  const { billing_plan, ...clientBody } = body
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+  const { billing_plan, ...clientBody } = raw
+  const parsed = parseBody(ClientCreateSchema, clientBody)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+
+  const body = parsed.data
   const client: Client = {
-    id: generateId(), name: clientBody.name, email: clientBody.email, phone: clientBody.phone ?? null,
-    status: clientBody.status ?? 'pending', country: clientBody.country ?? null, notes: clientBody.notes ?? null,
+    id: generateId(),
+    name:    body.name,
+    email:   body.email,
+    phone:   body.phone   as string | undefined,
+    status:  body.status  ?? 'pending',
+    country: body.country as string | undefined,
+    notes:   body.notes   as string | undefined,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('clients').insert(client)

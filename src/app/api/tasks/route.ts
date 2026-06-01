@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionTask } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
+import { parseBody, TaskCreateSchema } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
-import type { Task } from '@/types'
+import type { Task, TaskType } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -46,18 +47,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
-  const body = await req.json()
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+
+  const parsed = parseBody(TaskCreateSchema, raw)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+
+  const body = parsed.data
   const task: Task = {
-    id: generateId(), title: body.title, description: body.description ?? null,
-    status: body.status ?? 'todo', priority: body.priority ?? 'medium',
-    task_type: body.task_type || null,
-    due_date: body.due_date || null,
-    assigned_to: body.assigned_to || null,
-    client_id: body.client_id || null,
-    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    id: generateId(),
+    title:       body.title,
+    description: body.description as string | undefined,
+    status:      body.status    ?? 'todo',
+    priority:    body.priority  ?? 'medium',
+    task_type:   body.task_type  as TaskType | undefined,
+    due_date:    body.due_date   as string   | undefined,
+    assigned_to: body.assigned_to as string  | undefined,
+    client_id:   body.client_id   as string  | undefined,
+    created_at:  new Date().toISOString(),
+    updated_at:  new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
+  try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch (e) {
+    console.error('[tasks POST] Notion sync failed:', e)
+  }
   return NextResponse.json(task, { status: 201 })
 }

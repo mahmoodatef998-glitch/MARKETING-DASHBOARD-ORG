@@ -4,23 +4,28 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
+import { parseBody, TaskUpdateSchema } from '@/lib/validation'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const body = await req.json()
 
-  // Normalize empty strings to null for optional FK / enum / date columns.
-  // The form sends '' for unset selects; Supabase rejects them against CHECK/FK constraints.
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+
+  const parsed = parseBody(TaskUpdateSchema, raw)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+
+  const body = parsed.data
   const updated: Record<string, unknown> = {
     title:       body.title,
-    description: body.description || null,
+    description: body.description ?? null,
     status:      body.status,
     priority:    body.priority,
-    task_type:   body.task_type   || null,
-    due_date:    body.due_date    || null,
-    assigned_to: body.assigned_to || null,
-    client_id:   body.client_id   || null,
+    task_type:   body.task_type   ?? null,
+    due_date:    body.due_date    ?? null,
+    assigned_to: body.assigned_to ?? null,
+    client_id:   body.client_id   ?? null,
     updated_at:  new Date().toISOString(),
   }
 

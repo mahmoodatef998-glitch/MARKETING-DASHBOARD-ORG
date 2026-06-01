@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionInvoice } from '@/lib/notion'
-import { generateId, generateInvoiceNumber } from '@/lib/utils'
+import { generateId } from '@/lib/utils'
+import { nextInvoiceNumber } from '@/lib/invoice-number'
 import { DEMO_INVOICES } from '@/lib/demo-data'
 import { rateLimit } from '@/lib/rate-limit'
 import { parseBody, InvoiceCreateSchema } from '@/lib/validation'
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const items = body.items ?? []
     const subtotal = items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)
     const tax = body.tax ?? 0
-    return NextResponse.json({ id: generateId(), invoice_number: generateInvoiceNumber(), ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
+    return NextResponse.json({ id: generateId(), invoice_number: `INV-DEMO-${Date.now()}`, ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
 
   const supabase = await createServerClient()
@@ -71,8 +72,9 @@ export async function POST(req: NextRequest) {
   const tax = body.tax ?? 0
   const total = subtotal + (subtotal * tax) / 100
 
+  const invoiceNum = body.invoice_number ?? await nextInvoiceNumber(supabase)
   const invoice: Invoice = {
-    id: generateId(), invoice_number: body.invoice_number ?? generateInvoiceNumber(),
+    id: generateId(), invoice_number: invoiceNum,
     client_id: body.client_id,
     items: items.map((i) => ({ id: generateId(), description: i.description, quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price })),
     subtotal, tax, total, status: body.status ?? 'draft',

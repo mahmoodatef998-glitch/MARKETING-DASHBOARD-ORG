@@ -3,13 +3,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
+import { parseBody, ClientUpdateSchema } from '@/lib/validation'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const body = await req.json()
-  const { billing_plan, ...clientBody } = body
-  const updated = { ...clientBody, updated_at: new Date().toISOString() }
+
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+
+  const { billing_plan, ...clientBody } = raw
+  const parsed = parseBody(ClientUpdateSchema, clientBody)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+
+  const updated = { ...parsed.data, updated_at: new Date().toISOString() }
 
   const { data, error } = await supabase
     .from('clients')
@@ -62,7 +69,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   if (data?.notion_id) {
-    try { await updateNotionClient(data.notion_id, updated) } catch {}
+    try { await updateNotionClient(data.notion_id, updated as Record<string, unknown>) } catch (e) {
+      console.error('[clients PUT] Notion sync failed:', e)
+    }
   }
 
   return NextResponse.json(data)

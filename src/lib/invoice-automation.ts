@@ -1,4 +1,5 @@
-import { generateId, generateInvoiceNumber } from './utils'
+import { generateId } from './utils'
+import { nextInvoiceNumber } from './invoice-number'
 import { sendEmail } from './gmail'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -209,7 +210,22 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
   } = opts
 
   const now = new Date()
-  const invoiceNumber = generateInvoiceNumber()
+
+  // Idempotency: skip if an invoice was already created for this client today
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+  const { data: existingToday } = await supabase
+    .from('invoices')
+    .select('id, invoice_number')
+    .eq('client_id', clientId)
+    .gte('created_at', todayStart.toISOString())
+    .maybeSingle()
+
+  if (existingToday) {
+    console.log(`[invoice-automation] Skipping duplicate: invoice ${existingToday.invoice_number} already exists for client ${clientId} today`)
+    return existingToday as { id: string; invoice_number: string }
+  }
+
+  const invoiceNumber = await nextInvoiceNumber(supabase)
   const due = dueDate(now)
 
   const invoice = {

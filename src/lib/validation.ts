@@ -23,10 +23,10 @@ export const TaskUpdateSchema = TaskCreateSchema.partial()
 export const ClientCreateSchema = z.object({
   name:    z.string().min(1).max(200),
   email:   z.string().email().max(254),
-  phone:   z.string().max(30).optional().nullable(),
+  phone:   e2n(z.string().max(30).nullable().optional()),
   status:  z.enum(['active', 'inactive', 'pending']).optional(),
-  country: z.string().max(100).optional().nullable(),
-  notes:   z.string().max(2000).optional().nullable(),
+  country: e2n(z.string().max(100).nullable().optional()),
+  notes:   e2n(z.string().max(2000).nullable().optional()),
 })
 
 export const ClientUpdateSchema = ClientCreateSchema.partial()
