@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react'
+import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react'
+import { CalendarView } from '@/components/calendar/CalendarView'
 import type { Task, Message } from '@/types'
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -18,34 +19,30 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 export default function TeamPortalPage() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks,    setTasks]    = useState<Task[]>([])
   const [messages, setMessages] = useState<Message[]>([])
-  const [newMsg, setNewMsg] = useState('')
-  const [adminId, setAdminId] = useState<string | null>(null)
-  const [myId, setMyId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [tab, setTab] = useState<'tasks' | 'chat'>('tasks')
+  const [newMsg,   setNewMsg]   = useState('')
+  const [adminId,  setAdminId]  = useState<string | null>(null)
+  const [myId,     setMyId]     = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(true)
+  const [sending,  setSending]  = useState(false)
+  const [tab,      setTab]      = useState<'tasks' | 'calendar' | 'chat'>('tasks')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function load() {
-      // Get my profile
       const profileRes = await fetch('/api/profile')
-      const profile = await profileRes.json()
+      const profile    = await profileRes.json()
       setMyId(profile.id)
 
-      // Get my tasks
-      const tasksRes = await fetch('/api/tasks?limit=200')
+      const tasksRes  = await fetch('/api/tasks?limit=200')
       const tasksData = await tasksRes.json()
       setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
 
-      // Get admin user id (first admin profile)
       const adminRes = await fetch('/api/admin-id')
       if (adminRes.ok) {
         const { id } = await adminRes.json()
         setAdminId(id)
-        // Load messages with admin
         const msgRes = await fetch(`/api/messages?partner=${id}`)
         if (msgRes.ok) setMessages(await msgRes.json())
       }
@@ -55,7 +52,7 @@ export default function TeamPortalPage() {
   }, [])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (tab === 'chat') bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, tab])
 
   async function sendMessage(e: React.FormEvent) {
@@ -95,6 +92,7 @@ export default function TeamPortalPage() {
 
   return (
     <div className="space-y-6">
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -112,32 +110,28 @@ export default function TeamPortalPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-800">
-        <button
-          onClick={() => setTab('tasks')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'tasks'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-100'
-          }`}
-        >
-          <CheckSquare className="h-4 w-4" />
-          My Tasks
-        </button>
-        <button
-          onClick={() => setTab('chat')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'chat'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-100'
-          }`}
-        >
-          <MessageCircle className="h-4 w-4" />
-          Chat with Admin
-        </button>
+      <div className="flex gap-1 border-b border-slate-800">
+        {([
+          { key: 'tasks',    label: 'My Tasks',        icon: CheckSquare },
+          { key: 'calendar', label: 'My Calendar',     icon: CalendarDays },
+          { key: 'chat',     label: 'Chat with Admin', icon: MessageCircle },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === key
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-100'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Tasks Tab */}
+      {/* ── My Tasks Tab ──────────────────────────────────────────── */}
       {tab === 'tasks' && (
         <div className="space-y-3">
           {tasks.length === 0 && (
@@ -177,7 +171,6 @@ export default function TeamPortalPage() {
                   )}
                 </div>
 
-                {/* Status selector */}
                 <select
                   value={task.status}
                   onChange={e => updateStatus(task.id, e.target.value)}
@@ -193,7 +186,12 @@ export default function TeamPortalPage() {
         </div>
       )}
 
-      {/* Chat Tab */}
+      {/* ── My Calendar Tab ───────────────────────────────────────── */}
+      {tab === 'calendar' && (
+        <CalendarView tasks={tasks} showAssignee={false} />
+      )}
+
+      {/* ── Chat Tab ──────────────────────────────────────────────── */}
       {tab === 'chat' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[500px]">
           <div className="flex-1 overflow-y-auto p-4 space-y-3">

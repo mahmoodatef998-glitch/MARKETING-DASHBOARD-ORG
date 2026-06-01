@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   BarChart2,
   CreditCard,
+  CalendarDays,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -29,6 +30,7 @@ const nav = [
   { href: '/clients',        label: 'Clients',      icon: Users },
   { href: '/team',           label: 'Team',         icon: UserCheck },
   { href: '/tasks',          label: 'Tasks',        icon: CheckSquare },
+  { href: '/calendar',       label: 'Calendar',     icon: CalendarDays },
   { href: '/invoices',       label: 'Invoices',     icon: FileText },
   { href: '/billing',        label: 'Billing',      icon: CreditCard },
   { href: '/automation',     label: 'Automation',   icon: Zap },
@@ -59,7 +61,7 @@ export default function Sidebar() {
           <Building2 className="h-4 w-4 text-white" />
         </div>
         {!collapsed && (
-          <span className="font-bold text-white text-lg tracking-tight">Agency OS</span>
+          <span className="font-bold text-white text-sm tracking-tight leading-tight">Pixel Marketing</span>
         )}
       </div>
 
