@@ -145,22 +145,30 @@ export default function TeamPage() {
 
   // Workload: group tasks by assigned_to profile id
   const workload = members.map(m => {
-    // tasks have assigned_to = auth user id; team members have their own id
-    // We match on display_name fallback by email prefix or on assigned_to matching team member records
     const memberTasks = tasks.filter(t => {
       if (!t.assigned_to) return false
-      // Match via assignee display_name containing member name
+      if (t.assigned_to === m.id) return true
       if (t.assignee?.display_name?.toLowerCase().includes(m.name.toLowerCase())) return true
       return false
     })
+    const doneTasks   = memberTasks.filter(t => t.status === 'done')
+    const ratedTasks  = doneTasks.filter(t => t.client_rating != null)
+    const avgRating   = ratedTasks.length > 0
+      ? ratedTasks.reduce((sum, t) => sum + (t.client_rating ?? 0), 0) / ratedTasks.length
+      : null
+    const doneRate    = memberTasks.length > 0
+      ? Math.round((doneTasks.length / memberTasks.length) * 100)
+      : null
     return {
       member: m,
       total:       memberTasks.length,
       todo:        memberTasks.filter(t => t.status === 'todo').length,
       in_progress: memberTasks.filter(t => t.status === 'in_progress').length,
       review:      memberTasks.filter(t => t.status === 'review').length,
-      done:        memberTasks.filter(t => t.status === 'done').length,
+      done:        doneTasks.length,
       overdue:     memberTasks.filter(t => t.status === 'overdue').length,
+      avgRating,
+      doneRate,
     }
   }).sort((a, b) => (b.in_progress + b.todo) - (a.in_progress + a.todo))
 
@@ -260,7 +268,7 @@ export default function TeamPage() {
           ) : workload.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-sm">No team members found.</div>
           ) : (
-            workload.map(({ member, total, todo, in_progress, review, done, overdue }) => {
+            workload.map(({ member, total, todo, in_progress, review, done, overdue, avgRating, doneRate }) => {
               const activeLoad = in_progress + todo + review
               const maxLoad    = Math.max(...workload.map(w => w.in_progress + w.todo + w.review), 1)
               const barPct     = Math.round((activeLoad / maxLoad) * 100)
@@ -278,9 +286,12 @@ export default function TeamPage() {
                         </span>
                       </div>
                     </div>
-                    <span className={`text-sm font-bold ${overdue > 0 ? 'text-red-400' : activeLoad > 5 ? 'text-orange-400' : 'text-slate-300'}`}>
-                      {activeLoad} active
-                    </span>
+                    <div className="text-right">
+                      <p className={`text-sm font-bold ${overdue > 0 ? 'text-red-400' : activeLoad > 5 ? 'text-orange-400' : 'text-slate-300'}`}>
+                        {activeLoad} active
+                      </p>
+                      <p className="text-xs text-slate-500">{total} total</p>
+                    </div>
                   </div>
 
                   {/* Load bar */}
@@ -292,7 +303,7 @@ export default function TeamPage() {
                   </div>
 
                   {/* Counters */}
-                  <div className="flex items-center gap-3 flex-wrap text-xs">
+                  <div className="flex items-center gap-3 flex-wrap text-xs mb-3">
                     {in_progress > 0 && (
                       <span className="flex items-center gap-1 text-blue-400">
                         <Clock className="h-3 w-3" />{in_progress} in progress
@@ -318,6 +329,29 @@ export default function TeamPage() {
                     )}
                     {total === 0 && <span className="text-slate-600">No tasks assigned</span>}
                   </div>
+
+                  {/* Performance metrics */}
+                  {(doneRate !== null || avgRating !== null) && (
+                    <div className="flex items-center gap-4 pt-2 border-t border-slate-800 text-xs">
+                      {doneRate !== null && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-500">Done rate</span>
+                          <span className={`font-semibold ${doneRate >= 70 ? 'text-green-400' : doneRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {doneRate}%
+                          </span>
+                        </div>
+                      )}
+                      {avgRating !== null && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-500">Avg rating</span>
+                          <span className="font-semibold text-amber-400">
+                            {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
+                            {' '}{avgRating.toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })

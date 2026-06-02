@@ -19,7 +19,9 @@ export async function GET() {
     .select('*, billing_plans(id, cycle_type, amount, currency, custom_days, next_invoice_date, is_active)')
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  return NextResponse.json(data, {
+    headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+  })
 }
 
 export async function POST(req: NextRequest) {

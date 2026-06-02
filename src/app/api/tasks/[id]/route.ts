@@ -5,6 +5,7 @@ import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { parseBody, TaskUpdateSchema } from '@/lib/validation'
+import { logActivity } from '@/lib/activity-log'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -149,19 +150,55 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Log activity
+  const { data: { user } } = await supabase.auth.getUser()
+  if (body.status && oldTask?.status !== body.status) {
+    await logActivity({
+      supabase: createAdminClient(),
+      userId:     user?.id,
+      action:     'task.status_changed',
+      entityType: 'task',
+      entityId:   id,
+      entityName: data?.title,
+      oldValue:   { status: oldTask?.status },
+      newValue:   { status: body.status },
+    })
+  } else if (user) {
+    await logActivity({
+      supabase: createAdminClient(),
+      userId:     user.id,
+      action:     'task.updated',
+      entityType: 'task',
+      entityId:   id,
+      entityName: data?.title,
+    })
+  }
+
   return NextResponse.json(data)
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const { data } = await supabase.from('tasks').select('notion_id').eq('id', id).single()
+  const { data } = await supabase.from('tasks').select('notion_id, title').eq('id', id).single()
 
   if (data?.notion_id) {
     try { await deleteNotionPage(data.notion_id) } catch {}
   }
 
-  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  // Soft delete — preserves data for audit trail and undo
+  const { error } = await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: { user } } = await supabase.auth.getUser()
+  await logActivity({
+    supabase: createAdminClient(),
+    userId:     user?.id,
+    action:     'task.deleted',
+    entityType: 'task',
+    entityId:   id,
+    entityName: data?.title,
+  })
+
   return NextResponse.json({ success: true })
 }

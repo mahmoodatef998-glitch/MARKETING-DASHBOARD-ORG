@@ -119,6 +119,9 @@ export interface Task {
   assignee?: TaskAssignee
   client_id?: string
   client?: Client
+  client_rating?: number | null
+  client_rating_note?: string | null
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }

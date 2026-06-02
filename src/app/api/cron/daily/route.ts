@@ -345,5 +345,39 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── 8. Package renewal alerts (7 days before end_date) ───────────────────
+  const in7days = new Date(now); in7days.setDate(in7days.getDate() + 7)
+  const in7str  = toDateStr(in7days)
+
+  const { data: expiringPackages } = await supabase
+    .from('client_packages')
+    .select('id, name, end_date, client:clients(id, name, email)')
+    .eq('is_active', true)
+    .eq('end_date', in7str)
+
+  for (const pkg of expiringPackages ?? []) {
+    const client = pkg.client as unknown as { id: string; name: string; email: string } | null
+    if (!client?.email) continue
+    try {
+      await sendEmail({
+        to:      client.email,
+        subject: `Your package "${pkg.name}" expires in 7 days`,
+        body: [
+          `Dear ${client.name},`,
+          ``,
+          `Your package "${pkg.name}" is set to expire on ${pkg.end_date}.`,
+          ``,
+          `Please contact us to renew your package and ensure uninterrupted service.`,
+          ``,
+          `Best regards,`,
+          `Pixel Marketing Agency`,
+        ].join('\n'),
+      })
+      results.push({ type: 'package_renewal_alert', recipient: client.email, status: 'sent' })
+    } catch (err: any) {
+      results.push({ type: 'package_renewal_alert', recipient: client.email, status: 'failed' })
+    }
+  }
+
   return NextResponse.json({ success: true, processed: results.length, results })
 }

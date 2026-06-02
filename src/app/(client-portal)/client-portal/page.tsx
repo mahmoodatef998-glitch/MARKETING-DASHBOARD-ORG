@@ -25,13 +25,20 @@ const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
 
 // ─── Approval Card ────────────────────────────────────────────────────────────
 function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) {
-  const [reviseOpen, setReviseOpen] = useState(false)
-  const [notes, setNotes]           = useState('')
-  const [loading, setLoading]       = useState<'approve' | 'revise' | null>(null)
+  const [reviseOpen,  setReviseOpen]  = useState(false)
+  const [ratingOpen,  setRatingOpen]  = useState(false)
+  const [notes,       setNotes]       = useState('')
+  const [rating,      setRating]      = useState(0)
+  const [ratingNote,  setRatingNote]  = useState('')
+  const [loading,     setLoading]     = useState<'approve' | 'revise' | null>(null)
 
   async function approve() {
     setLoading('approve')
-    await fetch(`/api/tasks/${task.id}/approve`, { method: 'POST' })
+    await fetch(`/api/tasks/${task.id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: rating || null, rating_note: ratingNote }),
+    })
     onAction()
     setLoading(null)
   }
@@ -86,11 +93,44 @@ function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) 
         </div>
       )}
 
+      {/* Rating prompt (shown before final approve) */}
+      {ratingOpen && (
+        <div className="mx-4 mb-3 p-3 bg-slate-800/60 rounded-xl space-y-2">
+          <p className="text-xs font-medium text-slate-300">Rate this delivery (optional)</p>
+          <div className="flex gap-1">
+            {[1,2,3,4,5].map(s => (
+              <button key={s} onClick={() => setRating(r => r === s ? 0 : s)}
+                className={`text-xl transition-transform hover:scale-110 ${s <= rating ? 'text-yellow-400' : 'text-slate-600'}`}>
+                ★
+              </button>
+            ))}
+          </div>
+          {rating > 0 && (
+            <textarea value={ratingNote} onChange={e => setRatingNote(e.target.value)}
+              placeholder="Any comments? (optional)"
+              rows={2}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-indigo-500 resize-none transition-colors"
+            />
+          )}
+          <div className="flex gap-2">
+            <button onClick={approve} disabled={!!loading}
+              className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
+              {loading === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              {rating > 0 ? 'Approve & Submit Rating' : 'Approve without rating'}
+            </button>
+            <button onClick={() => setRatingOpen(false)}
+              className="px-3 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
-      {!reviseOpen ? (
+      {!reviseOpen && !ratingOpen ? (
         <div className="flex gap-2 px-4 pb-4">
           <button
-            onClick={approve}
+            onClick={() => setRatingOpen(true)}
             disabled={!!loading}
             className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
           >

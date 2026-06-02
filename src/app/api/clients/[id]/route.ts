@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
 import { parseBody, ClientUpdateSchema } from '@/lib/validation'
+import { logActivity } from '@/lib/activity-log'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -74,6 +75,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  const { data: { user } } = await supabase.auth.getUser()
+  await logActivity({
+    supabase: createAdminClient(),
+    userId:     user?.id,
+    action:     'client.updated',
+    entityType: 'client',
+    entityId:   id,
+    entityName: data?.name,
+  })
+
   return NextResponse.json(data)
 }
 
@@ -81,13 +92,24 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const supabase = await createServerClient()
 
-  const { data } = await supabase.from('clients').select('notion_id').eq('id', id).single()
+  const { data } = await supabase.from('clients').select('notion_id, name').eq('id', id).single()
   if (data?.notion_id) {
     try { await deleteNotionPage(data.notion_id) } catch {}
   }
 
-  const { error } = await supabase.from('clients').delete().eq('id', id)
+  // Soft delete
+  const { error } = await supabase.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: { user } } = await supabase.auth.getUser()
+  await logActivity({
+    supabase: createAdminClient(),
+    userId:     user?.id,
+    action:     'client.deleted',
+    entityType: 'client',
+    entityId:   id,
+    entityName: data?.name,
+  })
 
   return NextResponse.json({ success: true })
 }

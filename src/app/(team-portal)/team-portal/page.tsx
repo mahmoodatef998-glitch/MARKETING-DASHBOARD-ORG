@@ -1,9 +1,64 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2, Wifi } from 'lucide-react'
+import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2, Wifi, Search, Filter } from 'lucide-react'
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Message } from '@/types'
+
+// ── Task filter component ──────────────────────────────────────────────────────
+function TaskFilter({ tasks, render }: { tasks: Task[]; render: (filtered: Task[]) => React.ReactNode }) {
+  const [search,   setSearch]   = useState('')
+  const [priority, setPriority] = useState('all')
+  const [status,   setStatus]   = useState('all')
+
+  const filtered = tasks.filter(t => {
+    const matchSearch   = !search   || t.title.toLowerCase().includes(search.toLowerCase())
+    const matchPriority = priority === 'all' || t.priority === priority
+    const matchStatus   = status   === 'all' || t.status   === status
+    return matchSearch && matchPriority && matchStatus
+  })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search tasks…"
+            className="w-full pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+        <select value={priority} onChange={e => setPriority(e.target.value)}
+          className="text-xs px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 outline-none cursor-pointer">
+          <option value="all">All priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select value={status} onChange={e => setStatus(e.target.value)}
+          className="text-xs px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 outline-none cursor-pointer">
+          <option value="all">All statuses</option>
+          <option value="todo">To Do</option>
+          <option value="in_progress">In Progress</option>
+          <option value="review">Review</option>
+          <option value="overdue">Overdue</option>
+          <option value="done">Done</option>
+        </select>
+        {(search || priority !== 'all' || status !== 'all') && (
+          <button onClick={() => { setSearch(''); setPriority('all'); setStatus('all') }}
+            className="text-xs px-2 py-1.5 text-slate-400 hover:text-slate-200 transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">{filtered.length} of {tasks.length} tasks</p>
+      {render(filtered)}
+    </div>
+  )
+}
 
 const PRIORITY_COLOR: Record<string, string> = {
   urgent: 'bg-red-500/10 text-red-400 border-red-500/20',
@@ -161,13 +216,14 @@ export default function TeamPortalPage() {
       {/* ── My Tasks Tab ──────────────────────────────────────────── */}
       {tab === 'tasks' && (
         <div className="space-y-3">
-          {tasks.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <CheckSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p>No tasks assigned yet</p>
-            </div>
-          )}
-          {tasks.map(task => (
+          {/* Search + filter bar */}
+          {tasks.length > 0 && (
+            <TaskFilter tasks={tasks} render={(filtered) => (
+              <>
+                {filtered.length === 0 && (
+                  <div className="text-center py-8 text-slate-500 text-sm">No tasks match your filters.</div>
+                )}
+                {filtered.map(task => (
             <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -209,7 +265,16 @@ export default function TeamPortalPage() {
                 </select>
               </div>
             </div>
-          ))}
+                ))}
+              </>
+            )} />
+          )}
+          {tasks.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <CheckSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>No tasks assigned yet</p>
+            </div>
+          )}
         </div>
       )}
 
