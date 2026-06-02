@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
   ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
-  Package, TrendingUp, RotateCcw, Zap,
+  Package, TrendingUp, RotateCcw, Zap, CreditCard, ChevronDown, ChevronUp,
+  Receipt, Calendar, DollarSign, Repeat2,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
@@ -361,12 +362,332 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
   )
 }
 
+// ─── Invoices Tab ─────────────────────────────────────────────────────────────
+type BillingPlan = {
+  id: string
+  cycle_type: string
+  amount: number
+  currency: string
+  custom_days?: number | null
+  next_invoice_date: string
+  is_active: boolean
+  created_at: string
+}
+
+const CYCLE_LABEL: Record<string, string> = {
+  monthly:       'Monthly',
+  biweekly:      'Every 2 Weeks',
+  every_10_days: 'Every 10 Days',
+  custom_days:   'Custom Cycle',
+  manual:        'Manual',
+}
+
+const INVOICE_COLOR: Record<string, { bg: string; text: string; dot: string }> = {
+  paid:    { bg: 'bg-green-500/10',  text: 'text-green-400',  dot: 'bg-green-400'  },
+  sent:    { bg: 'bg-blue-500/10',   text: 'text-blue-400',   dot: 'bg-blue-400'   },
+  overdue: { bg: 'bg-red-500/10',    text: 'text-red-400',    dot: 'bg-red-400'    },
+  draft:   { bg: 'bg-slate-500/10',  text: 'text-slate-400',  dot: 'bg-slate-500'  },
+}
+
+function InvoiceRow({ inv }: { inv: Invoice }) {
+  const [open, setOpen] = useState(false)
+  const col = INVOICE_COLOR[inv.status] ?? INVOICE_COLOR.draft
+
+  return (
+    <div className={`rounded-xl border transition-colors ${open ? 'border-slate-700 bg-slate-800/60' : 'border-slate-800 bg-slate-900'}`}>
+      {/* Header row */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${col.bg}`}>
+            <Receipt className={`h-4 w-4 ${col.text}`} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-white text-sm">{inv.invoice_number}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Issued {new Date(inv.issued_date ?? inv.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {inv.due_date && ` · Due ${new Date(inv.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className="font-bold text-white text-sm">{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {(inv as any).currency ?? 'USD'}</p>
+            <span className={`inline-flex items-center gap-1 text-xs font-medium ${col.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />
+              {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+            </span>
+          </div>
+          {open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+        </div>
+      </button>
+
+      {/* Expanded items */}
+      {open && (
+        <div className="border-t border-slate-700/60 px-4 pb-4 pt-3 space-y-2">
+          {inv.notes && (
+            <p className="text-xs text-slate-400 italic mb-3">"{inv.notes}"</p>
+          )}
+          {(inv.items ?? []).length > 0 ? (
+            <>
+              <div className="space-y-1.5">
+                {inv.items.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs text-slate-300">
+                    <span className="flex-1 min-w-0 truncate">{item.description}</span>
+                    <span className="text-slate-500 mx-3">{item.quantity} × {item.unit_price.toLocaleString()}</span>
+                    <span className="font-semibold text-white">{item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-slate-700/40 flex justify-between text-xs text-slate-400">
+                <span>Subtotal</span>
+                <span>{inv.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              {inv.tax && inv.tax > 0 && (
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Tax ({inv.tax}%)</span>
+                  <span>{(inv.subtotal * inv.tax / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-white pt-1">
+                <span>Total</span>
+                <span>{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2 })} {(inv as any).currency ?? 'USD'}</span>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500 py-1">No line items on record.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InvoicesTab({
+  billingPlan,
+  pkgs,
+  invoices,
+}: {
+  billingPlan: BillingPlan | null
+  pkgs: ClientPackage[]
+  invoices: Invoice[]
+}) {
+  const now = new Date()
+  const daysUntil = billingPlan?.next_invoice_date
+    ? Math.max(0, Math.ceil((new Date(billingPlan.next_invoice_date).getTime() - now.getTime()) / 86_400_000))
+    : null
+
+  // Collect all deliverables done this period across all packages
+  const deliverableLines: { label: string; used: number; total: number }[] = []
+  for (const pkg of pkgs) {
+    for (const item of pkg.items) {
+      if ((item.used ?? 0) > 0 || item.total_quantity > 0) {
+        const existing = deliverableLines.find(d => d.label === item.label)
+        if (existing) {
+          existing.used  += item.used ?? 0
+          existing.total += item.total_quantity
+        } else {
+          deliverableLines.push({ label: item.label, used: item.used ?? 0, total: item.total_quantity })
+        }
+      }
+    }
+    // fallback: if no items configured but total_done > 0
+    if (pkg.items.length === 0 && (pkg.total_done ?? 0) > 0) {
+      deliverableLines.push({ label: 'Tasks completed', used: pkg.total_done ?? 0, total: 0 })
+    }
+  }
+
+  const totalDeliverablesDone  = deliverableLines.reduce((s, d) => s + d.used, 0)
+  const totalDeliverablesTotal = deliverableLines.reduce((s, d) => s + d.total, 0)
+
+  const paidInvoices    = invoices.filter(i => i.status === 'paid')
+  const totalPaid       = paidInvoices.reduce((s, i) => s + i.total, 0)
+  const pendingInvoices = invoices.filter(i => i.status === 'sent' || i.status === 'overdue')
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Billing Plan Card ──────────────────────────────────────────────── */}
+      {billingPlan ? (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800/60 border border-slate-700/60 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-indigo-400" />
+            <span className="text-sm font-semibold text-white">Billing Plan</span>
+            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${billingPlan.is_active ? 'bg-green-500/15 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+              {billingPlan.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+
+          {/* Plan KPIs */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <DollarSign className="h-3.5 w-3.5 text-slate-500" />
+              </div>
+              <p className="text-lg font-extrabold text-white">
+                {billingPlan.amount.toLocaleString()}
+              </p>
+              <p className="text-[11px] text-slate-500">{billingPlan.currency} / cycle</p>
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Repeat2 className="h-3.5 w-3.5 text-slate-500" />
+              </div>
+              <p className="text-sm font-extrabold text-white">
+                {CYCLE_LABEL[billingPlan.cycle_type] ?? billingPlan.cycle_type}
+              </p>
+              {billingPlan.cycle_type === 'custom_days' && billingPlan.custom_days && (
+                <p className="text-[11px] text-slate-500">Every {billingPlan.custom_days} days</p>
+              )}
+              <p className="text-[11px] text-slate-500">Billing frequency</p>
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Calendar className="h-3.5 w-3.5 text-slate-500" />
+              </div>
+              <p className={`text-lg font-extrabold ${daysUntil !== null && daysUntil <= 3 ? 'text-amber-400' : 'text-white'}`}>
+                {daysUntil !== null ? (daysUntil === 0 ? 'Today' : `${daysUntil}d`) : '—'}
+              </p>
+              <p className="text-[11px] text-slate-500">Until next invoice</p>
+            </div>
+          </div>
+
+          {/* Total paid summary */}
+          {paidInvoices.length > 0 && (
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-700/40">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                {paidInvoices.length} invoice{paidInvoices.length > 1 ? 's' : ''} paid
+              </span>
+              <span className="font-semibold text-white">
+                {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })} {billingPlan.currency} total
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-3 text-slate-400">
+          <CreditCard className="h-5 w-5 shrink-0" />
+          <p className="text-sm">No billing plan configured yet. Contact your account manager to set one up.</p>
+        </div>
+      )}
+
+      {/* ── Next Invoice Preview ───────────────────────────────────────────── */}
+      {billingPlan && billingPlan.cycle_type !== 'manual' && billingPlan.next_invoice_date && (
+        <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-indigo-400" />
+              <span className="text-sm font-semibold text-white">Next Invoice</span>
+            </div>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
+              daysUntil !== null && daysUntil <= 3
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+                : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/20'
+            }`}>
+              {billingPlan.next_invoice_date
+                ? new Date(billingPlan.next_invoice_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                : '—'}
+            </span>
+          </div>
+
+          {/* Amount */}
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-3xl font-extrabold text-white">
+                {billingPlan.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">{billingPlan.currency} · {CYCLE_LABEL[billingPlan.cycle_type]}</p>
+            </div>
+            {daysUntil !== null && daysUntil > 0 && (
+              <p className="text-xs text-slate-500">in {daysUntil} day{daysUntil !== 1 ? 's' : ''}</p>
+            )}
+          </div>
+
+          {/* Deliverables summary for this period */}
+          {deliverableLines.length > 0 && (
+            <div className="border-t border-indigo-500/15 pt-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5 text-slate-500" />
+                Deliverables completed this period
+              </p>
+              <div className="space-y-2">
+                {deliverableLines.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${d.used > 0 ? 'text-emerald-400' : 'text-slate-600'}`} />
+                      <span className="text-xs text-slate-300 truncate">{d.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-slate-400">
+                        <span className={`font-semibold ${d.used > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{d.used}</span>
+                        {d.total > 0 && <span className="text-slate-600"> / {d.total}</span>}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {totalDeliverablesTotal > 0 && (
+                <div className="flex items-center gap-2 pt-2 border-t border-indigo-500/15">
+                  <div className="flex-1 h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
+                      style={{ width: `${Math.min(Math.round(totalDeliverablesDone / totalDeliverablesTotal * 100), 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0">
+                    {totalDeliverablesDone} / {totalDeliverablesTotal} done
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Pending / Overdue alert ────────────────────────────────────────── */}
+      {pendingInvoices.length > 0 && (
+        <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 rounded-xl px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-300">
+            You have{' '}
+            <span className="font-semibold">{pendingInvoices.length} pending invoice{pendingInvoices.length > 1 ? 's' : ''}</span>
+            {' '}totalling{' '}
+            <span className="font-semibold">
+              {pendingInvoices.reduce((s, i) => s + i.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {billingPlan?.currency ?? 'USD'}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* ── Invoice history ────────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          Invoice History ({invoices.length})
+        </p>
+        {invoices.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">
+            <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
+            <p>No invoices issued yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {invoices.map(inv => <InvoiceRow key={inv.id} inv={inv} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ClientPortalPage() {
   const [tasks,       setTasks]       = useState<Task[]>([])
   const [invoices,    setInvoices]    = useState<Invoice[]>([])
   const [pkgs,        setPkgs]        = useState<ClientPackage[]>([])
-  const [billingPlan, setBillingPlan] = useState<{ next_invoice_date: string; cycle_type: string; amount: number; currency: string } | null>(null)
+  const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
   const [loading,     setLoading]     = useState(true)
   const [tab,         setTab]         = useState<'package' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
   const [detailTask,  setDetailTask]  = useState<Task | null>(null)
@@ -581,48 +902,7 @@ export default function ClientPortalPage() {
 
       {/* Invoices tab */}
       {tab === 'invoices' && (
-        <div className="space-y-3">
-          {/* Next invoice date banner */}
-          {billingPlan && billingPlan.cycle_type !== 'manual' && billingPlan.next_invoice_date && (
-            <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3">
-              <Zap className="h-4 w-4 text-indigo-400 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-white">
-                  Next invoice on{' '}
-                  <span className="text-indigo-300">
-                    {new Date(billingPlan.next_invoice_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </span>
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {billingPlan.amount.toLocaleString()} {billingPlan.currency} ·{' '}
-                  {{ monthly: 'Monthly', biweekly: 'Every 2 weeks', every_10_days: 'Every 10 days', custom_days: 'Custom cycle' }[billingPlan.cycle_type] ?? billingPlan.cycle_type}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {invoices.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p>No invoices yet</p>
-            </div>
-          )}
-          {invoices.map(inv => {
-            const cfg = INVOICE_STATUS[inv.status] ?? INVOICE_STATUS.draft
-            return (
-              <div key={inv.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">{inv.invoice_number}</p>
-                  <p className="text-xs text-slate-400 mt-1">Due: {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-white">${inv.total.toLocaleString()}</p>
-                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <InvoicesTab billingPlan={billingPlan} pkgs={pkgs} invoices={invoices} />
       )}
 
       <TaskDetailModal task={detailTask} open={!!detailTask} onClose={() => setDetailTask(null)} />
