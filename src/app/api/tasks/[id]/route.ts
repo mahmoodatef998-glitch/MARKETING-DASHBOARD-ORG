@@ -50,6 +50,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     try { await updateNotionTask(data.notion_id, updated) } catch {}
   }
 
+  // ── When task is re-assigned → notify new team member ─────────────────────
+  const assigneeChanged = oldTask?.assigned_to !== body.assigned_to && !!body.assigned_to
+  if (assigneeChanged && body.assigned_to) {
+    try {
+      const adminForAssign = createAdminClient()
+      const { data: authUser } = await adminForAssign.auth.admin.getUserById(body.assigned_to as string)
+      const memberEmail = authUser?.user?.email
+      if (memberEmail) {
+        await sendEmail({
+          to:      memberEmail,
+          subject: `📋 Task assigned to you: "${data.title}"`,
+          body: [
+            `A task has been assigned to you:`,
+            ``,
+            `  Title:    ${data.title}`,
+            data.description ? `  Details:  ${data.description}` : null,
+            `  Priority: ${data.priority}`,
+            `  Status:   ${data.status}`,
+            data.due_date ? `  Due:      ${data.due_date}` : null,
+            data.client?.name ? `  Client:   ${data.client.name}` : null,
+            data.revision_notes ? `\nRevision notes:\n${data.revision_notes}` : null,
+            ``,
+            `Log in to your portal to get started.`,
+          ].filter(Boolean).join('\n'),
+        })
+      }
+    } catch (e: any) {
+      console.error('[tasks PUT] assign notify failed:', e.message)
+    }
+  }
+
   // ── When task moves to review → notify client to approve ──────────────────
   const justReview = oldTask?.status !== 'review' && body.status === 'review'
   if (justReview && data?.client?.email) {

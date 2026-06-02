@@ -71,6 +71,33 @@ export async function POST(
       task_id:         id,
       created_at:      new Date().toISOString(),
     })
+
+    // Notify admin about the client approval
+    try {
+      const { data: adminProfiles } = await admin.from('profiles').select('id').eq('role', 'admin').limit(1)
+      if (adminProfiles?.[0]) {
+        const { data: adminAuth } = await admin.auth.admin.getUserById(adminProfiles[0].id)
+        const adminEmail = adminAuth?.user?.email
+        if (adminEmail) {
+          const ratingLine = rating
+            ? `\nClient rating: ${'⭐'.repeat(rating)} (${rating}/5)${ratingNote ? `\nNote: "${ratingNote}"` : ''}`
+            : ''
+          await sendEmail({
+            to:      adminEmail,
+            subject: `✅ Client approved task: "${task?.title}"`,
+            body: [
+              `${task?.client?.name ?? 'A client'} has approved the following task:`,
+              ``,
+              `  "${task?.title}"`,
+              ratingLine,
+              task?.delivery_url ? `\nDelivery: ${task.delivery_url}` : null,
+            ].filter(l => l !== undefined).join('\n'),
+          })
+        }
+      }
+    } catch (adminNotifyErr: any) {
+      console.error('[approve] admin notify failed:', adminNotifyErr.message)
+    }
   } catch (err: any) {
     console.error('[approve] notify failed:', err.message)
   }

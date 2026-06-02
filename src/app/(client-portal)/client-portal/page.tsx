@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
   ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
-  Package, TrendingUp, RotateCcw,
+  Package, TrendingUp, RotateCcw, Zap,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
@@ -363,26 +363,30 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ClientPortalPage() {
-  const [tasks,      setTasks]      = useState<Task[]>([])
-  const [invoices,   setInvoices]   = useState<Invoice[]>([])
-  const [pkgs,       setPkgs]       = useState<ClientPackage[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [tab,        setTab]        = useState<'package' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
-  const [detailTask, setDetailTask] = useState<Task | null>(null)
-  const [clientId,   setClientId]   = useState<string | null>(null)
+  const [tasks,       setTasks]       = useState<Task[]>([])
+  const [invoices,    setInvoices]    = useState<Invoice[]>([])
+  const [pkgs,        setPkgs]        = useState<ClientPackage[]>([])
+  const [billingPlan, setBillingPlan] = useState<{ next_invoice_date: string; cycle_type: string; amount: number; currency: string } | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [tab,         setTab]         = useState<'package' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
+  const [detailTask,  setDetailTask]  = useState<Task | null>(null)
+  const [clientId,    setClientId]    = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [tasksRes, invoicesRes, pkgRes] = await Promise.all([
+    const [tasksRes, invoicesRes, pkgRes, billRes] = await Promise.all([
       fetch('/api/tasks?limit=200'),
       fetch('/api/invoices?limit=200'),
       fetch('/api/packages/mine'),
+      fetch('/api/billing-plans/mine'),
     ])
     const td = await tasksRes.json()
     const id = await invoicesRes.json()
     const pd = await pkgRes.json()
+    const bd = await billRes.json()
     setTasks(Array.isArray(td) ? td : (td.data ?? []))
     setInvoices(Array.isArray(id) ? id : (id.data ?? []))
     setPkgs(Array.isArray(pd) ? pd : (pd && !pd.error ? [pd] : []))
+    setBillingPlan(bd && !bd.error ? bd : null)
     setLoading(false)
   }, [])
 
@@ -578,6 +582,25 @@ export default function ClientPortalPage() {
       {/* Invoices tab */}
       {tab === 'invoices' && (
         <div className="space-y-3">
+          {/* Next invoice date banner */}
+          {billingPlan && billingPlan.cycle_type !== 'manual' && billingPlan.next_invoice_date && (
+            <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3">
+              <Zap className="h-4 w-4 text-indigo-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white">
+                  Next invoice on{' '}
+                  <span className="text-indigo-300">
+                    {new Date(billingPlan.next_invoice_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {billingPlan.amount.toLocaleString()} {billingPlan.currency} ·{' '}
+                  {{ monthly: 'Monthly', biweekly: 'Every 2 weeks', every_10_days: 'Every 10 days', custom_days: 'Custom cycle' }[billingPlan.cycle_type] ?? billingPlan.cycle_type}
+                </p>
+              </div>
+            </div>
+          )}
+
           {invoices.length === 0 && (
             <div className="text-center py-12 text-slate-500">
               <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />

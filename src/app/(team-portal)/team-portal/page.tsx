@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
-import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2, Search, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2, Search, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Undo2 } from 'lucide-react'
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Message } from '@/types'
@@ -85,6 +85,8 @@ export default function TeamPortalPage() {
   const [tab,            setTab]            = useState<'tasks' | 'calendar' | 'chat'>('tasks')
   const [online,         setOnline]         = useState(false)
   const [completedOpen,  setCompletedOpen]  = useState(false)
+  const [doneToast,      setDoneToast]      = useState<{ taskId: string; taskTitle: string } | null>(null)
+  const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -172,13 +174,61 @@ export default function TeamPortalPage() {
   }
 
   async function updateStatus(taskId: string, status: string) {
+    const task = tasks.find(t => t.id === taskId)
+    const fullBody = task ? {
+      title:       task.title,
+      description: task.description,
+      status,
+      priority:    task.priority,
+      task_type:   task.task_type,
+      due_date:    task.due_date,
+      assigned_to: task.assigned_to,
+      client_id:   task.client_id,
+    } : { status }
     await fetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(fullBody),
     })
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: status as Task['status'] } : t))
   }
+
+  const markDone = useCallback((taskId: string, taskTitle: string) => {
+    // Optimistic UI update immediately
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'done' as Task['status'] } : t))
+    setDoneToast({ taskId, taskTitle })
+
+    // Clear any existing timer
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
+
+    // Commit to API after 5 seconds if no undo
+    doneTimerRef.current = setTimeout(async () => {
+      setDoneToast(null)
+      const task = tasks.find(t => t.id === taskId)
+      const fullBody = task ? {
+        title:       task.title,
+        description: task.description,
+        status:      'done',
+        priority:    task.priority,
+        task_type:   task.task_type,
+        due_date:    task.due_date,
+        assigned_to: task.assigned_to,
+        client_id:   task.client_id,
+      } : { status: 'done' }
+      await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullBody),
+      })
+    }, 5000)
+  }, [tasks])
+
+  const undoDone = useCallback(() => {
+    if (!doneToast) return
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
+    setTasks(prev => prev.map(t => t.id === doneToast.taskId ? { ...t, status: 'in_progress' as Task['status'] } : t))
+    setDoneToast(null)
+  }, [doneToast])
 
   const activeTasks  = tasks.filter(t => t.status !== 'done')
   const doneTasks    = tasks.filter(t => t.status === 'done')
@@ -192,6 +242,23 @@ export default function TeamPortalPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* Undo toast */}
+      {doneToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 shadow-2xl shadow-black/40 animate-in slide-in-from-bottom-4">
+          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+          <span className="text-sm text-white">
+            <span className="font-semibold">Done:</span>{' '}
+            <span className="text-slate-300 max-w-[200px] truncate inline-block align-bottom">{doneToast.taskTitle}</span>
+          </span>
+          <button
+            onClick={undoDone}
+            className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 ml-1 border border-indigo-500/30 px-2.5 py-1 rounded-lg hover:bg-indigo-500/10 transition-colors"
+          >
+            <Undo2 className="h-3.5 w-3.5" /> Undo
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -246,15 +313,25 @@ export default function TeamPortalPage() {
                   <div className="text-center py-8 text-slate-500 text-sm">No tasks match your filters.</div>
                 )}
                 {filtered.map(task => (
-                  <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <div key={task.id} className={`bg-slate-900 border rounded-xl p-4 space-y-3 ${task.revision_notes ? 'border-amber-500/30' : 'border-slate-800'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white">{task.title}</h3>
                         {task.description && (
                           <p className="text-sm text-slate-400 mt-1">{task.description}</p>
                         )}
+                        {/* Revision notes inline */}
+                        {task.revision_notes && (
+                          <div className="mt-2 flex items-start gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            <RefreshCw className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-semibold text-amber-400 mb-0.5">Revision requested</p>
+                              <p className="text-xs text-slate-300 leading-relaxed">{task.revision_notes}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium border ${PRIORITY_COLOR[task.priority] ?? ''}`}>
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium border shrink-0 ${PRIORITY_COLOR[task.priority] ?? ''}`}>
                         {task.priority}
                       </span>
                     </div>
@@ -263,8 +340,7 @@ export default function TeamPortalPage() {
                       <div className="flex items-center gap-3">
                         {task.due_date && (
                           <div className={`flex items-center gap-1 text-xs ${
-                            new Date(task.due_date) < new Date()
-                              ? 'text-red-400' : 'text-slate-400'
+                            new Date(task.due_date) < new Date() ? 'text-red-400' : 'text-slate-400'
                           }`}>
                             {new Date(task.due_date) < new Date()
                               ? <AlertTriangle className="h-3 w-3" />
@@ -275,7 +351,6 @@ export default function TeamPortalPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Status dropdown — no "Done" option here */}
                         <select
                           value={task.status}
                           onChange={e => updateStatus(task.id, e.target.value)}
@@ -286,9 +361,8 @@ export default function TeamPortalPage() {
                           <option value="review">Review</option>
                         </select>
 
-                        {/* Dedicated Done button */}
                         <button
-                          onClick={() => updateStatus(task.id, 'done')}
+                          onClick={() => markDone(task.id, task.title)}
                           className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 font-medium transition-colors border border-green-500/20"
                         >
                           <CheckCircle2 className="h-3 w-3" />

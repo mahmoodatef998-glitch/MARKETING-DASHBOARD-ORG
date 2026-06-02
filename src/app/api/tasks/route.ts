@@ -75,5 +75,37 @@ export async function POST(req: NextRequest) {
   try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch (e) {
     console.error('[tasks POST] Notion sync failed:', e)
   }
+
+  // Notify the assigned team member about the new task
+  if (task.assigned_to) {
+    try {
+      const { createAdminClient } = await import('@/lib/supabase-server')
+      const { sendEmail }         = await import('@/lib/gmail')
+      const admin = createAdminClient()
+      const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to)
+      const memberEmail = authUser?.user?.email
+      if (memberEmail) {
+        const { data: clientRec } = await admin.from('clients').select('name').eq('id', task.client_id ?? '').maybeSingle()
+        await sendEmail({
+          to:      memberEmail,
+          subject: `📋 New task assigned: "${task.title}"`,
+          body: [
+            `A new task has been assigned to you:`,
+            ``,
+            `  Title:    ${task.title}`,
+            task.description ? `  Details:  ${task.description}` : null,
+            `  Priority: ${task.priority}`,
+            task.due_date ? `  Due:      ${task.due_date}` : null,
+            clientRec?.name ? `  Client:   ${clientRec.name}` : null,
+            ``,
+            `Log in to your portal to get started.`,
+          ].filter(Boolean).join('\n'),
+        })
+      }
+    } catch (e: any) {
+      console.error('[tasks POST] assign notify failed:', e.message)
+    }
+  }
+
   return NextResponse.json(task, { status: 201 })
 }
