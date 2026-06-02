@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
   ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
@@ -7,6 +7,7 @@ import {
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
 import { CalendarView } from '@/components/calendar/CalendarView'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Invoice, ClientPackage } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -312,8 +313,9 @@ export default function ClientPortalPage() {
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'tasks' | 'completed' | 'calendar' | 'invoices'>('tasks')
   const [detailTask, setDetailTask] = useState<Task | null>(null)
+  const [clientId, setClientId]     = useState<string | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     const [tasksRes, invoicesRes, pkgRes] = await Promise.all([
       fetch('/api/tasks?limit=200'),
       fetch('/api/invoices?limit=200'),
@@ -326,9 +328,31 @@ export default function ClientPortalPage() {
     setInvoices(Array.isArray(id) ? id : (id.data ?? []))
     setPkg(pd && !pd.error ? pd : null)
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  // Initial load + resolve clientId for realtime subscription
+  useEffect(() => {
+    load()
+    fetch('/api/profile')
+      .then(r => r.json())
+      .then(p => { if (p?.client_id) setClientId(p.client_id) })
+      .catch(() => {})
+  }, [load])
+
+  // Realtime: re-fetch when any task for this client changes
+  useEffect(() => {
+    if (!clientId) return
+    const supabase = getSupabaseClient()
+    const ch = supabase
+      .channel(`client-portal:tasks:${clientId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `client_id=eq.${clientId}` },
+        () => { load() }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [clientId, load])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">

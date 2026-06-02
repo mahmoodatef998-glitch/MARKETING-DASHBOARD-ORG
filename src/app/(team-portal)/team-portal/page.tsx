@@ -109,7 +109,26 @@ export default function TeamPortalPage() {
     load()
   }, [])
 
-  // Real-time: subscribe to new incoming messages
+  // Realtime: tasks assigned to me
+  useEffect(() => {
+    if (!myId) return
+    const supabase = getSupabaseClient()
+    const tasksCh = supabase
+      .channel(`team-portal:tasks:${myId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `assigned_to=eq.${myId}` },
+        async () => {
+          const res  = await fetch('/api/tasks?limit=200')
+          const data = await res.json()
+          setTasks(Array.isArray(data) ? data : (data.data ?? []))
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(tasksCh) }
+  }, [myId])
+
+  // Realtime: incoming messages
   useEffect(() => {
     if (!myId) return
     const supabase = getSupabaseClient()

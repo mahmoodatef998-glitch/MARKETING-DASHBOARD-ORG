@@ -16,8 +16,11 @@ const CIRC = 2 * Math.PI * R
 
 export default function PackageProgress({ pkg }: { pkg: ClientPackage }) {
   const totalItems = pkg.items.reduce((s, i) => s + i.total_quantity, 0)
-  const totalUsed  = pkg.items.reduce((s, i) => s + (i.used ?? 0), 0)
-  const remaining  = Math.max(totalItems - totalUsed, 0)
+  // Use per-item usage if items are configured, otherwise fall back to total_done
+  const totalUsed  = pkg.items.length > 0
+    ? pkg.items.reduce((s, i) => s + (i.used ?? 0), 0)
+    : (pkg.total_done ?? 0)
+  const remaining  = totalItems > 0 ? Math.max(totalItems - totalUsed, 0) : 0
   const pct        = totalItems > 0 ? Math.round((totalUsed / totalItems) * 100) : 0
   const dashOffset = CIRC * (1 - pct / 100)
   const gradId     = `ring-${pkg.id.replace(/-/g, '')}`
@@ -59,12 +62,16 @@ export default function PackageProgress({ pkg }: { pkg: ClientPackage }) {
       {/* KPI cards */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: 'Total',     value: totalItems,  color: 'text-slate-200'  },
-          { label: 'Completed', value: totalUsed,   color: 'text-emerald-400' },
-          { label: 'Remaining', value: remaining,   color: 'text-amber-400'  },
+          { label: 'Total',     value: totalItems > 0 ? totalItems : '—', color: 'text-slate-200'  },
+          {
+            label: 'Completed',
+            value: pkg.total_done != null && pkg.total_done > totalUsed ? pkg.total_done : totalUsed,
+            color: 'text-emerald-400',
+          },
+          { label: 'Remaining', value: remaining > 0 ? remaining : '—', color: 'text-amber-400'  },
           {
             label: 'Progress',
-            value: `${pct}%`,
+            value: totalItems > 0 ? `${pct}%` : `${pkg.total_done ?? 0} done`,
             color: pct >= 100 ? 'text-red-400' : pct >= 80 ? 'text-amber-400' : 'text-indigo-400',
           },
         ].map(({ label, value, color }) => (

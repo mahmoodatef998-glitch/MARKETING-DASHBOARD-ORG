@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import type { Task, Client, TaskAssignee } from '@/types'
 
@@ -171,7 +172,7 @@ export default function TasksPage() {
   const [editing,       setEditing]       = useState<Task | null>(null)
   const [completedOpen, setCompletedOpen] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     const [tr, cr, mr] = await Promise.all([
       fetch('/api/tasks').then((r) => r.json()),
       fetch('/api/clients').then((r) => r.json()),
@@ -181,9 +182,19 @@ export default function TasksPage() {
     setClients(Array.isArray(cr) ? cr : [])
     setMembers(Array.isArray(mr) ? mr : [])
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, [load])
+
+  // Realtime: auto-refresh when any task changes
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    const ch = supabase
+      .channel('admin:tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { void load() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [load])
 
   async function handleSave(data: Partial<Task>) {
     if (editing) {

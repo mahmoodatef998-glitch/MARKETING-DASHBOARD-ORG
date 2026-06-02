@@ -85,6 +85,8 @@ export interface ClientPackage {
   is_active: boolean
   notes?: string
   items: PackageItem[]
+  /** computed: total done tasks in current period regardless of task_type */
+  total_done?: number
   created_at: string
   updated_at: string
 }
