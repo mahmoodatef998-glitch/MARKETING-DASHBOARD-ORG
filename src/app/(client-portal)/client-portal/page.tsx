@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
-  ExternalLink, CheckCircle2, RefreshCw, Star,
+  ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
+import { CalendarView } from '@/components/calendar/CalendarView'
 import type { Task, Invoice, ClientPackage } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -309,7 +310,7 @@ export default function ClientPortalPage() {
   const [invoices, setInvoices]     = useState<Invoice[]>([])
   const [pkg, setPkg]               = useState<ClientPackage | null>(null)
   const [loading, setLoading]       = useState(true)
-  const [tab, setTab]               = useState<'tasks' | 'completed' | 'invoices'>('tasks')
+  const [tab, setTab]               = useState<'tasks' | 'completed' | 'calendar' | 'invoices'>('tasks')
   const [detailTask, setDetailTask] = useState<Task | null>(null)
 
   async function load() {
@@ -387,10 +388,11 @@ export default function ClientPortalPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-800">
         {([
-          { key: 'tasks',     label: 'Tasks',     icon: CheckSquare, badge: activeTasks.length + reviewTasks.length },
-          { key: 'completed', label: 'Completed',  icon: CheckCircle2, badge: doneTasks.length },
-          { key: 'invoices',  label: 'Invoices',   icon: FileText,    badge: 0 },
-        ] as const).map(({ key, label, icon: Icon, badge }) => (
+          { key: 'tasks',     label: 'Tasks',    icon: CheckSquare,  badge: activeTasks.length + reviewTasks.length, badgeColor: 'bg-slate-700 text-slate-300' },
+          { key: 'completed', label: 'Completed', icon: CheckCircle2, badge: doneTasks.length,                       badgeColor: 'bg-green-500/20 text-green-400' },
+          { key: 'calendar',  label: 'Calendar',  icon: CalendarDays, badge: 0,                                      badgeColor: '' },
+          { key: 'invoices',  label: 'Invoices',  icon: FileText,     badge: 0,                                      badgeColor: '' },
+        ] as const).map(({ key, label, icon: Icon, badge, badgeColor }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -401,11 +403,7 @@ export default function ClientPortalPage() {
             <Icon className="h-4 w-4" />
             {label}
             {badge > 0 && (
-              <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                key === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-300'
-              }`}>
-                {badge}
-              </span>
+              <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
             )}
           </button>
         ))}
@@ -478,6 +476,23 @@ export default function ClientPortalPage() {
                 <CompletedCard key={task.id} task={task} onAction={load} />
               ))}
             </>
+          )}
+        </div>
+      )}
+
+      {/* Calendar tab */}
+      {tab === 'calendar' && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">
+            Your project plan — all scheduled tasks across the timeline. Tap any day to see details.
+          </p>
+          {tasks.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>No tasks scheduled yet</p>
+            </div>
+          ) : (
+            <CalendarView tasks={tasks} showAssignee={false} />
           )}
         </div>
       )}
