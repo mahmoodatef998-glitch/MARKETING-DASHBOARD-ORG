@@ -5,6 +5,8 @@ import { createNotionClient } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
 import { parseBody, ClientCreateSchema } from '@/lib/validation'
 import { DEMO_CLIENTS } from '@/lib/demo-data'
+import { sendEmail } from '@/lib/gmail'
+import { generateEmailContent } from '@/lib/gemini'
 import type { Client } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -64,5 +66,29 @@ export async function POST(req: NextRequest) {
   }
 
   try { const notionId = await createNotionClient(client); await supabase.from('clients').update({ notion_id: notionId }).eq('id', client.id) } catch {}
+
+  // Send welcome email (non-blocking)
+  try {
+    const portalUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://your-dashboard.vercel.app'
+    const details = [
+      `Company: ${client.name}`,
+      `Portal: ${portalUrl}/client-portal`,
+      client.phone ? `Phone: ${client.phone}` : null,
+    ].filter(Boolean).join('\n')
+    const { subject, body: emailBody } = await generateEmailContent({
+      type:          'client_welcome',
+      recipientName: client.name,
+      details,
+    })
+    await sendEmail({ to: client.email, subject, body: emailBody })
+    await supabase.from('automation_logs').insert({
+      type:            'client_welcome',
+      recipient_email: client.email,
+      subject,
+      status:          'sent',
+      created_at:      new Date().toISOString(),
+    })
+  } catch {}
+
   return NextResponse.json(client, { status: 201 })
 }

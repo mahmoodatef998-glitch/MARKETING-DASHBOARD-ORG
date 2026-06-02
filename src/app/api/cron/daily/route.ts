@@ -287,5 +287,63 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  // ── 7. Weekly client report (Sundays only) ────────────────────────────────
+  if (now.getDay() === 0) {
+    const weekStart = new Date(now)
+    weekStart.setDate(weekStart.getDate() - 7)
+    const weekStartStr = toDateStr(weekStart)
+
+    const { data: activeClients } = await supabase
+      .from('clients')
+      .select('id, name, email')
+      .eq('status', 'active')
+
+    for (const client of activeClients ?? []) {
+      try {
+        const [doneTasks, pendingTasks, overdueCount] = await Promise.all([
+          supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'done').gte('updated_at', weekStartStr),
+          supabase.from('tasks').select('title, due_date').eq('client_id', client.id).in('status', ['todo', 'in_progress', 'review']),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'overdue'),
+        ])
+
+        const completedList = (doneTasks.data ?? []).map(t => `• ${t.title}`).join('\n') || 'No tasks completed this week'
+        const upcomingList  = (pendingTasks.data ?? []).slice(0, 5).map(t => `• ${t.title}${t.due_date ? ` (due ${t.due_date})` : ''}`).join('\n') || 'No pending tasks'
+
+        const details = [
+          `Week: ${weekStartStr} → ${today}`,
+          `Completed this week (${doneTasks.data?.length ?? 0} tasks):\n${completedList}`,
+          `Upcoming (${pendingTasks.data?.length ?? 0} tasks):\n${upcomingList}`,
+          overdueCount.count ? `⚠️ Overdue tasks: ${overdueCount.count}` : null,
+        ].filter(Boolean).join('\n\n')
+
+        const { subject, body } = await generateEmailContent({
+          type:          'weekly_report',
+          recipientName: client.name,
+          details,
+        })
+
+        await sendEmail({ to: client.email, subject, body })
+        await supabase.from('automation_logs').insert({
+          type:            'weekly_report',
+          recipient_email: client.email,
+          subject,
+          status:          'sent',
+          created_at:      now.toISOString(),
+        })
+        results.push({ type: 'weekly_report', recipient: client.email, status: 'sent' })
+      } catch (err: any) {
+        await supabase.from('automation_logs').insert({
+          type:            'weekly_report',
+          recipient_email: client.email,
+          subject:         'Weekly Progress Report',
+          status:          'failed',
+          error:           err.message,
+          created_at:      now.toISOString(),
+        })
+        results.push({ type: 'weekly_report', recipient: client.email, status: 'failed' })
+      }
+    }
+  }
+
   return NextResponse.json({ success: true, processed: results.length, results })
 }

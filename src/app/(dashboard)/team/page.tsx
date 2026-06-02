@@ -8,8 +8,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Search, Pencil, Trash2, Mail, Loader2, UserPlus } from 'lucide-react'
-import type { TeamMember } from '@/types'
+import { Search, Pencil, Trash2, Mail, Loader2, UserPlus, BarChart2, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import type { TeamMember, Task } from '@/types'
 
 // Must match the UserRole values used in profiles table
 const ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer'] as const
@@ -94,16 +94,23 @@ export default function TeamPage() {
   const { toast } = useToast()
   const router = useRouter()
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [tasks,   setTasks]   = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [open, setOpen] = useState(false)
+  const [search,  setSearch]  = useState('')
+  const [open,    setOpen]    = useState(false)
   const [editing, setEditing] = useState<TeamMember | null>(null)
+  const [tab,     setTab]     = useState<'members' | 'workload'>('members')
 
   async function load() {
     try {
-      const res = await fetch('/api/team')
-      const data = await res.json()
-      setMembers(Array.isArray(data) ? data : [])
+      const [teamRes, tasksRes] = await Promise.all([
+        fetch('/api/team'),
+        fetch('/api/tasks?limit=500'),
+      ])
+      const teamData  = await teamRes.json()
+      const tasksData = await tasksRes.json()
+      setMembers(Array.isArray(teamData) ? teamData : [])
+      setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
     } catch {
       setMembers([])
     } finally {
@@ -136,6 +143,27 @@ export default function TeamPage() {
     (m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.email.toLowerCase().includes(search.toLowerCase())
   )
 
+  // Workload: group tasks by assigned_to profile id
+  const workload = members.map(m => {
+    // tasks have assigned_to = auth user id; team members have their own id
+    // We match on display_name fallback by email prefix or on assigned_to matching team member records
+    const memberTasks = tasks.filter(t => {
+      if (!t.assigned_to) return false
+      // Match via assignee display_name containing member name
+      if (t.assignee?.display_name?.toLowerCase().includes(m.name.toLowerCase())) return true
+      return false
+    })
+    return {
+      member: m,
+      total:       memberTasks.length,
+      todo:        memberTasks.filter(t => t.status === 'todo').length,
+      in_progress: memberTasks.filter(t => t.status === 'in_progress').length,
+      review:      memberTasks.filter(t => t.status === 'review').length,
+      done:        memberTasks.filter(t => t.status === 'done').length,
+      overdue:     memberTasks.filter(t => t.status === 'overdue').length,
+    }
+  }).sort((a, b) => (b.in_progress + b.todo) - (a.in_progress + a.todo))
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
@@ -148,6 +176,24 @@ export default function TeamPage() {
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-800">
+        {([
+          { key: 'members',  label: 'Team Members', icon: UserPlus },
+          { key: 'workload', label: 'Workload',      icon: BarChart2 },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === key ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-100'
+            }`}
+          >
+            <Icon className="h-4 w-4" />{label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Members Tab ── */}
+      {tab === 'members' && <>
       <p className="text-xs text-slate-500">
         Team members are created from the{' '}
         <button onClick={() => router.push('/users')} className="text-indigo-400 hover:underline">Users page</button>
@@ -201,6 +247,81 @@ export default function TeamPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+      </>}
+
+      {/* ── Workload Tab ── */}
+      {tab === 'workload' && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">Task distribution across active team members — sorted by active workload.</p>
+          {loading ? (
+            <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+          ) : workload.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-sm">No team members found.</div>
+          ) : (
+            workload.map(({ member, total, todo, in_progress, review, done, overdue }) => {
+              const activeLoad = in_progress + todo + review
+              const maxLoad    = Math.max(...workload.map(w => w.in_progress + w.todo + w.review), 1)
+              const barPct     = Math.round((activeLoad / maxLoad) * 100)
+              return (
+                <div key={member.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-100 text-sm">{member.name}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${roleColors[member.role] ?? 'bg-slate-700 text-slate-400'}`}>
+                          {ROLE_LABELS[member.role] ?? member.role}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`text-sm font-bold ${overdue > 0 ? 'text-red-400' : activeLoad > 5 ? 'text-orange-400' : 'text-slate-300'}`}>
+                      {activeLoad} active
+                    </span>
+                  </div>
+
+                  {/* Load bar */}
+                  <div className="h-1.5 bg-slate-800 rounded-full mb-3 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${overdue > 0 ? 'bg-red-500' : activeLoad > 5 ? 'bg-orange-500' : 'bg-indigo-500'}`}
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+
+                  {/* Counters */}
+                  <div className="flex items-center gap-3 flex-wrap text-xs">
+                    {in_progress > 0 && (
+                      <span className="flex items-center gap-1 text-blue-400">
+                        <Clock className="h-3 w-3" />{in_progress} in progress
+                      </span>
+                    )}
+                    {review > 0 && (
+                      <span className="flex items-center gap-1 text-amber-400">
+                        <Clock className="h-3 w-3" />{review} review
+                      </span>
+                    )}
+                    {todo > 0 && (
+                      <span className="text-slate-400">{todo} to do</span>
+                    )}
+                    {done > 0 && (
+                      <span className="flex items-center gap-1 text-green-400">
+                        <CheckCircle2 className="h-3 w-3" />{done} done
+                      </span>
+                    )}
+                    {overdue > 0 && (
+                      <span className="flex items-center gap-1 text-red-400">
+                        <AlertTriangle className="h-3 w-3" />{overdue} overdue
+                      </span>
+                    )}
+                    {total === 0 && <span className="text-slate-600">No tasks assigned</span>}
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
       )}
 

@@ -193,6 +193,9 @@ export type AutomationLogType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
+  | 'task_review_ready'
+  | 'client_welcome'
+  | 'weekly_report'
 
 export interface AutomationLog {
   id: string

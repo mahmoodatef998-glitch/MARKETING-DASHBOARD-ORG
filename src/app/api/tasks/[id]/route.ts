@@ -49,6 +49,50 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     try { await updateNotionTask(data.notion_id, updated) } catch {}
   }
 
+  // ── When task moves to review → notify client to approve ──────────────────
+  const justReview = oldTask?.status !== 'review' && body.status === 'review'
+  if (justReview && data?.client?.email) {
+    const admin = createAdminClient()
+    const clientName  = data.client.name
+    const clientEmail = data.client.email
+    const details = [
+      `Task: ${data.title}`,
+      data.description ? `Description: ${data.description}` : null,
+      `Type: ${data.task_type?.replace(/_/g, ' ') ?? 'General'}`,
+      `Priority: ${data.priority}`,
+      data.due_date ? `Due date: ${data.due_date}` : null,
+      data.delivery_url ? `Delivery link: ${data.delivery_url}` : null,
+    ].filter(Boolean).join('\n')
+
+    try {
+      const { subject, body: emailBody } = await generateEmailContent({
+        type:          'task_review_ready',
+        recipientName: clientName,
+        details,
+      })
+      await sendEmail({ to: clientEmail, subject, body: emailBody })
+      await admin.from('automation_logs').insert({
+        type:            'task_review_ready',
+        recipient_email: clientEmail,
+        subject,
+        status:          'sent',
+        task_id:         id,
+        created_at:      new Date().toISOString(),
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      await admin.from('automation_logs').insert({
+        type:            'task_review_ready',
+        recipient_email: clientEmail,
+        subject:         `Task "${data.title}" ready for review`,
+        status:          'failed',
+        error:           msg,
+        task_id:         id,
+        created_at:      new Date().toISOString(),
+      })
+    }
+  }
+
   // ── When task is marked done → notify client ───────────────────────────────
   const justCompleted = oldTask?.status !== 'done' && body.status === 'done'
   if (justCompleted && data?.client?.email) {

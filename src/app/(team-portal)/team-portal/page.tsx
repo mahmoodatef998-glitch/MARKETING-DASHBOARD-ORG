@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react'
+import { CheckSquare, MessageCircle, CalendarDays, Clock, AlertTriangle, Send, Loader2, Wifi } from 'lucide-react'
 import { CalendarView } from '@/components/calendar/CalendarView'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Message } from '@/types'
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -27,6 +28,7 @@ export default function TeamPortalPage() {
   const [loading,  setLoading]  = useState(true)
   const [sending,  setSending]  = useState(false)
   const [tab,      setTab]      = useState<'tasks' | 'calendar' | 'chat'>('tasks')
+  const [online,   setOnline]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,6 +52,28 @@ export default function TeamPortalPage() {
     }
     load()
   }, [])
+
+  // Real-time: subscribe to new incoming messages
+  useEffect(() => {
+    if (!myId) return
+    const supabase = getSupabaseClient()
+    const channel = supabase
+      .channel(`messages:${myId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${myId}` },
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
+        }
+      )
+      .subscribe((status) => setOnline(status === 'SUBSCRIBED'))
+
+    return () => { supabase.removeChannel(channel) }
+  }, [myId])
 
   useEffect(() => {
     if (tab === 'chat') bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -127,6 +151,9 @@ export default function TeamPortalPage() {
           >
             <Icon className="h-4 w-4" />
             {label}
+            {key === 'chat' && (
+              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-400' : 'bg-slate-600'}`} title={online ? 'Live' : 'Connecting…'} />
+            )}
           </button>
         ))}
       </div>

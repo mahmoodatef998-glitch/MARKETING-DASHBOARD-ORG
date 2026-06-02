@@ -9,6 +9,9 @@ export type EmailType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
+  | 'task_review_ready'
+  | 'client_welcome'
+  | 'weekly_report'
 
 export async function generateEmailContent(opts: {
   type: EmailType
@@ -53,6 +56,24 @@ Recipient (client): ${opts.recipientName}
 Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Inform the client that their task has been completed. Be positive and professional. Invite them to review the work and reach out with feedback. Plain text body, no HTML.`,
+
+    task_review_ready: `Write a professional notification email to a client informing them their deliverable is ready for review and approval.
+Recipient (client): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Be enthusiastic and professional. Tell them the work is ready for their review. Include a clear call-to-action to log in to the portal and approve or request revisions. Plain text body, no HTML.`,
+
+    client_welcome: `Write a professional, warm welcome email for a new client joining a marketing agency called Pixel Marketing Agency.
+Recipient (new client): ${opts.recipientName}
+Details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Welcome them warmly. Briefly explain what to expect: dedicated team, regular updates, a client portal to track progress and approve work. Mention they can reply to this email anytime. Plain text body, no HTML.`,
+
+    weekly_report: `Write a professional weekly progress report email from Pixel Marketing Agency to a client.
+Recipient (client): ${opts.recipientName}
+Week summary: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Summarize the week's accomplishments clearly. Be positive, highlight completed work, mention upcoming tasks. Keep it brief (max 150 words). Plain text body, no HTML.`,
   }
 
   const result = await model.generateContent(prompts[opts.type])
