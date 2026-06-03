@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionInvoice, deleteNotionPage } from '@/lib/notion'
+import { dbError } from '@/lib/utils'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +36,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
 
   if (data?.notion_id) {
     try { await updateNotionInvoice(data.notion_id, updated) } catch {}
@@ -57,6 +58,6 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { error } = await supabase.from('invoices').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }

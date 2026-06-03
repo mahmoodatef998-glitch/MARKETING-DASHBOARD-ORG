@@ -4,10 +4,15 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
+import { dbError } from '@/lib/utils'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
 
   // Normalize empty strings to null for optional FK / enum / date columns.
@@ -40,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
 
   if (data?.notion_id) {
     try { await updateNotionTask(data.notion_id, updated) } catch {}
@@ -108,6 +113,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { data } = await supabase.from('tasks').select('notion_id').eq('id', id).single()
 
   if (data?.notion_id) {
@@ -115,6 +124,6 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { error } = await supabase.from('tasks').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }
