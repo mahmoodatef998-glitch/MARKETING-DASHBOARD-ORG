@@ -340,6 +340,27 @@ export default function TasksPage() {
     load()
   }
 
+  async function bulkReassign(memberId: string) {
+    await Promise.all([...selected].map((id) => {
+      const task = tasks.find(t => t.id === id)
+      if (!task) return Promise.resolve()
+      return fetch(`/api/tasks/${id}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          ...task,
+          assigned_to: memberId,
+          task_type:   task.task_type ?? null,
+          due_date:    task.due_date  ?? null,
+          client_id:   task.client_id ?? null,
+        }),
+      })
+    }))
+    toast(`${selected.size} task(s) reassigned`, 'success')
+    setSelected(new Set())
+    load()
+  }
+
   const filtered = tasks
     .filter((t) => {
       const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
@@ -387,6 +408,16 @@ export default function TasksPage() {
             <SelectContent>
               {STATUS_OPTIONS.map((s) => (
                 <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select onValueChange={bulkReassign}>
+            <SelectTrigger className="w-40 h-8 text-xs border-indigo-500/40 bg-slate-800">
+              <SelectValue placeholder="Reassign to…" />
+            </SelectTrigger>
+            <SelectContent>
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
               ))}
             </SelectContent>
           </Select>

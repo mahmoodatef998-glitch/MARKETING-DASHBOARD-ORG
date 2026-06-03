@@ -8,8 +8,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Search, Pencil, Trash2, Mail, Loader2, UserPlus } from 'lucide-react'
-import type { TeamMember } from '@/types'
+import { Search, Pencil, Trash2, Mail, Loader2, UserPlus, LayoutGrid, BarChart2 } from 'lucide-react'
+import type { TeamMember, Task } from '@/types'
 
 // Must match the UserRole values used in profiles table
 const ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer'] as const
@@ -90,22 +90,84 @@ const roleColors: Record<string, string> = {
   media_buyer: 'bg-orange-500/20 text-orange-400',
 }
 
+interface WorkloadStats {
+  todo: number; in_progress: number; review: number; done: number; overdue: number; total: number
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  todo:        '#64748b',
+  in_progress: '#818cf8',
+  review:      '#f59e0b',
+  done:        '#34d399',
+  overdue:     '#f87171',
+}
+
+function WorkloadBar({ stats }: { stats: WorkloadStats }) {
+  if (stats.total === 0) return <p className="text-xs text-slate-600 italic">No tasks assigned</p>
+  return (
+    <div className="space-y-2">
+      {/* stacked bar */}
+      <div className="flex h-2 rounded-full overflow-hidden w-full">
+        {(['done', 'in_progress', 'review', 'todo', 'overdue'] as const).map(s => {
+          const pct = (stats[s] / stats.total) * 100
+          if (pct === 0) return null
+          return <div key={s} style={{ width: `${pct}%`, background: STATUS_COLORS[s] }} />
+        })}
+      </div>
+      {/* legend */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {([
+          ['done',        'Done'],
+          ['in_progress', 'In Progress'],
+          ['review',      'Review'],
+          ['todo',        'To Do'],
+          ['overdue',     'Overdue'],
+        ] as const).map(([s, label]) => stats[s] > 0 && (
+          <span key={s} className="flex items-center gap-1 text-[10px] text-slate-400">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLORS[s] }} />
+            {stats[s]} {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function TeamPage() {
   const { toast } = useToast()
   const router = useRouter()
-  const [members, setMembers] = useState<TeamMember[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<TeamMember | null>(null)
+  const [members,   setMembers]   = useState<TeamMember[]>([])
+  const [tasks,     setTasks]     = useState<Task[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [search,    setSearch]    = useState('')
+  const [viewMode,  setViewMode]  = useState<'grid' | 'workload'>('grid')
+  const [open,      setOpen]      = useState(false)
+  const [editing,   setEditing]   = useState<TeamMember | null>(null)
 
   async function load() {
-    const res = await fetch('/api/team')
-    setMembers(await res.json())
+    const [membersRes, tasksRes] = await Promise.all([
+      fetch('/api/team'),
+      fetch('/api/tasks'),
+    ])
+    setMembers(await membersRes.json())
+    const t = await tasksRes.json()
+    setTasks(Array.isArray(t) ? t : [])
     setLoading(false)
   }
 
   useEffect(() => { void load() }, [])
+
+  function getWorkload(memberId: string): WorkloadStats {
+    const mt = tasks.filter(t => t.assigned_to === memberId)
+    return {
+      todo:        mt.filter(t => t.status === 'todo').length,
+      in_progress: mt.filter(t => t.status === 'in_progress').length,
+      review:      mt.filter(t => t.status === 'review').length,
+      done:        mt.filter(t => t.status === 'done').length,
+      overdue:     mt.filter(t => t.status === 'overdue').length,
+      total:       mt.length,
+    }
+  }
 
   async function handleSave(data: Partial<TeamMember>) {
     if (!editing) return
@@ -137,6 +199,25 @@ export default function TeamPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search team…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        {/* View toggle */}
+        <div className="flex rounded-lg border border-slate-700 overflow-hidden">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> Grid
+          </button>
+          <button
+            onClick={() => setViewMode('workload')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === 'workload' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+            }`}
+          >
+            <BarChart2 className="h-3.5 w-3.5" /> Workload
+          </button>
+        </div>
         <Button onClick={() => router.push('/users')}>
           <UserPlus className="h-4 w-4" /> Add Member
         </Button>
@@ -157,7 +238,7 @@ export default function TeamPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <div key={i} className="h-36 rounded-xl bg-slate-800/50 animate-pulse" />)}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((m) => (
             <Card key={m.id} className="hover:border-slate-600 transition-colors">
@@ -195,6 +276,44 @@ export default function TeamPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      ) : (
+        /* ── Workload view ───────────────────────────────────────── */
+        <div className="space-y-3">
+          {filtered
+            .map(m => ({ m, stats: getWorkload(m.id) }))
+            .sort((a, b) => b.stats.total - a.stats.total)
+            .map(({ m, stats }) => (
+              <Card key={m.id} className="hover:border-slate-600 transition-colors">
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-4">
+                    {/* Avatar + info */}
+                    <div className="flex items-center gap-3 w-48 shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        {m.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-200 truncate">{m.name}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${roleColors[m.role] ?? 'bg-slate-700 text-slate-400'}`}>
+                          {ROLE_LABELS[m.role] ?? m.role}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Workload bar */}
+                    <div className="flex-1 min-w-0">
+                      <WorkloadBar stats={stats} />
+                    </div>
+
+                    {/* Total count */}
+                    <div className="shrink-0 text-right">
+                      <p className="text-xl font-bold text-slate-200">{stats.total}</p>
+                      <p className="text-[10px] text-slate-500">tasks</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
         </div>
       )}
 

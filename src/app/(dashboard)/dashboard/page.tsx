@@ -7,8 +7,9 @@ import { formatCurrency } from '@/lib/utils'
 import {
   TrendingUp, TrendingDown, DollarSign, CheckSquare, Users,
   Target, Clock, AlertCircle, BarChart2, Trophy, UserCheck,
-  Zap, Calendar, CreditCard, ArrowRight,
+  Zap, Calendar, CreditCard, ArrowRight, Eye,
 } from 'lucide-react'
+import type { Task } from '@/types'
 
 const ROLE_LABELS: Record<string, string> = {
   video_maker: 'Video Maker',
@@ -48,14 +49,19 @@ interface ReportData {
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<ReportData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data,         setData]         = useState<ReportData | null>(null)
+  const [reviewTasks,  setReviewTasks]  = useState<Task[]>([])
+  const [loading,      setLoading]      = useState(true)
 
   useEffect(() => {
-    fetch('/api/reports')
-      .then((r) => r.json())
-      .then((d: ReportData) => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+    Promise.all([
+      fetch('/api/reports').then(r => r.json()),
+      fetch('/api/tasks?status=review').then(r => r.json()),
+    ]).then(([reportData, tasks]) => {
+      setData(reportData)
+      setReviewTasks(Array.isArray(tasks) ? tasks : [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
   if (loading) {
@@ -135,6 +141,52 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Ready for Review alert ───────────────────────────────── */}
+      {reviewTasks.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-500/15">
+                <Eye className="h-4 w-4 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-300">
+                  {reviewTasks.length} task{reviewTasks.length > 1 ? 's' : ''} awaiting client approval
+                </p>
+                <p className="text-xs text-amber-400/70">These tasks are marked done and waiting for client review</p>
+              </div>
+            </div>
+            <Link href="/tasks?status=review"
+              className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors">
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="space-y-1.5">
+            {reviewTasks.slice(0, 4).map(task => (
+              <div key={task.id} className="flex items-center justify-between rounded-lg bg-amber-500/5 border border-amber-500/10 px-3 py-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <CheckSquare className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <span className="text-sm text-slate-200 truncate">{task.title}</span>
+                  {(task as Task & { client?: { name: string } }).client?.name && (
+                    <span className="text-xs text-slate-500 truncate hidden sm:block">
+                      — {(task as Task & { client?: { name: string } }).client?.name}
+                    </span>
+                  )}
+                </div>
+                {task.assignee?.display_name && (
+                  <span className="text-xs text-slate-500 shrink-0 ml-2">@ {task.assignee.display_name}</span>
+                )}
+              </div>
+            ))}
+            {reviewTasks.length > 4 && (
+              <p className="text-xs text-amber-400/60 text-center pt-1">
+                +{reviewTasks.length - 4} more
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

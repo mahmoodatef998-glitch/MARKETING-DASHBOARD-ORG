@@ -21,6 +21,7 @@ import {
   BarChart2,
   CreditCard,
   Settings,
+  MessageSquare,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,6 +33,7 @@ const nav = [
   { href: '/tasks',          label: 'Tasks',        icon: CheckSquare },
   { href: '/invoices',       label: 'Invoices',     icon: FileText },
   { href: '/billing',        label: 'Billing',      icon: CreditCard },
+  { href: '/inbox',          label: 'Inbox',        icon: MessageSquare },
   { href: '/automation',     label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',   label: 'AI Assistant', icon: Bot },
   { href: '/users',          label: 'Users',        icon: ShieldCheck },
