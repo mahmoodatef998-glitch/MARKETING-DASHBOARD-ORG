@@ -85,12 +85,14 @@ export interface ClientPackage {
   is_active: boolean
   notes?: string
   items: PackageItem[]
+  /** computed: total tasks done (fallback when no items configured) */
+  total_done?: number
   created_at: string
   updated_at: string
 }
 
 // ─── Task ─────────────────────────────────────────────────────────────────────
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'overdue'
+export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'overdue'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
 export interface TaskAssignee {
