@@ -7,6 +7,9 @@ import { createServerClient } from '@/lib/supabase-server'
 // Returns all packages for a client with computed usage per item
 export async function GET(req: NextRequest) {
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const clientId = new URL(req.url).searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
 
@@ -62,6 +65,10 @@ export async function GET(req: NextRequest) {
 // Create a new package with its items
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
   const { items, ...packageData } = body
 

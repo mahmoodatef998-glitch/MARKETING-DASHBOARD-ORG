@@ -39,6 +39,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), invoice_number: generateInvoiceNumber(), ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
   const items = body.items ?? []
   const subtotal = items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)

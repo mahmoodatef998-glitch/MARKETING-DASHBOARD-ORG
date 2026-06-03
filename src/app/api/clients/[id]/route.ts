@@ -4,9 +4,20 @@ import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 import { generateId } from '@/lib/utils'
 
+async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return null
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
+  const authErr = await requireAdmin(supabase)
+  if (authErr) return authErr
+
   const body = await req.json()
   const { billing_plan, ...clientBody } = body
   const updated = { ...clientBody, updated_at: new Date().toISOString() }
@@ -71,6 +82,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
+  const authErr = await requireAdmin(supabase)
+  if (authErr) return authErr
 
   const { data } = await supabase.from('clients').select('notion_id').eq('id', id).single()
   if (data?.notion_id) {
