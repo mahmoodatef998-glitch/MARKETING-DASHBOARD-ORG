@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
+import SchedulePublishPanel from '@/components/tasks/SchedulePublishPanel'
 import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { Task, Client, TaskAssignee } from '@/types'
@@ -194,6 +195,13 @@ function TaskForm({
         <Input value={form.delivery_url} onChange={(e) => set('delivery_url', e.target.value)}
           placeholder="https://drive.google.com/…" className="text-slate-300" />
       </div>
+
+      {/* Schedule publishing — only available when editing (task already has an ID) */}
+      {initial?.id && (
+        <div className="border-t border-slate-800 pt-4">
+          <SchedulePublishPanel taskId={initial.id} hasDelivery={!!form.delivery_url} />
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

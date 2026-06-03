@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   BarChart2,
   CreditCard,
+  Settings,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -34,6 +35,7 @@ const nav = [
   { href: '/automation',     label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',   label: 'AI Assistant', icon: Bot },
   { href: '/users',          label: 'Users',        icon: ShieldCheck },
+  { href: '/settings',       label: 'Social Media', icon: Settings },
 ]
 
 export default function Sidebar() {
