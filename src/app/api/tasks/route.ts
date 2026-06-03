@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionTask } from '@/lib/notion'
-import { generateId } from '@/lib/utils'
+import { generateId, dbError } from '@/lib/utils'
+import { TaskCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
 import type { Task } from '@/types'
 
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) {
     console.error('[tasks GET]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: dbError(error) }, { status: 500 })
   }
   return NextResponse.json(data ?? [])
 }
@@ -63,20 +64,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
-  const body = await req.json()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rawBody = await req.json().catch(() => null)
+  const parsed = parseBody(TaskCreateSchema, rawBody)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+
+  const b = parsed.data
   const task: Task = {
-    id: generateId(), title: body.title, description: body.description ?? null,
-    status: body.status ?? 'todo', priority: body.priority ?? 'medium',
-    task_type: body.task_type || null,
-    due_date: body.due_date || null,
-    assigned_to: body.assigned_to || null,
-    client_id: body.client_id || null,
-    delivery_url: body.delivery_url || null,
-    reference_image_url: body.reference_image_url || null,
-    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    id: generateId(),
+    title:               b.title,
+    description:         (b.description         as string | undefined) ?? undefined,
+    status:              b.status              ?? 'todo',
+    priority:            b.priority            ?? 'medium',
+    task_type:           (b.task_type           as import('@/types').TaskType | undefined) ?? undefined,
+    due_date:            (b.due_date            as string | undefined) ?? undefined,
+    assigned_to:         (b.assigned_to         as string | undefined) ?? undefined,
+    client_id:           (b.client_id           as string | undefined) ?? undefined,
+    delivery_url:        (b.delivery_url        as string | undefined) ?? undefined,
+    reference_image_url: (b.reference_image_url as string | undefined) ?? undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
   return NextResponse.json(task, { status: 201 })
 }

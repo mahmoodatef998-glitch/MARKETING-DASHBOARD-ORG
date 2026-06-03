@@ -28,6 +28,14 @@ export function generateInvoiceNumber(): string {
   return `INV-${year}-${rand}`
 }
 
+// Returns a safe error message — hides DB internals in production
+export function dbError(err: unknown): string {
+  if (process.env.NODE_ENV !== 'production') {
+    return err instanceof Error ? err.message : String(err)
+  }
+  return 'Internal server error'
+}
+
 export function isOverdue(dueDateStr?: string): boolean {
   if (!dueDateStr) return false
   return new Date(dueDateStr) < new Date()
