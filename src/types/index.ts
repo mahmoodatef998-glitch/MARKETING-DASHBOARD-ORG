@@ -115,6 +115,11 @@ export interface Task {
   assignee?: TaskAssignee
   client_id?: string
   client?: Client
+  delivery_url?: string
+  reference_image_url?: string
+  revision_notes?: string
+  client_rating?: number
+  client_rating_note?: string
   created_at: string
   updated_at: string
 }

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { Task, Client, TaskAssignee } from '@/types'
 
@@ -22,6 +22,66 @@ const TASK_TYPE_OPTIONS = [
   { value: 'custom',     label: 'Custom / Other' },
 ] as const
 
+function ImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      })
+      if (!presignRes.ok) throw new Error('Presign failed')
+      const { signedUrl, publicUrl } = await presignRes.json()
+      const uploadRes = await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      if (!uploadRes.ok) throw new Error('Upload failed')
+      onChange(publicUrl)
+    } catch (err) {
+      console.error('Image upload error:', err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-1.5">
+        <ImagePlus className="h-3.5 w-3.5 text-slate-400" /> Reference Image
+      </Label>
+      {value ? (
+        <div className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-800">
+          <img src={value} alt="Reference" className="w-full max-h-48 object-contain" />
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <a href={value} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+              <ExternalLink className="h-3.5 w-3.5" /> View
+            </a>
+            <button type="button" onClick={() => onChange('')}
+              className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs px-3 py-1.5 rounded-lg transition-colors">
+              <X className="h-3.5 w-3.5" /> Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()}
+          className="w-full border-2 border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-xl py-6 flex flex-col items-center gap-2 text-slate-500 hover:text-slate-300 transition-all">
+          {uploading
+            ? <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+            : <ImagePlus className="h-6 w-6" />}
+          <span className="text-xs">{uploading ? 'Uploading…' : 'Click to upload reference image'}</span>
+          <span className="text-[11px] text-slate-600">PNG, JPG, WebP up to 10 MB</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+    </div>
+  )
+}
+
 function TaskForm({
   initial, clients, members, onSave, onCancel,
 }: {
@@ -32,14 +92,16 @@ function TaskForm({
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
-    title: initial?.title ?? '',
-    description: initial?.description ?? '',
-    status: initial?.status ?? 'todo',
-    priority: initial?.priority ?? 'medium',
-    task_type: initial?.task_type ?? '',
-    due_date: initial?.due_date ?? '',
-    assigned_to: initial?.assigned_to ?? '',
-    client_id: initial?.client_id ?? '',
+    title:               initial?.title               ?? '',
+    description:         initial?.description         ?? '',
+    status:              initial?.status              ?? 'todo',
+    priority:            initial?.priority            ?? 'medium',
+    task_type:           initial?.task_type           ?? '',
+    due_date:            initial?.due_date            ?? '',
+    assigned_to:         initial?.assigned_to         ?? '',
+    client_id:           initial?.client_id           ?? '',
+    delivery_url:        initial?.delivery_url        ?? '',
+    reference_image_url: initial?.reference_image_url ?? '',
   })
   const [loading, setLoading] = useState(false)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
@@ -52,7 +114,7 @@ function TaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
       <div className="space-y-2">
         <Label>Title *</Label>
         <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Task title" required />
@@ -120,6 +182,19 @@ function TaskForm({
         <Label>Due Date</Label>
         <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
       </div>
+
+      {/* Reference image */}
+      <ImageUpload value={form.reference_image_url} onChange={(url) => set('reference_image_url', url)} />
+
+      {/* Delivery URL */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-1.5">
+          <ExternalLink className="h-3.5 w-3.5 text-slate-400" /> Delivery Link
+        </Label>
+        <Input value={form.delivery_url} onChange={(e) => set('delivery_url', e.target.value)}
+          placeholder="https://drive.google.com/…" className="text-slate-300" />
+      </div>
+
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={loading}>
@@ -378,7 +453,7 @@ export default function TasksPage() {
                     )}
                   </div>
                   {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
-                  <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
                     {task.due_date && (
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" /> {formatDate(task.due_date)}
@@ -386,6 +461,17 @@ export default function TasksPage() {
                     )}
                     {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
                     {task.client?.name && <span>— {task.client.name}</span>}
+                    {task.reference_image_url && (
+                      <span className="flex items-center gap-1 text-indigo-400">
+                        <ImagePlus className="h-3 w-3" /> ref image
+                      </span>
+                    )}
+                    {task.delivery_url && (
+                      <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors">
+                        <ExternalLink className="h-3 w-3" /> delivery
+                      </a>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">

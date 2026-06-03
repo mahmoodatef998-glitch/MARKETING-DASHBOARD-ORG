@@ -1,6 +1,9 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react'
+import {
+  CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
+  CheckCircle2, ExternalLink, ImagePlus, Link2, X,
+} from 'lucide-react'
 import type { Task, Message } from '@/types'
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -13,39 +16,177 @@ const PRIORITY_COLOR: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   todo:        'bg-slate-500/10 text-slate-400',
   in_progress: 'bg-blue-500/10 text-blue-400',
+  review:      'bg-amber-500/10 text-amber-400',
   done:        'bg-green-500/10 text-green-400',
   overdue:     'bg-red-500/10 text-red-400',
 }
 
+// ─── Mark Done Modal ──────────────────────────────────────────────────────────
+function MarkDoneModal({
+  task,
+  onConfirm,
+  onCancel,
+}: {
+  task: Task
+  onConfirm: (deliveryUrl: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [deliveryUrl, setDeliveryUrl] = useState(task.delivery_url ?? '')
+  const [uploading,   setUploading]   = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      })
+      if (!presignRes.ok) throw new Error('Presign failed')
+      const { signedUrl, publicUrl } = await presignRes.json()
+      await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      setDeliveryUrl(publicUrl)
+    } catch (err) {
+      console.error('Upload error', err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleConfirm() {
+    setSaving(true)
+    await onConfirm(deliveryUrl)
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            </div>
+            <span className="font-semibold text-white text-sm">Mark as Done</span>
+          </div>
+          <button onClick={onCancel} className="text-slate-500 hover:text-slate-300 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="bg-slate-800/60 rounded-xl p-3">
+            <p className="text-xs text-slate-400 mb-0.5">Task</p>
+            <p className="font-medium text-white text-sm">{task.title}</p>
+          </div>
+
+          {/* Reference image — read-only for team */}
+          {task.reference_image_url && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+                <ImagePlus className="h-3.5 w-3.5" /> Reference Image
+              </p>
+              <div className="rounded-xl overflow-hidden border border-slate-700">
+                <img src={task.reference_image_url} alt="Reference" className="w-full max-h-40 object-contain bg-slate-800" />
+              </div>
+            </div>
+          )}
+
+          {/* Delivery link section */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Link2 className="h-3.5 w-3.5 text-slate-400" />
+              Attach your work <span className="text-slate-500 font-normal">(optional)</span>
+            </p>
+
+            {/* Google Drive / URL input */}
+            <div className="flex gap-2">
+              <input
+                value={deliveryUrl}
+                onChange={e => setDeliveryUrl(e.target.value)}
+                placeholder="https://drive.google.com/…"
+                className="flex-1 bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+              />
+              {deliveryUrl && (
+                <button onClick={() => setDeliveryUrl('')} type="button"
+                  className="px-2.5 text-slate-500 hover:text-red-400 transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500 text-center">— or upload a file directly —</p>
+
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-xl py-3 text-sm text-slate-400 hover:text-slate-300 transition-all disabled:opacity-50"
+            >
+              {uploading
+                ? <><Loader2 className="h-4 w-4 animate-spin text-indigo-400" /> Uploading…</>
+                : <><ImagePlus className="h-4 w-4" /> Upload file</>}
+            </button>
+            <input ref={inputRef} type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+
+            {deliveryUrl && deliveryUrl.startsWith('http') && (
+              <a href={deliveryUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                <ExternalLink className="h-3 w-3" /> Preview attachment
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 pb-5 flex gap-3">
+          <button onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleConfirm} disabled={saving || uploading}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
+            {saving
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+              : <><CheckCircle2 className="h-4 w-4" /> Mark as Done</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TeamPortalPage() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [messages, setMessages] = useState<Message[]>([])
-  const [newMsg, setNewMsg] = useState('')
-  const [adminId, setAdminId] = useState<string | null>(null)
-  const [myId, setMyId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [tab, setTab] = useState<'tasks' | 'chat'>('tasks')
+  const [tasks,       setTasks]       = useState<Task[]>([])
+  const [messages,    setMessages]    = useState<Message[]>([])
+  const [newMsg,      setNewMsg]      = useState('')
+  const [adminId,     setAdminId]     = useState<string | null>(null)
+  const [myId,        setMyId]        = useState<string | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [sending,     setSending]     = useState(false)
+  const [tab,         setTab]         = useState<'tasks' | 'chat'>('tasks')
+  const [doneModal,   setDoneModal]   = useState<Task | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function load() {
-      // Get my profile
       const profileRes = await fetch('/api/profile')
-      const profile = await profileRes.json()
+      const profile    = await profileRes.json()
       setMyId(profile.id)
 
-      // Get my tasks
-      const tasksRes = await fetch('/api/tasks')
+      const tasksRes  = await fetch('/api/tasks')
       const tasksData = await tasksRes.json()
       setTasks(Array.isArray(tasksData) ? tasksData : [])
 
-      // Get admin user id (first admin profile)
       const adminRes = await fetch('/api/admin-id')
       if (adminRes.ok) {
         const { id } = await adminRes.json()
         setAdminId(id)
-        // Load messages with admin
         const msgRes = await fetch(`/api/messages?partner=${id}`)
         if (msgRes.ok) setMessages(await msgRes.json())
       }
@@ -75,13 +216,51 @@ export default function TeamPortalPage() {
     setSending(false)
   }
 
-  async function updateStatus(taskId: string, status: string) {
+  async function updateStatus(taskId: string, newStatus: string) {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return
+
+    // When marking done, open modal first
+    if (newStatus === 'done') {
+      setDoneModal(task)
+      return
+    }
+
     await fetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        ...task,
+        status: newStatus,
+        task_type: task.task_type ?? null,
+        due_date:  task.due_date  ?? null,
+        assigned_to: task.assigned_to ?? null,
+        client_id: task.client_id ?? null,
+      }),
     })
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: status as Task['status'] } : t))
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
+  }
+
+  async function confirmDone(deliveryUrl: string) {
+    if (!doneModal) return
+    const task = doneModal
+    await fetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...task,
+        status:       'done',
+        delivery_url: deliveryUrl || null,
+        task_type:    task.task_type   ?? null,
+        due_date:     task.due_date    ?? null,
+        assigned_to:  task.assigned_to ?? null,
+        client_id:    task.client_id   ?? null,
+      }),
+    })
+    setTasks(prev => prev.map(t =>
+      t.id === task.id ? { ...t, status: 'done' as Task['status'], delivery_url: deliveryUrl || undefined } : t
+    ))
+    setDoneModal(null)
   }
 
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done')
@@ -147,18 +326,52 @@ export default function TeamPortalPage() {
             </div>
           )}
           {tasks.map(task => (
-            <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div key={task.id}
+              className={`bg-slate-900 border rounded-xl p-4 space-y-3 transition-colors ${
+                task.revision_notes ? 'border-amber-500/30' : 'border-slate-800'
+              }`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-white">{task.title}</h3>
                   {task.description && (
                     <p className="text-sm text-slate-400 mt-1">{task.description}</p>
                   )}
+                  {/* Revision notes */}
+                  {task.revision_notes && (
+                    <div className="mt-2 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <p className="text-xs font-semibold text-amber-400 mb-0.5">Revision requested</p>
+                      <p className="text-xs text-amber-300/80">{task.revision_notes}</p>
+                    </div>
+                  )}
                 </div>
-                <span className={`px-2 py-1 rounded-md text-xs font-medium border ${PRIORITY_COLOR[task.priority] ?? ''}`}>
+                <span className={`px-2 py-1 rounded-md text-xs font-medium border shrink-0 ${PRIORITY_COLOR[task.priority] ?? ''}`}>
                   {task.priority}
                 </span>
               </div>
+
+              {/* Reference image */}
+              {task.reference_image_url && (
+                <div className="rounded-xl overflow-hidden border border-indigo-500/20 bg-slate-800">
+                  <div className="px-3 py-1.5 border-b border-indigo-500/10 flex items-center gap-1.5">
+                    <ImagePlus className="h-3 w-3 text-indigo-400" />
+                    <span className="text-xs text-indigo-400 font-medium">Reference Image</span>
+                    <a href={task.reference_image_url} target="_blank" rel="noopener noreferrer"
+                      className="ml-auto text-slate-500 hover:text-slate-300 transition-colors">
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                  <img src={task.reference_image_url} alt="Reference" className="w-full max-h-48 object-contain" />
+                </div>
+              )}
+
+              {/* Existing delivery link */}
+              {task.delivery_url && task.status === 'done' && (
+                <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{task.delivery_url}</span>
+                </a>
+              )}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -177,16 +390,28 @@ export default function TeamPortalPage() {
                   )}
                 </div>
 
-                {/* Status selector */}
-                <select
-                  value={task.status}
-                  onChange={e => updateStatus(task.id, e.target.value)}
-                  className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}
-                >
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
+                {task.status === 'done' ? (
+                  <span className={`text-xs px-2 py-1 rounded-md ${STATUS_COLOR.done}`}>Done ✓</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {/* Status selector (non-done transitions) */}
+                    <select
+                      value={task.status}
+                      onChange={e => updateStatus(task.id, e.target.value)}
+                      className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}
+                    >
+                      <option value="todo">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                    </select>
+                    {/* Explicit Done button */}
+                    <button
+                      onClick={() => setDoneModal(task)}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -238,6 +463,15 @@ export default function TeamPortalPage() {
             </button>
           </form>
         </div>
+      )}
+
+      {/* Mark Done Modal */}
+      {doneModal && (
+        <MarkDoneModal
+          task={doneModal}
+          onConfirm={confirmDone}
+          onCancel={() => setDoneModal(null)}
+        />
       )}
     </div>
   )
