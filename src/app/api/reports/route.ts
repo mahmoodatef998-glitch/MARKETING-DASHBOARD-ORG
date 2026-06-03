@@ -7,6 +7,9 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const [invoicesRes, tasksRes, clientsRes, teamTasksRes] = await Promise.all([
     supabase.from('invoices').select('id, total, status, issued_date, due_date, client_id'),
     supabase.from('tasks').select('id, status, priority, task_type, due_date, created_at, updated_at, client_id, assigned_to'),

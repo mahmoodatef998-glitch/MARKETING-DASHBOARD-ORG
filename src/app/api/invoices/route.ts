@@ -12,7 +12,20 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_INVOICES)
   const supabase = await createServerClient()
-  const { data, error } = await supabase.from('invoices').select('*, client:clients(*)').order('created_at', { ascending: false })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
+
+  let query = supabase.from('invoices').select('*, client:clients(*)').order('created_at', { ascending: false })
+
+  // Clients only see their own invoices
+  if (profile?.role === 'client') {
+    if (!profile.client_id) return NextResponse.json([])
+    query = query.eq('client_id', profile.client_id)
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }

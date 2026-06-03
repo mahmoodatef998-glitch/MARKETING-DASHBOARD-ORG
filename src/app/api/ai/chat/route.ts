@@ -5,6 +5,9 @@ import { chatWithAssistant } from '@/lib/gemini'
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { message, history } = await req.json()
 
   const [{ data: clients }, { data: tasks }, { data: invoices }] = await Promise.all([

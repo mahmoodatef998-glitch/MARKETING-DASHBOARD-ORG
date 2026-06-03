@@ -11,6 +11,10 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_CLIENTS)
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { data, error } = await supabase
     .from('clients')
     .select('*, billing_plans(id, cycle_type, amount, currency, custom_days, next_invoice_date, is_active)')
