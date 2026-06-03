@@ -319,9 +319,22 @@ export default function TasksPage() {
   }
 
   async function bulkSetStatus(status: string) {
-    await Promise.all([...selected].map((id) =>
-      fetch(`/api/tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-    ))
+    await Promise.all([...selected].map((id) => {
+      const task = tasks.find(t => t.id === id)
+      if (!task) return Promise.resolve()
+      return fetch(`/api/tasks/${id}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          ...task,
+          status,
+          task_type:   task.task_type   ?? null,
+          due_date:    task.due_date    ?? null,
+          assigned_to: task.assigned_to ?? null,
+          client_id:   task.client_id   ?? null,
+        }),
+      })
+    }))
     toast(`${selected.size} task(s) updated`, 'success')
     setSelected(new Set())
     load()
