@@ -4,7 +4,7 @@ import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
   ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
   Package, TrendingUp, RotateCcw, Zap, CreditCard, ChevronDown, ChevronUp,
-  Receipt, Calendar, DollarSign, Repeat2,
+  Receipt, Calendar, DollarSign, Repeat2, Mic, X,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
