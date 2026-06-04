@@ -5,6 +5,7 @@ import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { dbError } from '@/lib/utils'
+import { sendSlack } from '@/lib/slack'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -49,6 +50,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (data?.notion_id) {
     try { await updateNotionTask(data.notion_id, updated) } catch {}
+  }
+
+  // ── When task moves to "review" → notify client ───────────────────────────
+  const justReview = oldTask?.status !== 'review' && body.status === 'review'
+  if (justReview && data?.client?.email) {
+    const admin = createAdminClient()
+    const details = [
+      `Task: ${data.title}`,
+      data.description ? `Description: ${data.description}` : null,
+      `Priority: ${data.priority}`,
+      data.due_date ? `Due date: ${data.due_date}` : null,
+    ].filter(Boolean).join('\n')
+    try {
+      const { subject, body: emailBody } = await generateEmailContent({
+        type:          'task_in_review',
+        recipientName: data.client.name,
+        details,
+      })
+      await sendEmail({ to: data.client.email, subject, body: emailBody })
+      await admin.from('automation_logs').insert({
+        type: 'task_in_review', recipient_email: data.client.email,
+        subject, status: 'sent', task_id: id, created_at: new Date().toISOString(),
+      })
+    } catch {}
+    void sendSlack(`🔍 *Task ready for review*: "${data.title}" — client: ${data.client.name}`)
   }
 
   // ── When task is marked done → notify client ───────────────────────────────

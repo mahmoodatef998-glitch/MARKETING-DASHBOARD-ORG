@@ -12,7 +12,7 @@ export async function GET() {
 
   const [invoicesRes, tasksRes, clientsRes, teamTasksRes] = await Promise.all([
     supabase.from('invoices').select('id, total, status, issued_date, due_date, client_id'),
-    supabase.from('tasks').select('id, status, priority, task_type, due_date, created_at, updated_at, client_id, assigned_to'),
+    supabase.from('tasks').select('id, status, priority, task_type, due_date, created_at, updated_at, client_id, assigned_to, client_rating, revision_notes'),
     supabase.from('clients').select('id, name, status, created_at'),
     supabase
       .from('tasks')
@@ -215,6 +215,17 @@ export async function GET() {
     ? Math.round(((thisMonthOutput - lastMonthOutput) / lastMonthOutput) * 100)
     : thisMonthOutput > 0 ? 100 : 0
 
+  // ── Client rating avg ───────────────────────────────────────────────────────
+  const ratedTasks = (tasks as unknown as { client_rating?: number | null }[]).filter(t => t.client_rating != null)
+  const avgClientRating = ratedTasks.length > 0
+    ? Math.round((ratedTasks.reduce((s, t) => s + (t.client_rating ?? 0), 0) / ratedTasks.length) * 10) / 10
+    : 0
+
+  // ── Revision rate ───────────────────────────────────────────────────────────
+  const doneTasksAll = tasks.filter(t => t.status === 'done')
+  const tasksWithRevision = (tasks as unknown as { revision_notes?: string | null }[]).filter(t => t.revision_notes)
+  const revisionRate = tasks.length > 0 ? Math.round((tasksWithRevision.length / tasks.length) * 100) : 0
+
   return NextResponse.json({
     monthlyRevenue,
     monthlyOutput,
@@ -241,6 +252,9 @@ export async function GET() {
       onTimeRate,
       thisMonthOutput,
       outputGrowthPct,
+      avgClientRating,
+      revisionRate,
+      ratedTasksCount: ratedTasks.length,
     },
   })
 }

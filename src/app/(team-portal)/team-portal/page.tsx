@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
   CheckCircle2, ExternalLink, ImagePlus, Link2, X, Calendar, Camera,
-  Globe, Music2,
+  Globe, Music2, Mic, Sparkles,
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
 
@@ -48,14 +48,31 @@ function MarkDoneModal({
   onConfirm: (deliveryUrl: string, schedule?: ScheduleInfo) => Promise<void>
   onCancel: () => void
 }) {
-  const [deliveryUrl,  setDeliveryUrl]  = useState(task.delivery_url ?? '')
-  const [uploading,    setUploading]    = useState(false)
-  const [saving,       setSaving]       = useState(false)
-  const [scheduleOn,   setScheduleOn]   = useState(false)
-  const [platforms,    setPlatforms]    = useState<string[]>([])
-  const [scheduledAt,  setScheduledAt]  = useState('')
-  const [caption,      setCaption]      = useState('')
+  const [deliveryUrl,       setDeliveryUrl]       = useState(task.delivery_url ?? '')
+  const [uploading,         setUploading]         = useState(false)
+  const [saving,            setSaving]            = useState(false)
+  const [scheduleOn,        setScheduleOn]        = useState(false)
+  const [platforms,         setPlatforms]         = useState<string[]>([])
+  const [scheduledAt,       setScheduledAt]       = useState('')
+  const [caption,           setCaption]           = useState('')
+  const [generatingCaption, setGeneratingCaption] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleGenerateCaption() {
+    setGeneratingCaption(true)
+    try {
+      const res = await fetch('/api/ai/caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: task.id }),
+      })
+      if (res.ok) {
+        const { caption: generated } = await res.json()
+        setCaption(generated)
+      }
+    } catch {}
+    setGeneratingCaption(false)
+  }
 
   const hasDelivery = !!deliveryUrl
 
@@ -227,9 +244,18 @@ function MarkDoneModal({
 
                   {/* Caption */}
                   <div className="space-y-1.5">
-                    <p className="text-xs text-slate-400 font-medium">Caption</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-400 font-medium">Caption</p>
+                      <button type="button" onClick={handleGenerateCaption}
+                        disabled={generatingCaption}
+                        className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50 transition-colors">
+                        {generatingCaption
+                          ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating…</>
+                          : <><Sparkles className="h-3 w-3" /> AI Generate</>}
+                      </button>
+                    </div>
                     <textarea value={caption} onChange={e => setCaption(e.target.value)}
-                      placeholder="Write your post caption…" rows={3}
+                      placeholder="Write your post caption or use AI Generate above…" rows={3}
                       className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none resize-none transition-colors" />
                   </div>
 
@@ -469,9 +495,15 @@ export default function TeamPortalPage() {
                   <h3 className="font-medium text-white">{task.title}</h3>
                   {task.description && <p className="text-sm text-slate-400 mt-1">{task.description}</p>}
                   {task.revision_notes && (
-                    <div className="mt-2 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2">
-                      <p className="text-xs font-semibold text-amber-400 mb-0.5">Revision requested</p>
+                    <div className="mt-2 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2 space-y-1.5">
+                      <p className="text-xs font-semibold text-amber-400">Revision requested</p>
                       <p className="text-xs text-amber-300/80">{task.revision_notes}</p>
+                      {task.revision_voice_url && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Mic className="h-3 w-3 text-amber-400 shrink-0" />
+                          <audio src={task.revision_voice_url} controls className="flex-1 h-7 min-w-0" />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

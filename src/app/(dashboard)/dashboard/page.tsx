@@ -45,6 +45,9 @@ interface ReportData {
     monthlyGrowthPct: number
     avgClientLTV: number
     avgDaysToPayment: number
+    avgClientRating: number
+    ratedTasksCount: number
+    revisionRate: number
   }
 }
 
@@ -134,6 +137,19 @@ export default function DashboardPage() {
       value: `${data.kpis.taskCompletionRate}%`,
       sub: `${data.kpis.completedTasks} of ${data.kpis.totalTasks} done`,
       icon: Zap, color: 'text-yellow-400', bg: 'bg-yellow-400/10',
+    },
+    {
+      title: 'Avg Client Rating',
+      value: data.kpis.avgClientRating > 0 ? `${data.kpis.avgClientRating} ★` : '—',
+      sub: `from ${data.kpis.ratedTasksCount} rated task${data.kpis.ratedTasksCount !== 1 ? 's' : ''}`,
+      icon: Target, color: 'text-pink-400', bg: 'bg-pink-400/10',
+    },
+    {
+      title: 'Revision Rate',
+      value: `${data.kpis.revisionRate}%`,
+      sub: 'tasks that had revision requests',
+      icon: AlertCircle, color: data.kpis.revisionRate > 30 ? 'text-red-400' : 'text-slate-400',
+      bg:   data.kpis.revisionRate > 30 ? 'bg-red-400/10' : 'bg-slate-400/10',
     },
   ]
 

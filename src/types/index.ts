@@ -120,6 +120,7 @@ export interface Task {
   delivery_url?: string
   reference_image_url?: string
   revision_notes?: string
+  revision_voice_url?: string
   client_rating?: number
   client_rating_note?: string
   created_at: string
@@ -187,6 +188,7 @@ export type AutomationLogType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
+  | 'task_in_review'
 
 export interface AutomationLog {
   id: string

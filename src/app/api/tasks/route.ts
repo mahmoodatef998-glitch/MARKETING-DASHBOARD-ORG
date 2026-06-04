@@ -5,6 +5,7 @@ import { createNotionTask } from '@/lib/notion'
 import { generateId, dbError } from '@/lib/utils'
 import { TaskCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
+import { sendSlack } from '@/lib/slack'
 import type { Task } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -90,5 +91,8 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.from('tasks').insert(task)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
+  if (task.assigned_to) {
+    void sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`)
+  }
   return NextResponse.json(task, { status: 201 })
 }

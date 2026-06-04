@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { notes } = body
+  const { notes, voice_note_url } = body
 
   if (!notes?.trim()) return NextResponse.json({ error: 'Revision notes are required' }, { status: 400 })
 
@@ -36,9 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data, error } = await supabase
     .from('tasks')
     .update({
-      status:         'in_progress',
-      revision_notes: notes.trim(),
-      updated_at:     new Date().toISOString(),
+      status:             'in_progress',
+      revision_notes:     notes.trim(),
+      revision_voice_url: typeof voice_note_url === 'string' ? voice_note_url : null,
+      updated_at:         new Date().toISOString(),
     })
     .eq('id', id)
     .select()

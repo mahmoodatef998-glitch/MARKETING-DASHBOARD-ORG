@@ -9,6 +9,7 @@ export type EmailType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
+  | 'task_in_review'
 
 export async function generateEmailContent(opts: {
   type: EmailType
@@ -53,12 +54,42 @@ Recipient (client): ${opts.recipientName}
 Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Inform the client that their task has been completed. Be positive and professional. Invite them to review the work and reach out with feedback. Plain text body, no HTML.`,
+
+    task_in_review: `Write a professional notification email to a client informing them that their task is ready for review and approval.
+Recipient (client): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Be enthusiastic and clear. Ask them to log in to the client portal to review and either approve or request revisions. Plain text body, no HTML.`,
   }
 
   const result = await model.generateContent(prompts[opts.type])
   const text = result.response.text()
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   return JSON.parse(clean)
+}
+
+export async function generateCaption(opts: {
+  taskTitle: string
+  taskType?: string
+  description?: string
+  clientName?: string
+}): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+  const typeLabel: Record<string, string> = {
+    reel_video: 'a short video / reel',
+    design:     'a design / graphic',
+    ai_video:   'an AI-generated video',
+    post:       'a social media post',
+    custom:     'content',
+  }
+  const contentType = opts.taskType ? (typeLabel[opts.taskType] ?? 'content') : 'content'
+  const prompt = `Write an engaging social media caption for ${contentType}.
+Task: ${opts.taskTitle}${opts.description ? `\nContext: ${opts.description}` : ''}${opts.clientName ? `\nBrand: ${opts.clientName}` : ''}
+Requirements: catchy, 2-3 sentences max, include 3-5 relevant hashtags at the end.
+Return ONLY the caption text (no JSON, no quotes, no explanation).`
+
+  const result = await model.generateContent(prompt)
+  return result.response.text().trim()
 }
 
 export async function chatWithAssistant(opts: {

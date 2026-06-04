@@ -14,6 +14,7 @@ const LOG_LABELS: Record<AutomationLogType, string> = {
   task_reminder_24h: '24h Task Reminder',
   task_confirmation: 'Deadline Confirmation',
   task_completed:    'Task Completed → Client',
+  task_in_review:    'Task Ready for Review',
 }
 
 const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
@@ -23,6 +24,7 @@ const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
   task_reminder_24h: AlarmClock,
   task_confirmation: Send,
   task_completed:    CheckSquare,
+  task_in_review:    Mail,
 }
 
 export default function AutomationPage() {
