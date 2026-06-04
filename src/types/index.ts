@@ -172,6 +172,21 @@ export interface BillingPlan {
   updated_at: string
 }
 
+// ─── Meetings ─────────────────────────────────────────────────────────────────
+export type MeetingStatus = 'pending' | 'done' | 'cancelled'
+
+export interface Meeting {
+  id: string
+  title: string
+  client_id?: string
+  client?: Pick<Client, 'id' | 'name'>
+  scheduled_at: string
+  notes?: string
+  status: MeetingStatus
+  created_at: string
+  updated_at: string
+}
+
 // ─── AI Chat ─────────────────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string
