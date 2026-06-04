@@ -16,8 +16,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json()
 
-  // Normalize empty strings to null for optional FK / enum / date columns.
-  // The form sends '' for unset selects; Supabase rejects them against CHECK/FK constraints.
+  const raw = await req.json().catch(() => null)
+  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+
+  const parsed = parseBody(TaskUpdateSchema, raw)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+
+  const body = parsed.data
   const updated: Record<string, unknown> = {
     title:               body.title,
     description:         body.description         || null,
@@ -131,6 +136,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       console.error('[tasks] completion email failed:', msg)
     }
+  }
+
+  // Log activity
+  const { data: { user } } = await supabase.auth.getUser()
+  if (body.status && oldTask?.status !== body.status) {
+    await logActivity({
+      supabase: createAdminClient(),
+      userId:     user?.id,
+      action:     'task.status_changed',
+      entityType: 'task',
+      entityId:   id,
+      entityName: data?.title,
+      oldValue:   { status: oldTask?.status },
+      newValue:   { status: body.status },
+    })
+  } else if (user) {
+    await logActivity({
+      supabase: createAdminClient(),
+      userId:     user.id,
+      action:     'task.updated',
+      entityType: 'task',
+      entityId:   id,
+      entityName: data?.title,
+    })
   }
 
   return NextResponse.json(data)

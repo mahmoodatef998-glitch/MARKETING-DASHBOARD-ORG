@@ -40,10 +40,15 @@ export default function ClientsPage() {
   const [profileClient, setProfileClient] = useState<Client | null>(null)
 
   async function load() {
-    const res = await fetch('/api/clients')
-    const data = await res.json()
-    setClients(Array.isArray(data) ? data : [])
-    setLoading(false)
+    try {
+      const res = await fetch('/api/clients?page=all')
+      const data = await res.json()
+      setClients(Array.isArray(data) ? data : (data.data ?? []))
+    } catch {
+      setClients([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { void load() }, [])

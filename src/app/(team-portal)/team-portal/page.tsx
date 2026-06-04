@@ -7,6 +7,61 @@ import {
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
 
+// ── Task filter component ──────────────────────────────────────────────────────
+function TaskFilter({ tasks, render }: { tasks: Task[]; render: (filtered: Task[]) => React.ReactNode }) {
+  const [search,   setSearch]   = useState('')
+  const [priority, setPriority] = useState('all')
+  const [status,   setStatus]   = useState('all')
+
+  const filtered = tasks.filter(t => {
+    const matchSearch   = !search   || t.title.toLowerCase().includes(search.toLowerCase())
+    const matchPriority = priority === 'all' || t.priority === priority
+    const matchStatus   = status   === 'all' || t.status   === status
+    return matchSearch && matchPriority && matchStatus
+  })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search tasks…"
+            className="w-full pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+        <select value={priority} onChange={e => setPriority(e.target.value)}
+          className="text-xs px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 outline-none cursor-pointer">
+          <option value="all">All priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select value={status} onChange={e => setStatus(e.target.value)}
+          className="text-xs px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 outline-none cursor-pointer">
+          <option value="all">All statuses</option>
+          <option value="todo">To Do</option>
+          <option value="in_progress">In Progress</option>
+          <option value="review">Review</option>
+          <option value="overdue">Overdue</option>
+          <option value="done">Done</option>
+        </select>
+        {(search || priority !== 'all' || status !== 'all') && (
+          <button onClick={() => { setSearch(''); setPriority('all'); setStatus('all') }}
+            className="text-xs px-2 py-1.5 text-slate-400 hover:text-slate-200 transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">{filtered.length} of {tasks.length} tasks</p>
+      {render(filtered)}
+    </div>
+  )
+}
+
 const PRIORITY_COLOR: Record<string, string> = {
   urgent: 'bg-red-500/10 text-red-400 border-red-500/20',
   high:   'bg-orange-500/10 text-orange-400 border-orange-500/20',
@@ -320,7 +375,7 @@ export default function TeamPortalPage() {
 
       const tasksRes  = await fetch('/api/tasks')
       const tasksData = await tasksRes.json()
-      setTasks(Array.isArray(tasksData) ? tasksData : [])
+      setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
 
       // Load social connections for media buyer scheduling
       if (profile.role === 'media_buyer') {
@@ -343,8 +398,49 @@ export default function TeamPortalPage() {
     load()
   }, [])
 
+  // Realtime: tasks assigned to me
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!myId) return
+    const supabase = getSupabaseClient()
+    const tasksCh = supabase
+      .channel(`team-portal:tasks:${myId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `assigned_to=eq.${myId}` },
+        async () => {
+          const res  = await fetch('/api/tasks?limit=200')
+          const data = await res.json()
+          setTasks(Array.isArray(data) ? data : (data.data ?? []))
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(tasksCh) }
+  }, [myId])
+
+  // Realtime: incoming messages
+  useEffect(() => {
+    if (!myId) return
+    const supabase = getSupabaseClient()
+    const channel = supabase
+      .channel(`messages:${myId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${myId}` },
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
+        }
+      )
+      .subscribe((status) => setOnline(status === 'SUBSCRIBED'))
+
+    return () => { supabase.removeChannel(channel) }
+  }, [myId])
+
+  useEffect(() => {
+    if (tab === 'chat') bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, tab])
 
   async function sendMessage(e: React.FormEvent) {
@@ -424,8 +520,46 @@ export default function TeamPortalPage() {
     setDoneModal(null)
   }
 
+  const markDone = useCallback((taskId: string, taskTitle: string) => {
+    // Optimistic UI update immediately
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'done' as Task['status'] } : t))
+    setDoneToast({ taskId, taskTitle })
+
+    // Clear any existing timer
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
+
+    // Commit to API after 5 seconds if no undo
+    doneTimerRef.current = setTimeout(async () => {
+      setDoneToast(null)
+      const task = tasks.find(t => t.id === taskId)
+      const fullBody = task ? {
+        title:       task.title,
+        description: task.description,
+        status:      'done',
+        priority:    task.priority,
+        task_type:   task.task_type,
+        due_date:    task.due_date,
+        assigned_to: task.assigned_to,
+        client_id:   task.client_id,
+      } : { status: 'done' }
+      await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullBody),
+      })
+    }, 5000)
+  }, [tasks])
+
+  const undoDone = useCallback(() => {
+    if (!doneToast) return
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
+    setTasks(prev => prev.map(t => t.id === doneToast.taskId ? { ...t, status: 'in_progress' as Task['status'] } : t))
+    setDoneToast(null)
+  }, [doneToast])
+
+  const activeTasks  = tasks.filter(t => t.status !== 'done')
+  const doneTasks    = tasks.filter(t => t.status === 'done')
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done')
-  const pendingTasks = tasks.filter(t => t.status !== 'done')
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -435,15 +569,33 @@ export default function TeamPortalPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* Undo toast */}
+      {doneToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 shadow-2xl shadow-black/40 animate-in slide-in-from-bottom-4">
+          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+          <span className="text-sm text-white">
+            <span className="font-semibold">Done:</span>{' '}
+            <span className="text-slate-300 max-w-[200px] truncate inline-block align-bottom">{doneToast.taskTitle}</span>
+          </span>
+          <button
+            onClick={undoDone}
+            className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 ml-1 border border-indigo-500/30 px-2.5 py-1 rounded-lg hover:bg-indigo-500/10 transition-colors"
+          >
+            <Undo2 className="h-3.5 w-3.5" /> Undo
+          </button>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <p className="text-xs text-slate-400 mb-1">Total Tasks</p>
-          <p className="text-2xl font-bold text-white">{tasks.length}</p>
+          <p className="text-xs text-slate-400 mb-1">Active</p>
+          <p className="text-2xl font-bold text-white">{activeTasks.length}</p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <p className="text-xs text-slate-400 mb-1">In Progress</p>
-          <p className="text-2xl font-bold text-blue-400">{pendingTasks.length}</p>
+          <p className="text-xs text-slate-400 mb-1">Completed</p>
+          <p className="text-2xl font-bold text-green-400">{doneTasks.length}</p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <p className="text-xs text-slate-400 mb-1">Overdue</p>
@@ -476,10 +628,80 @@ export default function TeamPortalPage() {
         ))}
       </div>
 
-      {/* Tasks Tab */}
+      {/* ── My Tasks Tab ──────────────────────────────────────────── */}
       {tab === 'tasks' && (
         <div className="space-y-3">
-          {tasks.length === 0 && (
+
+          {/* Active tasks */}
+          {activeTasks.length > 0 ? (
+            <TaskFilter tasks={activeTasks} render={(filtered) => (
+              <>
+                {filtered.length === 0 && (
+                  <div className="text-center py-8 text-slate-500 text-sm">No tasks match your filters.</div>
+                )}
+                {filtered.map(task => (
+                  <div key={task.id} className={`bg-slate-900 border rounded-xl p-4 space-y-3 ${task.revision_notes ? 'border-amber-500/30' : 'border-slate-800'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white">{task.title}</h3>
+                        {task.description && (
+                          <p className="text-sm text-slate-400 mt-1">{task.description}</p>
+                        )}
+                        {/* Revision notes inline */}
+                        {task.revision_notes && (
+                          <div className="mt-2 flex items-start gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            <RefreshCw className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-semibold text-amber-400 mb-0.5">Revision requested</p>
+                              <p className="text-xs text-slate-300 leading-relaxed">{task.revision_notes}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium border shrink-0 ${PRIORITY_COLOR[task.priority] ?? ''}`}>
+                        {task.priority}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        {task.due_date && (
+                          <div className={`flex items-center gap-1 text-xs ${
+                            new Date(task.due_date) < new Date() ? 'text-red-400' : 'text-slate-400'
+                          }`}>
+                            {new Date(task.due_date) < new Date()
+                              ? <AlertTriangle className="h-3 w-3" />
+                              : <Clock className="h-3 w-3" />}
+                            {new Date(task.due_date).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={task.status}
+                          onChange={e => updateStatus(task.id, e.target.value)}
+                          className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}
+                        >
+                          <option value="todo">To Do</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="review">Review</option>
+                        </select>
+
+                        <button
+                          onClick={() => markDone(task.id, task.title)}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 font-medium transition-colors border border-green-500/20"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )} />
+          ) : doneTasks.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
               <CheckSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p>No tasks assigned yet</p>
@@ -568,11 +790,58 @@ export default function TeamPortalPage() {
                 )}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Completed section */}
+          {doneTasks.length > 0 && (
+            <div className="pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setCompletedOpen(o => !o)}
+                className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 py-1.5 w-full transition-colors"
+              >
+                {completedOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500/60" />
+                <span className="font-medium">{doneTasks.length} completed task{doneTasks.length > 1 ? 's' : ''}</span>
+              </button>
+
+              {completedOpen && (
+                <div className="space-y-2 mt-2">
+                  {doneTasks.map(task => (
+                    <div key={task.id} className="bg-slate-900/50 border border-slate-800/60 rounded-xl p-3 opacity-75">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-sm text-slate-300 line-through truncate">{task.title}</p>
+                            {task.description && (
+                              <p className="text-xs text-slate-500 truncate mt-0.5">{task.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-medium border shrink-0 ${PRIORITY_COLOR[task.priority] ?? ''}`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      {task.client_rating && (
+                        <p className="mt-2 text-xs text-amber-400 pl-6">
+                          {'★'.repeat(task.client_rating)}{'☆'.repeat(5 - task.client_rating)} Client rating
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Chat Tab */}
+      {/* ── My Calendar Tab ───────────────────────────────────────── */}
+      {tab === 'calendar' && (
+        <CalendarView tasks={tasks} showAssignee={false} />
+      )}
+
+      {/* ── Chat Tab ──────────────────────────────────────────────── */}
       {tab === 'chat' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[500px]">
           <div className="flex-1 overflow-y-auto p-4 space-y-3">

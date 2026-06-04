@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   // Clients only see their own tasks — enforced server-side regardless of query params
@@ -56,7 +57,9 @@ export async function GET(req: NextRequest) {
     console.error('[tasks GET]', error.message)
     return NextResponse.json({ error: dbError(error) }, { status: 500 })
   }
-  return NextResponse.json(data ?? [])
+  return NextResponse.json(data ?? [], {
+    headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+  })
 }
 
 export async function POST(req: NextRequest) {

@@ -250,10 +250,11 @@ export default function TasksPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<Task | null>(null)
+  const [open,          setOpen]          = useState(false)
+  const [editing,       setEditing]       = useState<Task | null>(null)
+  const [completedOpen, setCompletedOpen] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     const [tr, cr, mr] = await Promise.all([
       fetch('/api/tasks').then((r) => r.json()),
       fetch('/api/clients').then((r) => r.json()),
@@ -263,9 +264,19 @@ export default function TasksPage() {
     setClients(Array.isArray(cr) ? cr : [])
     setMembers(Array.isArray(mr) ? mr : [])
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, [load])
+
+  // Realtime: auto-refresh when any task changes
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    const ch = supabase
+      .channel('admin:tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { void load() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [load])
 
   async function handleSave(data: Partial<Task>) {
     if (editing) {
@@ -303,7 +314,7 @@ export default function TasksPage() {
   }
 
   function toggleSelectAll() {
-    if (selected.size === filtered.length) {
+    if (selected.size === filtered.length && filtered.length > 0) {
       setSelected(new Set())
     } else {
       setSelected(new Set(filtered.map((t) => t.id)))
@@ -363,20 +374,17 @@ export default function TasksPage() {
 
   const filtered = tasks
     .filter((t) => {
+      if (t.status === 'done') return false
       const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || t.status === filterStatus
       return matchSearch && matchStatus
     })
-    .sort((a, b) => {
-      // Overdue always first
-      if (a.status === 'overdue' && b.status !== 'overdue') return -1
-      if (b.status === 'overdue' && a.status !== 'overdue') return 1
-      // Then by due_date ascending (no date goes last)
-      if (!a.due_date && !b.due_date) return 0
-      if (!a.due_date) return 1
-      if (!b.due_date) return -1
-      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-    })
+    .sort(sortByDue)
+
+  // Done tasks: always separated, only filtered by search
+  const filteredDone = tasks
+    .filter((t) => t.status === 'done' && t.title.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
 
   const countByStatus = (s: string) => tasks.filter((t) => t.status === s).length
 
@@ -430,7 +438,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Status filter chips with select-all */}
+      {/* Status filter chips (active tasks only — done has its own section) */}
       <div className="flex gap-2 flex-wrap items-center">
         {filtered.length > 0 && (
           <button
@@ -443,8 +451,8 @@ export default function TasksPage() {
             <span className="text-xs">All</span>
           </button>
         )}
-        {(['all', ...STATUS_OPTIONS] as const).map((s) => {
-          const count = s === 'all' ? tasks.length : countByStatus(s)
+        {(['all', 'todo', 'in_progress', 'review', 'overdue'] as const).map((s) => {
+          const count = s === 'all' ? tasks.filter(t => t.status !== 'done').length : countByStatus(s)
           const active = filterStatus === s
           return (
             <button
@@ -468,15 +476,18 @@ export default function TasksPage() {
 
       {loading ? (
         <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
-      ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-16 text-center">
-          <p className="text-slate-400 text-sm">No tasks found.</p>
-          <Button className="mt-4" onClick={() => { setEditing(null); setOpen(true) }}>
-            <Plus className="h-4 w-4" /> Create First Task
-          </Button>
-        </CardContent></Card>
       ) : (
         <div className="space-y-3">
+          {/* ── Active tasks ── */}
+          {filtered.length === 0 && filteredDone.length === 0 && (
+            <Card><CardContent className="py-16 text-center">
+              <p className="text-slate-400 text-sm">No tasks found.</p>
+              <Button className="mt-4" onClick={() => { setEditing(null); setOpen(true) }}>
+                <Plus className="h-4 w-4" /> Create First Task
+              </Button>
+            </CardContent></Card>
+          )}
+
           {filtered.map((task) => (
             <Card key={task.id} className={`hover:border-slate-600 transition-colors ${selected.has(task.id) ? 'border-indigo-500/40 bg-indigo-500/5' : ''}`}>
               <CardContent className="py-4 flex items-start gap-3">
@@ -537,6 +548,65 @@ export default function TasksPage() {
               </CardContent>
             </Card>
           ))}
+
+          {/* ── Completed section ── */}
+          {filteredDone.length > 0 && (
+            <div className="pt-1">
+              <button
+                onClick={() => setCompletedOpen(o => !o)}
+                className="flex items-center gap-2 w-full px-1 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors rounded-lg"
+              >
+                {completedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <CheckCircle2 className="h-4 w-4 text-green-500/70" />
+                <span className="font-medium">Completed</span>
+                <span className="ml-1 text-xs bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full font-semibold">
+                  {filteredDone.length}
+                </span>
+                <span className="ml-auto text-xs text-slate-600">
+                  {completedOpen ? 'hide' : 'show'}
+                </span>
+              </button>
+
+              {completedOpen && (
+                <div className="space-y-2 mt-2">
+                  {filteredDone.map((task) => (
+                    <Card key={task.id} className="opacity-70 hover:opacity-90 transition-opacity border-green-500/10">
+                      <CardContent className="py-3 flex items-start gap-3">
+                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-slate-300 text-sm line-through">{task.title}</h3>
+                            {task.task_type && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 font-medium">
+                                {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500 flex-wrap">
+                            {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
+                            {task.client?.name && <span>— {task.client.name}</span>}
+                            {task.client_rating && (
+                              <span className="text-amber-400">
+                                {'★'.repeat(task.client_rating)}{'☆'.repeat(5 - task.client_rating)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(task); setOpen(true) }}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(task.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

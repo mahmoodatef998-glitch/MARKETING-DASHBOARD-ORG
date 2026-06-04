@@ -110,6 +110,10 @@ export interface Task {
   priority: TaskPriority
   task_type?: TaskType
   due_date?: string
+  delivery_url?: string
+  revision_notes?: string
+  publish_platforms?: string[]
+  published_at?: string
   /** legacy FK → team_members (kept for backward compat) */
   assignee_id?: string
   /** auth user UUID — used for RLS and new assignments */
@@ -125,6 +129,15 @@ export interface Task {
   client_rating_note?: string
   created_at: string
   updated_at: string
+}
+
+export interface TaskComment {
+  id: string
+  task_id: string
+  user_id: string
+  content: string
+  author_name?: string | null
+  created_at: string
 }
 
 // ─── Invoice ─────────────────────────────────────────────────────────────────

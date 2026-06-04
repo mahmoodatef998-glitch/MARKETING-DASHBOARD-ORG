@@ -67,7 +67,7 @@ export default function Sidebar() {
           <Building2 className="h-4 w-4 text-white" />
         </div>
         {!collapsed && (
-          <span className="font-bold text-white text-lg tracking-tight">Agency OS</span>
+          <span className="font-bold text-white text-sm tracking-tight leading-tight">Pixel Marketing</span>
         )}
       </div>
 

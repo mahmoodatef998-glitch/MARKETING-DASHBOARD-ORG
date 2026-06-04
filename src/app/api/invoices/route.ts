@@ -6,12 +6,22 @@ import { createNotionInvoice } from '@/lib/notion'
 import { generateId, generateInvoiceNumber, dbError } from '@/lib/utils'
 import { InvoiceCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_INVOICES } from '@/lib/demo-data'
+import { rateLimit } from '@/lib/rate-limit'
+import { parseBody, InvoiceCreateSchema } from '@/lib/validation'
 import type { Invoice } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
-export async function GET() {
+function getIp(req: NextRequest) {
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+}
+
+export async function GET(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 120, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   if (DEMO) return NextResponse.json(DEMO_INVOICES)
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,13 +42,17 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 20, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   if (DEMO) {
     const body = await req.json()
     const items = body.items ?? []
     const subtotal = items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)
     const tax = body.tax ?? 0
-    return NextResponse.json({ id: generateId(), invoice_number: generateInvoiceNumber(), ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
+    return NextResponse.json({ id: generateId(), invoice_number: `INV-DEMO-${Date.now()}`, ...body, subtotal, total: subtotal + subtotal * tax / 100, issued_date: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -75,6 +89,7 @@ export async function POST(req: NextRequest) {
     created_at:  new Date().toISOString(),
     updated_at:  new Date().toISOString(),
   }
+
   const { error } = await supabase.from('invoices').insert(invoice)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   try { const notionId = await createNotionInvoice(invoice); await supabase.from('invoices').update({ notion_id: notionId }).eq('id', invoice.id) } catch {}

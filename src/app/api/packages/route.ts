@@ -33,17 +33,17 @@ export async function GET(req: NextRequest) {
         periodStart = new Date(pkg.start_date).toISOString()
       }
 
-      // Count done tasks per task_type for this client in the period
       const { data: usageCounts } = await supabase
         .from('tasks')
         .select('task_type')
         .eq('client_id', clientId)
         .eq('status', 'done')
         .gte('updated_at', periodStart)
-        .not('task_type', 'is', null)
 
       const usageMap: Record<string, number> = {}
+      let totalDone = 0
       for (const row of usageCounts ?? []) {
+        totalDone++
         if (row.task_type) usageMap[row.task_type] = (usageMap[row.task_type] ?? 0) + 1
       }
 
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
           used: usageMap[item.task_type] ?? 0,
         }))
 
-      return { ...pkg, items: itemsWithUsage }
+      return { ...pkg, items: itemsWithUsage, total_done: totalDone }
     })
   )
 

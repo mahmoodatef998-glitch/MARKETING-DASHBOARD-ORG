@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
     email, password, role, display_name, phone, country, notes,
     // billing (clients only)
     billing_cycle, billing_amount, billing_currency, billing_custom_days,
+    // package (clients only)
+    package: packageData,
   } = await req.json()
   const admin = createAdminClient()
 
@@ -88,6 +90,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create client record: ' + clientErr.message }, { status: 500 })
     }
     resolvedClientId = newClient.id
+
+    // Create package if package data provided
+    if (packageData && packageData.name) {
+      const pkgRecord = {
+        id:           generateId(),
+        client_id:    resolvedClientId,
+        name:         packageData.name,
+        price:        Number(packageData.price ?? 0),
+        renewal_type: packageData.renewal_type ?? 'monthly',
+        start_date:   new Date().toISOString().split('T')[0],
+        end_date:     null,
+        is_active:    true,
+        notes:        packageData.notes || null,
+        created_at:   new Date().toISOString(),
+        updated_at:   new Date().toISOString(),
+      }
+      const { data: newPkg, error: pkgErr } = await admin
+        .from('client_packages')
+        .insert(pkgRecord)
+        .select('id')
+        .single()
+
+      if (!pkgErr && newPkg && Array.isArray(packageData.items)) {
+        const itemRows = (packageData.items as Array<{ task_type: string; label: string; total_quantity: number }>)
+          .filter(i => Number(i.total_quantity) > 0)
+          .map((i, idx) => ({
+            package_id:     newPkg.id,
+            label:          i.label,
+            task_type:      i.task_type,
+            total_quantity: Number(i.total_quantity),
+            sort_order:     idx,
+          }))
+        if (itemRows.length > 0) {
+          await admin.from('package_items').insert(itemRows)
+        }
+      }
+    }
 
     // Create billing plan if billing settings provided
     if (billing_cycle && billing_amount && billing_cycle !== 'manual') {

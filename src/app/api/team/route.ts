@@ -41,5 +41,7 @@ export async function GET() {
     updated_at: p.created_at,
   }))
 
-  return NextResponse.json(members)
+  return NextResponse.json(members, {
+    headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+  })
 }
