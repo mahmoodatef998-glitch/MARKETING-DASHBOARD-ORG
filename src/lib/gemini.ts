@@ -10,6 +10,8 @@ export type EmailType =
   | 'task_confirmation'
   | 'task_completed'
   | 'task_in_review'
+  | 'client_welcome'
+  | 'weekly_report'
 
 export async function generateEmailContent(opts: {
   type: EmailType
@@ -60,6 +62,18 @@ Recipient (client): ${opts.recipientName}
 Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Be enthusiastic and clear. Ask them to log in to the client portal to review and either approve or request revisions. Plain text body, no HTML.`,
+
+    client_welcome: `Write a warm welcome email to a new client onboarding to a marketing agency's dashboard.
+Recipient: ${opts.recipientName}
+Details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Be friendly and professional. Mention the client portal URL and encourage them to explore their tasks and invoices. Plain text body, no HTML.`,
+
+    weekly_report: `Write a concise weekly report email summarizing task progress for a client.
+Recipient: ${opts.recipientName}
+Details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Be professional and positive. Summarize completed and upcoming tasks clearly. Plain text body, no HTML.`,
   }
 
   const result = await model.generateContent(prompts[opts.type])

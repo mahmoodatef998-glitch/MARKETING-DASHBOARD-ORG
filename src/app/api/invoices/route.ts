@@ -7,7 +7,6 @@ import { generateId, generateInvoiceNumber, dbError } from '@/lib/utils'
 import { InvoiceCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_INVOICES } from '@/lib/demo-data'
 import { rateLimit } from '@/lib/rate-limit'
-import { parseBody, InvoiceCreateSchema } from '@/lib/validation'
 import type { Invoice } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'

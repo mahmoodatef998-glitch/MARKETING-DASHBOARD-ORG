@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 import { generateId, dbError } from '@/lib/utils'
+import { logActivity } from '@/lib/activity-log'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()

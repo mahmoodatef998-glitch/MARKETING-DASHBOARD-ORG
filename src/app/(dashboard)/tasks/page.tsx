@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,9 +9,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import SchedulePublishPanel from '@/components/tasks/SchedulePublishPanel'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Client, TaskAssignee } from '@/types'
+
+function sortByDue(a: Task, b: Task) {
+  if (!a.due_date && !b.due_date) return 0
+  if (!a.due_date) return 1
+  if (!b.due_date) return -1
+  return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+}
 
 const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done', 'overdue'] as const
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'] as const

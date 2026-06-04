@@ -110,8 +110,6 @@ export interface Task {
   priority: TaskPriority
   task_type?: TaskType
   due_date?: string
-  delivery_url?: string
-  revision_notes?: string
   publish_platforms?: string[]
   published_at?: string
   /** legacy FK → team_members (kept for backward compat) */

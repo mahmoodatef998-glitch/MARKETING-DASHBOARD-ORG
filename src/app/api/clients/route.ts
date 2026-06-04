@@ -43,19 +43,15 @@ export async function POST(req: NextRequest) {
   const parsed = parseBody(ClientCreateSchema, clientBody)
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
-  const { billing_plan, ...clientBody } = raw
-  const parsed = parseBody(ClientCreateSchema, clientBody)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
-
   const body = parsed.data
   const client: Client = {
     id: generateId(),
     name:    parsed.data.name,
     email:   parsed.data.email,
-    phone:   parsed.data.phone   ?? undefined,
+    phone:   (parsed.data.phone   ?? undefined) as string | undefined,
     status:  parsed.data.status  ?? 'pending',
-    country: parsed.data.country ?? undefined,
-    notes:   parsed.data.notes   ?? undefined,
+    country: (parsed.data.country ?? undefined) as string | undefined,
+    notes:   (parsed.data.notes   ?? undefined) as string | undefined,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }

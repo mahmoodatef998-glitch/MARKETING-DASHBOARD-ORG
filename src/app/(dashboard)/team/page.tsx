@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Search, Pencil, Trash2, Mail, Loader2, UserPlus, LayoutGrid, BarChart2 } from 'lucide-react'
+import { Search, Pencil, Trash2, Mail, Loader2, UserPlus, LayoutGrid, BarChart2, Clock, CheckCircle2, AlertTriangle } from 'lucide-react'
 import type { TeamMember, Task } from '@/types'
 
 // Must match the UserRole values used in profiles table
@@ -141,6 +141,7 @@ export default function TeamPage() {
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
   const [viewMode,  setViewMode]  = useState<'grid' | 'workload'>('grid')
+  const [tab,       setTab]       = useState<'members' | 'workload'>('members')
   const [open,      setOpen]      = useState(false)
   const [editing,   setEditing]   = useState<TeamMember | null>(null)
 

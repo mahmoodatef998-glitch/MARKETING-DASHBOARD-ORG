@@ -3,9 +3,11 @@ import { useEffect, useState, useRef } from 'react'
 import {
   CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
   CheckCircle2, ExternalLink, ImagePlus, Link2, X, Calendar, Camera,
-  Globe, Music2, Mic, Sparkles,
+  Globe, Music2, Mic, Sparkles, Search, RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
+import { getSupabaseClient } from '@/lib/supabase'
+import { CalendarView } from '@/components/calendar/CalendarView'
 
 // ── Task filter component ──────────────────────────────────────────────────────
 function TaskFilter({ tasks, render }: { tasks: Task[]; render: (filtered: Task[]) => React.ReactNode }) {
@@ -360,8 +362,10 @@ export default function TeamPortalPage() {
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([])
   const [loading,            setLoading]            = useState(true)
   const [sending,            setSending]            = useState(false)
-  const [tab,                setTab]                = useState<'tasks' | 'chat'>('tasks')
+  const [tab,                setTab]                = useState<'tasks' | 'calendar' | 'chat'>('tasks')
   const [doneModal,          setDoneModal]          = useState<Task | null>(null)
+  const [completedOpen,      setCompletedOpen]      = useState(false)
+  const [online,             setOnline]             = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const isMediaBuyer = myRole === 'media_buyer'
@@ -520,43 +524,6 @@ export default function TeamPortalPage() {
     setDoneModal(null)
   }
 
-  const markDone = useCallback((taskId: string, taskTitle: string) => {
-    // Optimistic UI update immediately
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'done' as Task['status'] } : t))
-    setDoneToast({ taskId, taskTitle })
-
-    // Clear any existing timer
-    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
-
-    // Commit to API after 5 seconds if no undo
-    doneTimerRef.current = setTimeout(async () => {
-      setDoneToast(null)
-      const task = tasks.find(t => t.id === taskId)
-      const fullBody = task ? {
-        title:       task.title,
-        description: task.description,
-        status:      'done',
-        priority:    task.priority,
-        task_type:   task.task_type,
-        due_date:    task.due_date,
-        assigned_to: task.assigned_to,
-        client_id:   task.client_id,
-      } : { status: 'done' }
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fullBody),
-      })
-    }, 5000)
-  }, [tasks])
-
-  const undoDone = useCallback(() => {
-    if (!doneToast) return
-    if (doneTimerRef.current) clearTimeout(doneTimerRef.current)
-    setTasks(prev => prev.map(t => t.id === doneToast.taskId ? { ...t, status: 'in_progress' as Task['status'] } : t))
-    setDoneToast(null)
-  }, [doneToast])
-
   const activeTasks  = tasks.filter(t => t.status !== 'done')
   const doneTasks    = tasks.filter(t => t.status === 'done')
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done')
@@ -569,23 +536,6 @@ export default function TeamPortalPage() {
 
   return (
     <div className="space-y-6">
-
-      {/* Undo toast */}
-      {doneToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 shadow-2xl shadow-black/40 animate-in slide-in-from-bottom-4">
-          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
-          <span className="text-sm text-white">
-            <span className="font-semibold">Done:</span>{' '}
-            <span className="text-slate-300 max-w-[200px] truncate inline-block align-bottom">{doneToast.taskTitle}</span>
-          </span>
-          <button
-            onClick={undoDone}
-            className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 ml-1 border border-indigo-500/30 px-2.5 py-1 rounded-lg hover:bg-indigo-500/10 transition-colors"
-          >
-            <Undo2 className="h-3.5 w-3.5" /> Undo
-          </button>
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -618,12 +568,16 @@ export default function TeamPortalPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-800">
-        {(['tasks', 'chat'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+        {([
+          { id: 'tasks',    label: 'My Tasks',        icon: CheckSquare    },
+          { id: 'calendar', label: 'Calendar',        icon: Calendar       },
+          { id: 'chat',     label: 'Chat with Admin', icon: MessageCircle  },
+        ] as const).map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === t ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-100'
+              tab === id ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-100'
             }`}>
-            {t === 'tasks' ? <><CheckSquare className="h-4 w-4" /> My Tasks</> : <><MessageCircle className="h-4 w-4" /> Chat with Admin</>}
+            <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
       </div>
@@ -651,10 +605,30 @@ export default function TeamPortalPage() {
                         {task.revision_notes && (
                           <div className="mt-2 flex items-start gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                             <RefreshCw className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-amber-400 mb-0.5">Revision requested</p>
                               <p className="text-xs text-slate-300 leading-relaxed">{task.revision_notes}</p>
+                              {task.revision_voice_url && (
+                                <div className="flex items-center gap-2 pt-1.5">
+                                  <Mic className="h-3 w-3 text-amber-400 shrink-0" />
+                                  <audio src={task.revision_voice_url} controls className="flex-1 h-7 min-w-0" />
+                                </div>
+                              )}
                             </div>
+                          </div>
+                        )}
+                        {/* Reference image */}
+                        {task.reference_image_url && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-indigo-500/20 bg-slate-800">
+                            <div className="px-3 py-1.5 border-b border-indigo-500/10 flex items-center gap-1.5">
+                              <ImagePlus className="h-3 w-3 text-indigo-400" />
+                              <span className="text-xs text-indigo-400 font-medium">Reference Image</span>
+                              <a href={task.reference_image_url} target="_blank" rel="noopener noreferrer"
+                                className="ml-auto text-slate-500 hover:text-slate-300 transition-colors">
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                            <img src={task.reference_image_url} alt="Reference" className="w-full max-h-40 object-contain" />
                           </div>
                         )}
                       </div>
@@ -689,11 +663,11 @@ export default function TeamPortalPage() {
                         </select>
 
                         <button
-                          onClick={() => markDone(task.id, task.title)}
+                          onClick={() => setDoneModal(task)}
                           className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 font-medium transition-colors border border-green-500/20"
                         >
                           <CheckCircle2 className="h-3 w-3" />
-                          Done
+                          {isMediaBuyer && connectedPlatforms.length > 0 ? 'Done & Publish' : 'Done'}
                         </button>
                       </div>
                     </div>
@@ -706,91 +680,7 @@ export default function TeamPortalPage() {
               <CheckSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p>No tasks assigned yet</p>
             </div>
-          )}
-          {tasks.map(task => (
-            <div key={task.id}
-              className={`bg-slate-900 border rounded-xl p-4 space-y-3 transition-colors ${
-                task.revision_notes ? 'border-amber-500/30' : 'border-slate-800'
-              }`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-white">{task.title}</h3>
-                  {task.description && <p className="text-sm text-slate-400 mt-1">{task.description}</p>}
-                  {task.revision_notes && (
-                    <div className="mt-2 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2 space-y-1.5">
-                      <p className="text-xs font-semibold text-amber-400">Revision requested</p>
-                      <p className="text-xs text-amber-300/80">{task.revision_notes}</p>
-                      {task.revision_voice_url && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <Mic className="h-3 w-3 text-amber-400 shrink-0" />
-                          <audio src={task.revision_voice_url} controls className="flex-1 h-7 min-w-0" />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <span className={`px-2 py-1 rounded-md text-xs font-medium border shrink-0 ${PRIORITY_COLOR[task.priority] ?? ''}`}>
-                  {task.priority}
-                </span>
-              </div>
-
-              {/* Reference image */}
-              {task.reference_image_url && (
-                <div className="rounded-xl overflow-hidden border border-indigo-500/20 bg-slate-800">
-                  <div className="px-3 py-1.5 border-b border-indigo-500/10 flex items-center gap-1.5">
-                    <ImagePlus className="h-3 w-3 text-indigo-400" />
-                    <span className="text-xs text-indigo-400 font-medium">Reference Image</span>
-                    <a href={task.reference_image_url} target="_blank" rel="noopener noreferrer"
-                      className="ml-auto text-slate-500 hover:text-slate-300 transition-colors">
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                  <img src={task.reference_image_url} alt="Reference" className="w-full max-h-48 object-contain" />
-                </div>
-              )}
-
-              {/* Delivery link (done tasks) */}
-              {task.delivery_url && task.status === 'done' && (
-                <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
-                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{task.delivery_url}</span>
-                </a>
-              )}
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {task.due_date && (
-                    <div className={`flex items-center gap-1 text-xs ${
-                      new Date(task.due_date) < new Date() && task.status !== 'done' ? 'text-red-400' : 'text-slate-400'
-                    }`}>
-                      {new Date(task.due_date) < new Date() && task.status !== 'done'
-                        ? <AlertTriangle className="h-3 w-3" />
-                        : <Clock className="h-3 w-3" />}
-                      {new Date(task.due_date).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-
-                {task.status === 'done' ? (
-                  <span className={`text-xs px-2 py-1 rounded-md ${STATUS_COLOR.done}`}>Done ✓</span>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <select value={task.status} onChange={e => updateStatus(task.id, e.target.value)}
-                      className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}>
-                      <option value="todo">To Do</option>
-                      <option value="in_progress">In Progress</option>
-                    </select>
-                    <button onClick={() => setDoneModal(task)}
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {isMediaBuyer && connectedPlatforms.length > 0 ? 'Done & Publish' : 'Done'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          ) : null}
 
           {/* Completed section */}
           {doneTasks.length > 0 && (

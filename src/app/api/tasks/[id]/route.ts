@@ -6,6 +6,8 @@ import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { dbError } from '@/lib/utils'
 import { sendSlack } from '@/lib/slack'
+import { parseBody, TaskUpdateSchema } from '@/lib/validation'
+import { logActivity } from '@/lib/activity-log'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -13,8 +15,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const body = await req.json()
 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -139,7 +139,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Log activity
-  const { data: { user } } = await supabase.auth.getUser()
   if (body.status && oldTask?.status !== body.status) {
     await logActivity({
       supabase: createAdminClient(),
