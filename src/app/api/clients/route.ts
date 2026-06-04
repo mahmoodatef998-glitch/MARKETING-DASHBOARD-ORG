@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionClient } from '@/lib/notion'
-import { generateId } from '@/lib/utils'
-import { parseBody, ClientCreateSchema } from '@/lib/validation'
+import { generateId, dbError } from '@/lib/utils'
+import { ClientCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_CLIENTS } from '@/lib/demo-data'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
@@ -14,14 +14,16 @@ const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 export async function GET() {
   if (DEMO) return NextResponse.json(DEMO_CLIENTS)
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { data, error } = await supabase
     .from('clients')
     .select('*, billing_plans(id, cycle_type, amount, currency, custom_days, next_invoice_date, is_active)')
     .order('created_at', { ascending: false })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data, {
-    headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
-  })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+  return NextResponse.json(data)
 }
 
 export async function POST(req: NextRequest) {
@@ -30,26 +32,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
-  const raw = await req.json().catch(() => null)
-  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { billing_plan, ...clientBody } = raw
+  const rawBody = await req.json().catch(() => null)
+  const { billing_plan, ...clientBody } = rawBody ?? {}
+
   const parsed = parseBody(ClientCreateSchema, clientBody)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
   const body = parsed.data
   const client: Client = {
     id: generateId(),
-    name:    body.name,
-    email:   body.email,
-    phone:   body.phone   as string | undefined,
-    status:  body.status  ?? 'pending',
-    country: body.country as string | undefined,
-    notes:   body.notes   as string | undefined,
-    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    name:    parsed.data.name,
+    email:   parsed.data.email,
+    phone:   (parsed.data.phone   ?? undefined) as string | undefined,
+    status:  parsed.data.status  ?? 'pending',
+    country: (parsed.data.country ?? undefined) as string | undefined,
+    notes:   (parsed.data.notes   ?? undefined) as string | undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('clients').insert(client)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
 
   // Create billing plan if provided
   if (billing_plan?.cycle_type) {

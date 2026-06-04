@@ -9,7 +9,7 @@ export type EmailType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
-  | 'task_review_ready'
+  | 'task_in_review'
   | 'client_welcome'
   | 'weekly_report'
 
@@ -57,29 +57,53 @@ Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Inform the client that their task has been completed. Be positive and professional. Invite them to review the work and reach out with feedback. Plain text body, no HTML.`,
 
-    task_review_ready: `Write a professional notification email to a client informing them their deliverable is ready for review and approval.
+    task_in_review: `Write a professional notification email to a client informing them that their task is ready for review and approval.
 Recipient (client): ${opts.recipientName}
 Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
-Be enthusiastic and professional. Tell them the work is ready for their review. Include a clear call-to-action to log in to the portal and approve or request revisions. Plain text body, no HTML.`,
+Be enthusiastic and clear. Ask them to log in to the client portal to review and either approve or request revisions. Plain text body, no HTML.`,
 
-    client_welcome: `Write a professional, warm welcome email for a new client joining a marketing agency called Pixel Marketing Agency.
-Recipient (new client): ${opts.recipientName}
+    client_welcome: `Write a warm welcome email to a new client onboarding to a marketing agency's dashboard.
+Recipient: ${opts.recipientName}
 Details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
-Welcome them warmly. Briefly explain what to expect: dedicated team, regular updates, a client portal to track progress and approve work. Mention they can reply to this email anytime. Plain text body, no HTML.`,
+Be friendly and professional. Mention the client portal URL and encourage them to explore their tasks and invoices. Plain text body, no HTML.`,
 
-    weekly_report: `Write a professional weekly progress report email from Pixel Marketing Agency to a client.
-Recipient (client): ${opts.recipientName}
-Week summary: ${opts.details}
+    weekly_report: `Write a concise weekly report email summarizing task progress for a client.
+Recipient: ${opts.recipientName}
+Details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
-Summarize the week's accomplishments clearly. Be positive, highlight completed work, mention upcoming tasks. Keep it brief (max 150 words). Plain text body, no HTML.`,
+Be professional and positive. Summarize completed and upcoming tasks clearly. Plain text body, no HTML.`,
   }
 
   const result = await model.generateContent(prompts[opts.type])
   const text = result.response.text()
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   return JSON.parse(clean)
+}
+
+export async function generateCaption(opts: {
+  taskTitle: string
+  taskType?: string
+  description?: string
+  clientName?: string
+}): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+  const typeLabel: Record<string, string> = {
+    reel_video: 'a short video / reel',
+    design:     'a design / graphic',
+    ai_video:   'an AI-generated video',
+    post:       'a social media post',
+    custom:     'content',
+  }
+  const contentType = opts.taskType ? (typeLabel[opts.taskType] ?? 'content') : 'content'
+  const prompt = `Write an engaging social media caption for ${contentType}.
+Task: ${opts.taskTitle}${opts.description ? `\nContext: ${opts.description}` : ''}${opts.clientName ? `\nBrand: ${opts.clientName}` : ''}
+Requirements: catchy, 2-3 sentences max, include 3-5 relevant hashtags at the end.
+Return ONLY the caption text (no JSON, no quotes, no explanation).`
+
+  const result = await model.generateContent(prompt)
+  return result.response.text().trim()
 }
 
 export async function chatWithAssistant(opts: {

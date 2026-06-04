@@ -20,6 +20,9 @@ import {
   ShieldCheck,
   BarChart2,
   CreditCard,
+  Settings,
+  MessageSquare,
+  Calendar,
   CalendarDays,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -30,12 +33,15 @@ const nav = [
   { href: '/clients',        label: 'Clients',      icon: Users },
   { href: '/team',           label: 'Team',         icon: UserCheck },
   { href: '/tasks',          label: 'Tasks',        icon: CheckSquare },
-  { href: '/calendar',       label: 'Calendar',     icon: CalendarDays },
+  { href: '/meetings',       label: 'Meetings',     icon: CalendarDays },
   { href: '/invoices',       label: 'Invoices',     icon: FileText },
   { href: '/billing',        label: 'Billing',      icon: CreditCard },
+  { href: '/inbox',          label: 'Inbox',        icon: MessageSquare },
+  { href: '/scheduled-posts', label: 'Scheduled',   icon: Calendar },
   { href: '/automation',     label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',   label: 'AI Assistant', icon: Bot },
   { href: '/users',          label: 'Users',        icon: ShieldCheck },
+  { href: '/settings',       label: 'Social Media', icon: Settings },
 ]
 
 export default function Sidebar() {

@@ -1,58 +1,50 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
-import { sendEmail } from '@/lib/gmail'
+import { createServerClient } from '@/lib/supabase-server'
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// POST /api/tasks/[id]/revise — client requests a revision (saves notes, moves back to in_progress)
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { notes } = await req.json()
+  const body = await req.json()
+  const { notes, voice_note_url } = body
 
-  const { data: task, error } = await supabase
+  if (!notes?.trim()) return NextResponse.json({ error: 'Revision notes are required' }, { status: 400 })
+
+  // Verify the task belongs to this client
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('client_id, role')
+    .eq('id', user.id)
+    .single()
+
+  const { data: task, error: fetchErr } = await supabase
+    .from('tasks')
+    .select('id, client_id, status')
+    .eq('id', id)
+    .single()
+
+  if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+  if (profile?.role !== 'admin' && task.client_id !== profile?.client_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { data, error } = await supabase
     .from('tasks')
     .update({
-      status: 'in_progress',
-      revision_notes: notes?.trim() || null,
-      delivery_url: null,
-      updated_at: new Date().toISOString(),
+      status:             'in_progress',
+      revision_notes:     notes.trim(),
+      revision_voice_url: typeof voice_note_url === 'string' ? voice_note_url : null,
+      updated_at:         new Date().toISOString(),
     })
     .eq('id', id)
-    .select('*, client:clients(id,name), assignee:profiles(id,display_name)')
+    .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  // Notify assigned team member
-  const admin = createAdminClient()
-  try {
-    if (task?.assigned_to) {
-      const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to)
-      const memberEmail = authUser?.user?.email
-      if (memberEmail) {
-        await sendEmail({
-          to: memberEmail,
-          subject: `🔄 Revision requested: "${task.title}"`,
-          body: [
-            `${task.client?.name ?? 'The client'} has requested a revision for:`,
-            ``,
-            `  "${task.title}"`,
-            ``,
-            notes ? `Client notes:\n${notes}` : 'No specific notes provided.',
-            ``,
-            `Please update the delivery and re-submit for approval.`,
-          ].join('\n'),
-        })
-      }
-    }
-  } catch (err: any) {
-    console.error('[revise] notify failed:', err.message)
-  }
-
-  return NextResponse.json(task)
+  return NextResponse.json(data)
 }

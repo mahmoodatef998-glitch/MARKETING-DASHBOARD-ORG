@@ -29,12 +29,29 @@ const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
 
 // ─── Approval Card ────────────────────────────────────────────────────────────
 function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) {
-  const [reviseOpen, setReviseOpen] = useState(false)
-  const [ratingOpen, setRatingOpen] = useState(false)
-  const [notes,      setNotes]      = useState('')
-  const [rating,     setRating]     = useState(0)
-  const [ratingNote, setRatingNote] = useState('')
-  const [loading,    setLoading]    = useState<'approve' | 'revise' | null>(null)
+  const [reviseOpen,     setReviseOpen]     = useState(false)
+  const [ratingOpen,     setRatingOpen]     = useState(false)
+  const [notes,          setNotes]          = useState('')
+  const [rating,         setRating]         = useState(0)
+  const [ratingNote,     setRatingNote]     = useState('')
+  const [loading,        setLoading]        = useState<'approve' | 'revise' | null>(null)
+  const [voiceUrl,       setVoiceUrl]       = useState('')
+  const [voiceUploading, setVoiceUploading] = useState(false)
+
+  async function uploadVoice(file: File) {
+    setVoiceUploading(true)
+    try {
+      const res = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      })
+      const { signedUrl, publicUrl } = await res.json()
+      await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      setVoiceUrl(publicUrl)
+    } catch {}
+    setVoiceUploading(false)
+  }
 
   async function approve() {
     setLoading('approve')
@@ -53,7 +70,7 @@ function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) 
     await fetch(`/api/tasks/${task.id}/revise`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ notes, voice_note_url: voiceUrl || undefined }),
     })
     onAction()
     setLoading(null)
@@ -127,13 +144,37 @@ function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) 
           <textarea autoFocus value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="Describe what needs to be changed…" rows={3}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+
+          {/* Voice note attachment */}
+          {voiceUrl ? (
+            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+              <Mic className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+              <audio src={voiceUrl} controls className="flex-1 h-8 min-w-0" />
+              <button onClick={() => setVoiceUrl('')}
+                className="text-slate-500 hover:text-red-400 transition-colors shrink-0">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label className={`flex items-center gap-1.5 text-xs cursor-pointer transition-colors ${
+              voiceUploading ? 'text-indigo-400 pointer-events-none' : 'text-slate-500 hover:text-slate-300'
+            }`}>
+              {voiceUploading
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                : <><Mic className="h-3.5 w-3.5" /> Attach a voice note (optional)</>}
+              <input type="file" accept="audio/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadVoice(f) }}
+                disabled={voiceUploading} />
+            </label>
+          )}
+
           <div className="flex gap-2">
-            <button onClick={revise} disabled={!notes.trim() || !!loading}
+            <button onClick={revise} disabled={!notes.trim() || !!loading || voiceUploading}
               className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
               {loading === 'revise' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Send Revision Request
             </button>
-            <button onClick={() => { setReviseOpen(false); setNotes('') }}
+            <button onClick={() => { setReviseOpen(false); setNotes(''); setVoiceUrl('') }}
               className="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-xl transition-colors">
               Cancel
             </button>

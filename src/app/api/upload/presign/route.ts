@@ -1,28 +1,41 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
-import { getPresignedUploadUrl, isR2Configured } from '@/lib/r2'
-import { generateId } from '@/lib/utils'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+
+const BUCKET = 'task-assets'
+const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export async function POST(req: NextRequest) {
-  if (!isR2Configured()) {
-    return NextResponse.json({ error: 'File storage not configured' }, { status: 503 })
-  }
-
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const raw = await req.json().catch(() => null)
-  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  const { filename, contentType } = raw
+  const { filename, contentType } = await req.json().catch(() => ({}))
   if (!filename || !contentType) {
-    return NextResponse.json({ error: 'filename and contentType are required' }, { status: 400 })
+    return NextResponse.json({ error: 'filename and contentType required' }, { status: 400 })
   }
 
-  const ext = filename.split('.').pop()?.toLowerCase() ?? 'bin'
-  const key = `deliveries/${new Date().getFullYear()}/${generateId()}.${ext}`
+  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowed.includes(contentType)) {
+    return NextResponse.json({ error: 'Only image files allowed' }, { status: 400 })
+  }
 
-  const { uploadUrl, fileUrl } = await getPresignedUploadUrl(key, contentType)
-  return NextResponse.json({ uploadUrl, fileUrl })
+  const ext   = filename.split('.').pop()?.toLowerCase() ?? 'jpg'
+  const key   = `${user.id}/${Date.now()}.${ext}`
+  const admin = createAdminClient()
+
+  const { data, error } = await admin.storage
+    .from(BUCKET)
+    .createSignedUploadUrl(key)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(key)
+
+  return NextResponse.json({
+    signedUrl: data.signedUrl,
+    token:     data.token,
+    path:      key,
+    publicUrl,
+  })
 }

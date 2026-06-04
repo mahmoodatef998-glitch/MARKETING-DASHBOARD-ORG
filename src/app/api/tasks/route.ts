@@ -2,10 +2,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionTask } from '@/lib/notion'
-import { generateId } from '@/lib/utils'
-import { parseBody, TaskCreateSchema } from '@/lib/validation'
+import { generateId, dbError } from '@/lib/utils'
+import { TaskCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
-import type { Task, TaskType } from '@/types'
+import { sendSlack } from '@/lib/slack'
+import type { Task } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -22,22 +23,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(tasks)
   }
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, client_id, team_member_id')
+    .eq('id', user.id)
+    .single()
+
   const { searchParams } = new URL(req.url)
   let query = supabase
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
-  const status = searchParams.get('status')
-  const clientId = searchParams.get('client_id')
-  const assignedTo = searchParams.get('assigned_to')
-  if (status) query = query.eq('status', status)
-  if (clientId) query = query.eq('client_id', clientId)
-  if (assignedTo) query = query.eq('assigned_to', assignedTo)
+
+  // Clients only see their own tasks — enforced server-side regardless of query params
+  if (profile?.role === 'client') {
+    if (!profile.client_id) return NextResponse.json([])
+    query = query.eq('client_id', profile.client_id)
+  } else {
+    const status = searchParams.get('status')
+    const clientId = searchParams.get('client_id')
+    const assignedTo = searchParams.get('assigned_to')
+    if (status) query = query.eq('status', status)
+    if (clientId) query = query.eq('client_id', clientId)
+    if (assignedTo) query = query.eq('assigned_to', assignedTo)
+  }
+
   const { data, error } = await query
   if (error) {
     console.error('[tasks GET]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: dbError(error) }, { status: 500 })
   }
   return NextResponse.json(data ?? [], {
     headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
@@ -50,62 +68,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
   const supabase = await createServerClient()
-  const raw = await req.json().catch(() => null)
-  if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parsed = parseBody(TaskCreateSchema, raw)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
+  const rawBody = await req.json().catch(() => null)
+  const parsed = parseBody(TaskCreateSchema, rawBody)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
-  const body = parsed.data
+  const b = parsed.data
   const task: Task = {
     id: generateId(),
-    title:       body.title,
-    description: body.description as string | undefined,
-    status:      body.status    ?? 'todo',
-    priority:    body.priority  ?? 'medium',
-    task_type:   body.task_type  as TaskType | undefined,
-    due_date:    body.due_date   as string   | undefined,
-    assigned_to: body.assigned_to as string  | undefined,
-    client_id:   body.client_id   as string  | undefined,
-    created_at:  new Date().toISOString(),
-    updated_at:  new Date().toISOString(),
+    title:               b.title,
+    description:         (b.description         as string | undefined) ?? undefined,
+    status:              b.status              ?? 'todo',
+    priority:            b.priority            ?? 'medium',
+    task_type:           (b.task_type           as import('@/types').TaskType | undefined) ?? undefined,
+    due_date:            (b.due_date            as string | undefined) ?? undefined,
+    assigned_to:         (b.assigned_to         as string | undefined) ?? undefined,
+    client_id:           (b.client_id           as string | undefined) ?? undefined,
+    delivery_url:        (b.delivery_url        as string | undefined) ?? undefined,
+    reference_image_url: (b.reference_image_url as string | undefined) ?? undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }
   const { error } = await supabase.from('tasks').insert(task)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch (e) {
-    console.error('[tasks POST] Notion sync failed:', e)
-  }
-
-  // Notify the assigned team member about the new task
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+  try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
   if (task.assigned_to) {
-    try {
-      const { createAdminClient } = await import('@/lib/supabase-server')
-      const { sendEmail }         = await import('@/lib/gmail')
-      const admin = createAdminClient()
-      const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to)
-      const memberEmail = authUser?.user?.email
-      if (memberEmail) {
-        const { data: clientRec } = await admin.from('clients').select('name').eq('id', task.client_id ?? '').maybeSingle()
-        await sendEmail({
-          to:      memberEmail,
-          subject: `📋 New task assigned: "${task.title}"`,
-          body: [
-            `A new task has been assigned to you:`,
-            ``,
-            `  Title:    ${task.title}`,
-            task.description ? `  Details:  ${task.description}` : null,
-            `  Priority: ${task.priority}`,
-            task.due_date ? `  Due:      ${task.due_date}` : null,
-            clientRec?.name ? `  Client:   ${clientRec.name}` : null,
-            ``,
-            `Log in to your portal to get started.`,
-          ].filter(Boolean).join('\n'),
-        })
-      }
-    } catch (e: any) {
-      console.error('[tasks POST] assign notify failed:', e.message)
-    }
+    void sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`)
   }
-
   return NextResponse.json(task, { status: 201 })
 }

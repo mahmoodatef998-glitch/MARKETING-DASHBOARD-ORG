@@ -1,116 +1,51 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
-import { sendEmail } from '@/lib/gmail'
-import { logActivity } from '@/lib/activity-log'
+import { createServerClient } from '@/lib/supabase-server'
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// POST /api/tasks/[id]/approve — client approves a task (moves to done + saves rating)
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Optional rating submitted by client at approval time
-  const body = await req.json().catch(() => ({}))
-  const rating: number | null     = (body?.rating >= 1 && body?.rating <= 5) ? body.rating : null
-  const ratingNote: string | null = body?.rating_note?.trim() || null
+  const body = await req.json()
+  const { rating, rating_note } = body
 
-  const updatePayload: Record<string, unknown> = {
-    status:         'done',
-    revision_notes: null,
-    updated_at:     new Date().toISOString(),
-  }
-  if (rating) {
-    updatePayload.client_rating      = rating
-    updatePayload.client_rating_note = ratingNote
-  }
+  // Verify the task belongs to this client
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('client_id, role')
+    .eq('id', user.id)
+    .single()
 
-  const { data: task, error } = await supabase
+  const { data: task, error: fetchErr } = await supabase
     .from('tasks')
-    .update(updatePayload)
+    .select('id, client_id, status')
     .eq('id', id)
-    .select('*, client:clients(id,name), assignee:profiles(id,display_name)')
+    .single()
+
+  if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+  // Only allow if admin or the task's client
+  if (profile?.role !== 'admin' && task.client_id !== profile?.client_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const updates: Record<string, unknown> = {
+    status:     'done',
+    updated_at: new Date().toISOString(),
+  }
+  if (rating)      updates.client_rating      = Number(rating)
+  if (rating_note) updates.client_rating_note = String(rating_note)
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update(updates)
+    .eq('id', id)
+    .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const admin = createAdminClient()
-
-  // Notify assigned team member
-  try {
-    if (task?.assigned_to) {
-      const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to)
-      const memberEmail = authUser?.user?.email
-      if (memberEmail) {
-        const ratingLine = rating ? `\nClient rating: ${'⭐'.repeat(rating)} (${rating}/5)${ratingNote ? `\nNote: "${ratingNote}"` : ''}` : ''
-        await sendEmail({
-          to:      memberEmail,
-          subject: `✅ Client approved: "${task.title}"`,
-          body: [
-            `Great news! ${task.client?.name ?? 'The client'} has approved the task:`,
-            ``,
-            `  "${task.title}"`,
-            ratingLine,
-            ``,
-            task.delivery_url ? `Approved delivery: ${task.delivery_url}` : '',
-            ``,
-            `The task is now marked as Done. You can proceed with publishing.`,
-          ].filter((l) => l !== undefined).join('\n'),
-        })
-      }
-    }
-
-    await admin.from('automation_logs').insert({
-      type:            'task_completed',
-      recipient_email: task?.client?.name ?? 'client',
-      subject:         `Client approved: ${task?.title}`,
-      status:          'sent',
-      task_id:         id,
-      created_at:      new Date().toISOString(),
-    })
-
-    // Notify admin about the client approval
-    try {
-      const { data: adminProfiles } = await admin.from('profiles').select('id').eq('role', 'admin').limit(1)
-      if (adminProfiles?.[0]) {
-        const { data: adminAuth } = await admin.auth.admin.getUserById(adminProfiles[0].id)
-        const adminEmail = adminAuth?.user?.email
-        if (adminEmail) {
-          const ratingLine = rating
-            ? `\nClient rating: ${'⭐'.repeat(rating)} (${rating}/5)${ratingNote ? `\nNote: "${ratingNote}"` : ''}`
-            : ''
-          await sendEmail({
-            to:      adminEmail,
-            subject: `✅ Client approved task: "${task?.title}"`,
-            body: [
-              `${task?.client?.name ?? 'A client'} has approved the following task:`,
-              ``,
-              `  "${task?.title}"`,
-              ratingLine,
-              task?.delivery_url ? `\nDelivery: ${task.delivery_url}` : null,
-            ].filter(l => l !== undefined).join('\n'),
-          })
-        }
-      }
-    } catch (adminNotifyErr: any) {
-      console.error('[approve] admin notify failed:', adminNotifyErr.message)
-    }
-  } catch (err: any) {
-    console.error('[approve] notify failed:', err.message)
-  }
-
-  await logActivity({
-    supabase: admin,
-    userId:     user.id,
-    action:     'task.approved',
-    entityType: 'task',
-    entityId:   id,
-    entityName: task?.title,
-    newValue:   rating ? { rating, rating_note: ratingNote } : undefined,
-  })
-
-  return NextResponse.json(task)
+  return NextResponse.json(data)
 }

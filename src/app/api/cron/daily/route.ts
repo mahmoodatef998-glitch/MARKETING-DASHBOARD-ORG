@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase-server'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { rateLimit } from '@/lib/rate-limit'
+import { sendSlack } from '@/lib/slack'
 
 // Vercel cron: runs daily at 9:00 AM UTC
 // vercel.json: { "crons": [{ "path": "/api/cron/daily", "schedule": "0 9 * * *" }] }
@@ -14,6 +16,11 @@ export async function GET(req: NextRequest) {
   const isVercelCron = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
 
   if (!isVercelCron) {
+    // Rate-limit manual triggers: 5 per hour per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    const rl = rateLimit(ip, { limit: 5, window: 60 * 60_000 })
+    if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
     // Allow logged-in admin users to trigger manually (for "Run Now" button)
     const { createServerClient } = await import('@/lib/supabase-server')
     const serverSupabase = await createServerClient()
@@ -62,6 +69,10 @@ export async function GET(req: NextRequest) {
       }
 
       results.push({ type, recipient: email, status: 'sent' })
+      // Slack mirror for 48h/24h reminders
+      if (type === 'task_reminder_48h' || type === 'task_reminder_24h') {
+        void sendSlack(`⏰ *${type === 'task_reminder_48h' ? '48h' : '24h'} reminder* sent to ${name}: task "${opts.details.split('\n')[0].replace('Task: ', '')}"`)
+      }
     } catch (err: any) {
       await supabase.from('automation_logs').insert({
         type,

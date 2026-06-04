@@ -85,7 +85,7 @@ export interface ClientPackage {
   is_active: boolean
   notes?: string
   items: PackageItem[]
-  /** computed: total done tasks in current period regardless of task_type */
+  /** computed: total tasks done (fallback when no items configured) */
   total_done?: number
   created_at: string
   updated_at: string
@@ -110,8 +110,6 @@ export interface Task {
   priority: TaskPriority
   task_type?: TaskType
   due_date?: string
-  delivery_url?: string
-  revision_notes?: string
   publish_platforms?: string[]
   published_at?: string
   /** legacy FK → team_members (kept for backward compat) */
@@ -121,9 +119,12 @@ export interface Task {
   assignee?: TaskAssignee
   client_id?: string
   client?: Client
-  client_rating?: number | null
-  client_rating_note?: string | null
-  deleted_at?: string | null
+  delivery_url?: string
+  reference_image_url?: string
+  revision_notes?: string
+  revision_voice_url?: string
+  client_rating?: number
+  client_rating_note?: string
   created_at: string
   updated_at: string
 }
@@ -182,6 +183,22 @@ export interface BillingPlan {
   updated_at: string
 }
 
+// ─── Meetings ─────────────────────────────────────────────────────────────────
+export type MeetingStatus = 'pending' | 'done' | 'cancelled'
+
+export interface Meeting {
+  id: string
+  title: string
+  client_id?: string
+  client_name?: string
+  client?: Pick<Client, 'id' | 'name'>
+  scheduled_at: string
+  notes?: string
+  status: MeetingStatus
+  created_at: string
+  updated_at: string
+}
+
 // ─── AI Chat ─────────────────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string
@@ -198,9 +215,7 @@ export type AutomationLogType =
   | 'task_reminder_24h'
   | 'task_confirmation'
   | 'task_completed'
-  | 'task_review_ready'
-  | 'client_welcome'
-  | 'weekly_report'
+  | 'task_in_review'
 
 export interface AutomationLog {
   id: string

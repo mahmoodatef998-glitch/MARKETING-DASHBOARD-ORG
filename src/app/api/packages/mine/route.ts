@@ -1,16 +1,17 @@
 export const dynamic = 'force-dynamic'
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 
-// Returns ALL active packages + per-item usage for the currently logged-in client
+// GET /api/packages/mine — returns packages for the authenticated client
 export async function GET() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json([])
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('client_id, role')
+    .select('client_id')
     .eq('id', user.id)
     .single()
 
@@ -26,11 +27,10 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!packages?.length) return NextResponse.json([])
 
-  // Compute usage for each package independently
+  // Compute usage per item (same logic as /api/packages?clientId=X)
   const enriched = await Promise.all(
-    packages.map(async (pkg: any) => {
+    (packages ?? []).map(async (pkg: any) => {
       let periodStart: string
       if (pkg.renewal_type === 'monthly') {
         const now = new Date()
@@ -45,19 +45,25 @@ export async function GET() {
         .eq('client_id', clientId)
         .eq('status', 'done')
         .gte('updated_at', periodStart)
+        .not('task_type', 'is', null)
 
       const usageMap: Record<string, number> = {}
-      let totalDone = 0
       for (const row of usageCounts ?? []) {
-        totalDone++
         if (row.task_type) usageMap[row.task_type] = (usageMap[row.task_type] ?? 0) + 1
       }
+
+      const { count: totalDone } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId)
+        .eq('status', 'done')
+        .gte('updated_at', periodStart)
 
       const itemsWithUsage = (pkg.items ?? [])
         .sort((a: any, b: any) => a.sort_order - b.sort_order)
         .map((item: any) => ({ ...item, used: usageMap[item.task_type] ?? 0 }))
 
-      return { ...pkg, items: itemsWithUsage, total_done: totalDone }
+      return { ...pkg, items: itemsWithUsage, total_done: totalDone ?? 0 }
     })
   )
 

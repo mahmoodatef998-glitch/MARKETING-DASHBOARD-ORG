@@ -4,12 +4,17 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionTask, deleteNotionPage } from '@/lib/notion'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
+import { dbError } from '@/lib/utils'
+import { sendSlack } from '@/lib/slack'
 import { parseBody, TaskUpdateSchema } from '@/lib/validation'
 import { logActivity } from '@/lib/activity-log'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -19,15 +24,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = parsed.data
   const updated: Record<string, unknown> = {
-    title:       body.title,
-    description: body.description ?? null,
-    status:      body.status,
-    priority:    body.priority,
-    task_type:   body.task_type   ?? null,
-    due_date:    body.due_date    ?? null,
-    assigned_to: body.assigned_to ?? null,
-    client_id:   body.client_id   ?? null,
-    updated_at:  new Date().toISOString(),
+    title:               body.title,
+    description:         body.description         || null,
+    status:              body.status,
+    priority:            body.priority,
+    task_type:           body.task_type           || null,
+    due_date:            body.due_date            || null,
+    assigned_to:         body.assigned_to         || null,
+    client_id:           body.client_id           || null,
+    delivery_url:        body.delivery_url        || null,
+    reference_image_url: body.reference_image_url || null,
+    updated_at:          new Date().toISOString(),
   }
 
   // Fetch old status before update so we know if it changed to 'done'
@@ -44,85 +51,35 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
 
   if (data?.notion_id) {
     try { await updateNotionTask(data.notion_id, updated) } catch {}
   }
 
-  // ── When task is re-assigned → notify new team member ─────────────────────
-  const assigneeChanged = oldTask?.assigned_to !== body.assigned_to && !!body.assigned_to
-  if (assigneeChanged && body.assigned_to) {
-    try {
-      const adminForAssign = createAdminClient()
-      const { data: authUser } = await adminForAssign.auth.admin.getUserById(body.assigned_to as string)
-      const memberEmail = authUser?.user?.email
-      if (memberEmail) {
-        await sendEmail({
-          to:      memberEmail,
-          subject: `📋 Task assigned to you: "${data.title}"`,
-          body: [
-            `A task has been assigned to you:`,
-            ``,
-            `  Title:    ${data.title}`,
-            data.description ? `  Details:  ${data.description}` : null,
-            `  Priority: ${data.priority}`,
-            `  Status:   ${data.status}`,
-            data.due_date ? `  Due:      ${data.due_date}` : null,
-            data.client?.name ? `  Client:   ${data.client.name}` : null,
-            data.revision_notes ? `\nRevision notes:\n${data.revision_notes}` : null,
-            ``,
-            `Log in to your portal to get started.`,
-          ].filter(Boolean).join('\n'),
-        })
-      }
-    } catch (e: any) {
-      console.error('[tasks PUT] assign notify failed:', e.message)
-    }
-  }
-
-  // ── When task moves to review → notify client to approve ──────────────────
+  // ── When task moves to "review" → notify client ───────────────────────────
   const justReview = oldTask?.status !== 'review' && body.status === 'review'
   if (justReview && data?.client?.email) {
     const admin = createAdminClient()
-    const clientName  = data.client.name
-    const clientEmail = data.client.email
     const details = [
       `Task: ${data.title}`,
       data.description ? `Description: ${data.description}` : null,
-      `Type: ${data.task_type?.replace(/_/g, ' ') ?? 'General'}`,
       `Priority: ${data.priority}`,
       data.due_date ? `Due date: ${data.due_date}` : null,
-      data.delivery_url ? `Delivery link: ${data.delivery_url}` : null,
     ].filter(Boolean).join('\n')
-
     try {
       const { subject, body: emailBody } = await generateEmailContent({
-        type:          'task_review_ready',
-        recipientName: clientName,
+        type:          'task_in_review',
+        recipientName: data.client.name,
         details,
       })
-      await sendEmail({ to: clientEmail, subject, body: emailBody })
+      await sendEmail({ to: data.client.email, subject, body: emailBody })
       await admin.from('automation_logs').insert({
-        type:            'task_review_ready',
-        recipient_email: clientEmail,
-        subject,
-        status:          'sent',
-        task_id:         id,
-        created_at:      new Date().toISOString(),
+        type: 'task_in_review', recipient_email: data.client.email,
+        subject, status: 'sent', task_id: id, created_at: new Date().toISOString(),
       })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      await admin.from('automation_logs').insert({
-        type:            'task_review_ready',
-        recipient_email: clientEmail,
-        subject:         `Task "${data.title}" ready for review`,
-        status:          'failed',
-        error:           msg,
-        task_id:         id,
-        created_at:      new Date().toISOString(),
-      })
-    }
+    } catch {}
+    void sendSlack(`🔍 *Task ready for review*: "${data.title}" — client: ${data.client.name}`)
   }
 
   // ── When task is marked done → notify client ───────────────────────────────
@@ -182,7 +139,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Log activity
-  const { data: { user } } = await supabase.auth.getUser()
   if (body.status && oldTask?.status !== body.status) {
     await logActivity({
       supabase: createAdminClient(),
@@ -211,25 +167,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const { data } = await supabase.from('tasks').select('notion_id, title').eq('id', id).single()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data } = await supabase.from('tasks').select('notion_id').eq('id', id).single()
 
   if (data?.notion_id) {
     try { await deleteNotionPage(data.notion_id) } catch {}
   }
 
-  // Soft delete — preserves data for audit trail and undo
-  const { error } = await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const { data: { user } } = await supabase.auth.getUser()
-  await logActivity({
-    supabase: createAdminClient(),
-    userId:     user?.id,
-    action:     'task.deleted',
-    entityType: 'task',
-    entityId:   id,
-    entityName: data?.title,
-  })
-
+  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }
