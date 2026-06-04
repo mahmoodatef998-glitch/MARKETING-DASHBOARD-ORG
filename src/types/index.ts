@@ -179,6 +179,7 @@ export interface Meeting {
   id: string
   title: string
   client_id?: string
+  client_name?: string
   client?: Pick<Client, 'id' | 'name'>
   scheduled_at: string
   notes?: string

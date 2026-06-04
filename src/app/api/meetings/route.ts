@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
     .from('meetings')
     .insert({
       title:        body.title.trim(),
-      client_id:    body.client_id    || null,
+      client_id:    body.client_id   || null,
+      client_name:  body.client_name?.trim() || null,
       scheduled_at: body.scheduled_at,
       notes:        body.notes?.trim() || null,
       status:       'pending',

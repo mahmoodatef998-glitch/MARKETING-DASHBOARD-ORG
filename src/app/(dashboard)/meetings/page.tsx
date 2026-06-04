@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import {
   CalendarDays, Plus, CheckCircle2, Clock, Trash2, Loader2,
-  Users, X, ChevronDown, AlarmClock, XCircle,
+  Users, X, AlarmClock, ChevronDown,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,16 +18,23 @@ function NewMeetingModal({
   onClose,
 }: {
   clients: Client[]
-  onSave: (data: { title: string; client_id?: string; scheduled_at: string; notes?: string }) => Promise<void>
+  onSave: (d: {
+    title: string
+    client_name?: string
+    client_id?: string
+    scheduled_at: string
+    notes?: string
+  }) => Promise<void>
   onClose: () => void
 }) {
   const [title,       setTitle]       = useState('')
+  const [clientName,  setClientName]  = useState('')
   const [clientId,    setClientId]    = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [notes,       setNotes]       = useState('')
   const [saving,      setSaving]      = useState(false)
+  const [pickExisting, setPickExisting] = useState(false)
 
-  // default datetime to tomorrow 10:00
   useEffect(() => {
     const d = new Date()
     d.setDate(d.getDate() + 1)
@@ -35,11 +42,24 @@ function NewMeetingModal({
     setScheduledAt(d.toISOString().slice(0, 16))
   }, [])
 
+  function selectExistingClient(id: string) {
+    setClientId(id)
+    const c = clients.find(c => c.id === id)
+    if (c) setClientName(c.name)
+    setPickExisting(false)
+  }
+
+  function clearExisting() {
+    setClientId('')
+    setPickExisting(false)
+  }
+
   async function handleSave() {
     if (!title.trim() || !scheduledAt) return
     setSaving(true)
     await onSave({
       title:        title.trim(),
+      client_name:  clientName.trim() || undefined,
       client_id:    clientId || undefined,
       scheduled_at: new Date(scheduledAt).toISOString(),
       notes:        notes.trim() || undefined,
@@ -50,6 +70,7 @@ function NewMeetingModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2">
@@ -65,6 +86,7 @@ function NewMeetingModal({
 
         {/* Body */}
         <div className="p-5 space-y-4">
+
           {/* Title */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-300">Meeting Title *</label>
@@ -72,27 +94,67 @@ function NewMeetingModal({
               autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Monthly review with client"
+              placeholder="e.g. Intro call with new client"
               className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
             />
           </div>
 
-          {/* Client */}
+          {/* Client — free text + optional existing picker */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">Client <span className="text-slate-500 font-normal">(optional)</span></label>
-            <div className="relative">
-              <select
-                value={clientId}
-                onChange={e => setClientId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none appearance-none cursor-pointer transition-colors"
-              >
-                <option value="">No specific client</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+            <label className="text-xs font-medium text-slate-300">
+              Client Name <span className="text-slate-500 font-normal">(optional — any name)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={clientName}
+                onChange={e => { setClientName(e.target.value); if (!e.target.value) clearExisting() }}
+                placeholder="Type any client name…"
+                className="flex-1 bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition-colors"
+              />
+              {clients.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPickExisting(p => !p)}
+                    title="Pick existing client"
+                    className={`h-full px-3 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1 ${
+                      clientId
+                        ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {pickExisting && (
+                    <div className="absolute right-0 top-full mt-1 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden">
+                      <div className="max-h-44 overflow-y-auto">
+                        {clients.map(c => (
+                          <button key={c.id} type="button"
+                            onClick={() => selectExistingClient(c.id)}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-slate-700 ${
+                              clientId === c.id ? 'text-indigo-400' : 'text-slate-200'
+                            }`}>
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                      {clientId && (
+                        <button type="button" onClick={clearExisting}
+                          className="w-full text-left px-3 py-2 text-xs text-slate-500 hover:text-red-400 border-t border-slate-700 transition-colors">
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+            {clientId && (
+              <p className="text-xs text-indigo-400 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Linked to registered client
+              </p>
+            )}
           </div>
 
           {/* Date + Time */}
@@ -110,7 +172,9 @@ function NewMeetingModal({
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">Notes <span className="text-slate-500 font-normal">(optional)</span></label>
+            <label className="text-xs font-medium text-slate-300">
+              Notes <span className="text-slate-500 font-normal">(optional)</span>
+            </label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
@@ -157,20 +221,16 @@ function MeetingCard({
   const meetingDt = new Date(meeting.scheduled_at)
   const isPast    = meetingDt < now
   const isDone    = meeting.status === 'done'
+  const diffDays  = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
 
-  const diffMs    = meetingDt.getTime() - now.getTime()
-  const diffDays  = Math.ceil(diffMs / 86_400_000)
+  const displayName = meeting.client?.name ?? meeting.client_name
+
   let timeLabel = ''
-  if (isDone) {
-    timeLabel = ''
-  } else if (isPast) {
-    timeLabel = 'Overdue'
-  } else if (diffDays === 0) {
-    timeLabel = 'Today'
-  } else if (diffDays === 1) {
-    timeLabel = 'Tomorrow'
-  } else {
-    timeLabel = `In ${diffDays} days`
+  if (!isDone) {
+    if (isPast)         timeLabel = 'Overdue'
+    else if (diffDays === 0) timeLabel = 'Today'
+    else if (diffDays === 1) timeLabel = 'Tomorrow'
+    else                timeLabel = `In ${diffDays} days`
   }
 
   async function handleDone() {
@@ -187,79 +247,73 @@ function MeetingCard({
   }
 
   return (
-    <Card className={`transition-all ${isDone ? 'opacity-60' : isPast && !isDone ? 'border-red-500/20' : 'hover:border-slate-600'}`}>
+    <Card className={`transition-all ${
+      isDone       ? 'opacity-60' :
+      isPast       ? 'border-red-500/20' :
+      diffDays === 0 ? 'border-amber-500/20' :
+                     'hover:border-slate-600'
+    }`}>
       <CardContent className="py-4">
         <div className="flex items-start gap-4">
-          {/* Left: status icon */}
+          {/* Icon */}
           <div className={`mt-0.5 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-            isDone      ? 'bg-green-500/10'  :
-            isPast      ? 'bg-red-500/10'    :
-            diffDays === 0 ? 'bg-amber-500/10' :
-                          'bg-indigo-500/10'
+            isDone         ? 'bg-green-500/10'  :
+            isPast         ? 'bg-red-500/10'    :
+            diffDays === 0 ? 'bg-amber-500/10'  :
+                             'bg-indigo-500/10'
           }`}>
-            {isDone
-              ? <CheckCircle2 className="h-5 w-5 text-green-400" />
-              : isPast
-                ? <AlarmClock className="h-5 w-5 text-red-400" />
-                : diffDays === 0
-                  ? <Clock className="h-5 w-5 text-amber-400" />
-                  : <CalendarDays className="h-5 w-5 text-indigo-400" />
-            }
+            {isDone         ? <CheckCircle2 className="h-5 w-5 text-green-400" />  :
+             isPast         ? <AlarmClock   className="h-5 w-5 text-red-400" />    :
+             diffDays === 0 ? <Clock        className="h-5 w-5 text-amber-400" />  :
+                              <CalendarDays className="h-5 w-5 text-indigo-400" />}
           </div>
 
-          {/* Center: info */}
+          {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className={`font-semibold text-sm ${isDone ? 'line-through text-slate-400' : 'text-white'}`}>
                 {meeting.title}
               </h3>
-              {/* Status badge */}
               {isDone ? (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-medium">Done</span>
-              ) : isPast ? (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-medium">Overdue</span>
               ) : timeLabel ? (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+                  isPast         ? 'bg-red-500/10 text-red-400 border-red-500/20'       :
                   diffDays === 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                                    'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                 }`}>{timeLabel}</span>
               ) : null}
             </div>
 
-            {/* Client */}
-            {meeting.client && (
+            {displayName && (
               <div className="flex items-center gap-1 mt-1">
                 <Users className="h-3 w-3 text-slate-500" />
-                <span className="text-xs text-slate-400">{meeting.client.name}</span>
+                <span className="text-xs text-slate-400">{displayName}</span>
+                {meeting.client_id && (
+                  <span className="text-xs text-indigo-500">·  registered</span>
+                )}
               </div>
             )}
 
-            {/* Date */}
             <div className="flex items-center gap-1 mt-1">
               <Clock className="h-3 w-3 text-slate-500" />
               <span className="text-xs text-slate-400">
                 {meetingDt.toLocaleString([], {
-                  weekday: 'short',
-                  month:   'short',
-                  day:     'numeric',
-                  hour:    '2-digit',
-                  minute:  '2-digit',
+                  weekday: 'short', month: 'short', day: 'numeric',
+                  hour: '2-digit', minute: '2-digit',
                 })}
               </span>
             </div>
 
-            {/* Notes */}
             {meeting.notes && (
               <p className="mt-1.5 text-xs text-slate-500 line-clamp-2">{meeting.notes}</p>
             )}
           </div>
 
-          {/* Right: actions */}
+          {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
             {!isDone && (
-              <button
-                onClick={handleDone}
-                disabled={markingDone}
+              <button onClick={handleDone} disabled={markingDone}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold transition-colors">
                 {markingDone
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -267,9 +321,7 @@ function MeetingCard({
                 Done
               </button>
             )}
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
+            <button onClick={handleDelete} disabled={deleting}
               className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50">
               {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             </button>
@@ -288,13 +340,20 @@ export default function MeetingsPage() {
   const [loading,  setLoading]  = useState(true)
   const [filter,   setFilter]   = useState<'all' | 'upcoming' | 'done'>('upcoming')
   const [showNew,  setShowNew]  = useState(false)
+  const [apiError, setApiError] = useState('')
 
   async function load() {
+    setApiError('')
     const [mr, cr] = await Promise.all([
       fetch('/api/meetings'),
       fetch('/api/clients'),
     ])
-    if (mr.ok) setMeetings(await mr.json())
+    if (mr.ok) {
+      setMeetings(await mr.json())
+    } else {
+      const err = await mr.json().catch(() => ({}))
+      setApiError(err.error ?? 'Could not load meetings')
+    }
     if (cr.ok) {
       const cd = await cr.json()
       setClients(Array.isArray(cd) ? cd : (cd.data ?? []))
@@ -304,7 +363,10 @@ export default function MeetingsPage() {
 
   useEffect(() => { void load() }, [])
 
-  async function handleCreate(data: { title: string; client_id?: string; scheduled_at: string; notes?: string }) {
+  async function handleCreate(data: {
+    title: string; client_name?: string; client_id?: string
+    scheduled_at: string; notes?: string
+  }) {
     const res = await fetch('/api/meetings', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -312,14 +374,17 @@ export default function MeetingsPage() {
     })
     if (res.ok) {
       const created = await res.json()
-      setMeetings(prev => [...prev, created].sort(
-        (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-      ))
+      setMeetings(prev =>
+        [...prev, created].sort((a, b) =>
+          new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+        )
+      )
       setShowNew(false)
       setFilter('upcoming')
       toast('Meeting scheduled', 'success')
     } else {
-      toast('Failed to schedule meeting', 'error')
+      const err = await res.json().catch(() => ({}))
+      toast(err.error ?? 'Failed to schedule meeting', 'error')
     }
   }
 
@@ -348,20 +413,17 @@ export default function MeetingsPage() {
     }
   }
 
-  const now = new Date()
+  const now      = new Date()
   const upcoming = meetings.filter(m => m.status === 'pending')
   const done     = meetings.filter(m => m.status === 'done')
   const overdue  = upcoming.filter(m => new Date(m.scheduled_at) < now)
-  const todayCount = upcoming.filter(m => {
-    const d = new Date(m.scheduled_at)
-    return d.toDateString() === now.toDateString()
-  }).length
+  const todayCount = upcoming.filter(m =>
+    new Date(m.scheduled_at).toDateString() === now.toDateString()
+  ).length
 
-  const filtered = filter === 'upcoming'
-    ? upcoming
-    : filter === 'done'
-      ? done
-      : meetings
+  const filtered = filter === 'upcoming' ? upcoming
+    : filter === 'done' ? done
+    : meetings
 
   return (
     <div className="space-y-5">
@@ -376,13 +438,21 @@ export default function MeetingsPage() {
         </Button>
       </div>
 
+      {/* DB not set up yet */}
+      {apiError && (
+        <div className="flex items-center gap-3 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+          <AlarmClock className="h-4 w-4 shrink-0" />
+          <span><strong>Database error:</strong> {apiError}. Run the SQL migration in Supabase to create the meetings table.</span>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Upcoming',  value: upcoming.length, icon: CalendarDays, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-          { label: 'Today',     value: todayCount,       icon: Clock,       color: 'text-amber-400',  bg: 'bg-amber-500/10'  },
-          { label: 'Overdue',   value: overdue.length,   icon: AlarmClock,  color: 'text-red-400',    bg: 'bg-red-500/10'    },
-          { label: 'Completed', value: done.length,      icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10'  },
+          { label: 'Upcoming',  value: upcoming.length,  icon: CalendarDays, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+          { label: 'Today',     value: todayCount,        icon: Clock,        color: 'text-amber-400',  bg: 'bg-amber-500/10'  },
+          { label: 'Overdue',   value: overdue.length,    icon: AlarmClock,   color: 'text-red-400',    bg: 'bg-red-500/10'    },
+          { label: 'Completed', value: done.length,       icon: CheckCircle2, color: 'text-green-400',  bg: 'bg-green-500/10'  },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <Card key={label}>
             <CardContent className="pt-4 pb-3 flex items-center gap-3">
@@ -424,9 +494,9 @@ export default function MeetingsPage() {
           <CardContent className="py-16 text-center">
             <CalendarDays className="h-10 w-10 mx-auto mb-3 text-slate-700" />
             <p className="text-slate-500 text-sm">
-              {filter === 'upcoming' ? 'No upcoming meetings' :
-               filter === 'done'     ? 'No completed meetings yet' :
-                                       'No meetings yet'}
+              {filter === 'upcoming' ? 'No upcoming meetings'
+               : filter === 'done'   ? 'No completed meetings yet'
+               :                       'No meetings yet'}
             </p>
             {filter !== 'done' && (
               <button onClick={() => setShowNew(true)}
@@ -438,31 +508,20 @@ export default function MeetingsPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {/* Overdue banner */}
           {filter === 'upcoming' && overdue.length > 0 && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/8 border border-red-500/20 rounded-xl text-xs text-red-400">
               <AlarmClock className="h-4 w-4 shrink-0" />
-              {overdue.length} meeting{overdue.length > 1 ? 's are' : ' is'} overdue — mark as done or delete them.
+              {overdue.length} meeting{overdue.length > 1 ? 's are' : ' is'} overdue — mark as done or delete.
             </div>
           )}
           {filtered.map(m => (
-            <MeetingCard
-              key={m.id}
-              meeting={m}
-              onDone={handleDone}
-              onDelete={handleDelete}
-            />
+            <MeetingCard key={m.id} meeting={m} onDone={handleDone} onDelete={handleDelete} />
           ))}
         </div>
       )}
 
-      {/* Modal */}
       {showNew && (
-        <NewMeetingModal
-          clients={clients}
-          onSave={handleCreate}
-          onClose={() => setShowNew(false)}
-        />
+        <NewMeetingModal clients={clients} onSave={handleCreate} onClose={() => setShowNew(false)} />
       )}
     </div>
   )

@@ -24,11 +24,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const admin = createAdminClient()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (body.status)        update.status        = body.status
-  if (body.title)         update.title         = body.title.trim()
-  if (body.notes !== undefined) update.notes   = body.notes?.trim() || null
-  if (body.scheduled_at)  update.scheduled_at  = body.scheduled_at
-  if (body.client_id !== undefined) update.client_id = body.client_id || null
+  if (body.status)                    update.status      = body.status
+  if (body.title)                     update.title       = body.title.trim()
+  if (body.notes !== undefined)       update.notes       = body.notes?.trim() || null
+  if (body.scheduled_at)              update.scheduled_at = body.scheduled_at
+  if (body.client_id !== undefined)   update.client_id   = body.client_id || null
+  if (body.client_name !== undefined) update.client_name = body.client_name?.trim() || null
 
   const { data, error } = await admin
     .from('meetings')
