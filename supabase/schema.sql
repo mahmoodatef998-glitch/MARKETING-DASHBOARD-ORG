@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS public.automation_logs (
   type            text NOT NULL
                   CHECK (type IN (
                     'payment_reminder','task_reminder','task_reminder_48h',
-                    'task_reminder_24h','task_confirmation','task_completed','task_in_review'
+                    'task_reminder_24h','task_confirmation','task_completed',
+                    'task_in_review','weekly_report','client_welcome'
                   )),
   recipient_email text NOT NULL,
   subject         text NOT NULL,
