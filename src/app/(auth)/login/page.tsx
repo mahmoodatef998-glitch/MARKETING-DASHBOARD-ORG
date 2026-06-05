@@ -93,11 +93,8 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-black text-white tracking-[0.18em] uppercase">
-            Pixel Marketing
+            {process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}
           </h1>
-          <p className="text-violet-400 font-bold text-xs tracking-[0.4em] uppercase mt-1.5">
-            Agency
-          </p>
           <div className="mt-3 flex items-center justify-center gap-2">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-violet-500/50" />
             <p className="text-slate-500 text-xs">Sign in to your dashboard</p>
@@ -163,7 +160,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-600 text-xs mt-6">
-          © {new Date().getFullYear()} Pixel Marketing Agency. All rights reserved.
+          © {new Date().getFullYear()} {process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}. All rights reserved.
         </p>
       </div>
     </div>

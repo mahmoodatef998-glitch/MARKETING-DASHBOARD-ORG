@@ -381,7 +381,7 @@ export async function GET(req: NextRequest) {
           `Please contact us to renew your package and ensure uninterrupted service.`,
           ``,
           `Best regards,`,
-          `Pixel Marketing Agency`,
+          process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency',
         ].join('\n'),
       })
       results.push({ type: 'package_renewal_alert', recipient: client.email, status: 'sent' })

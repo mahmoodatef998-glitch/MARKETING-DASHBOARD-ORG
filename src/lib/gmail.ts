@@ -22,7 +22,7 @@ function buildRawEmail(opts: {
   if (opts.html) {
     const boundary = 'boundary_pixelmkt_' + Date.now()
     const raw = [
-      `From: Pixel Marketing Agency <${from}>`,
+      `From: ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'} <${from}>`,
       `To: ${opts.to}`,
       `Subject: ${opts.subject}`,
       'MIME-Version: 1.0',

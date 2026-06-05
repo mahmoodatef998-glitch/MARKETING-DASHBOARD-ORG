@@ -113,7 +113,7 @@ function buildInvoiceHtml(opts: {
         <tr>
           <td style="background:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 100%);padding:32px 40px;border-radius:12px 12px 0 0;text-align:center;">
             <div style="font-size:28px;font-weight:900;color:#ffffff;letter-spacing:1px;">
-              Pixel Marketing Agency
+              ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}
             </div>
             <div style="font-size:13px;color:#c4b5fd;margin-top:6px;letter-spacing:2px;text-transform:uppercase;">
               Professional Marketing Solutions
@@ -140,7 +140,7 @@ function buildInvoiceHtml(opts: {
             <p style="margin:0 0 20px;color:#374151;font-size:15px;">Dear <strong>${clientName}</strong>,</p>
             <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
               Please find your invoice details below for the <strong>${cycleLabel}</strong> billing cycle.
-              We appreciate your continued trust in Pixel Marketing Agency.
+              We appreciate your continued trust in ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}.
             </p>
 
             <!-- Invoice Details Table -->
@@ -178,7 +178,7 @@ function buildInvoiceHtml(opts: {
             </div>
 
             <p style="margin:0 0 4px;color:#374151;font-size:14px;">Thank you for your business.</p>
-            <p style="margin:0;color:#7c3aed;font-size:14px;font-weight:700;">— Pixel Marketing Agency</p>
+            <p style="margin:0;color:#7c3aed;font-size:14px;font-weight:700;">— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}</p>
           </td>
         </tr>
 
@@ -186,7 +186,7 @@ function buildInvoiceHtml(opts: {
         <tr>
           <td style="padding:20px 40px;text-align:center;">
             <p style="margin:0;color:#9ca3af;font-size:11px;">
-              © ${new Date().getFullYear()} Pixel Marketing Agency · All rights reserved
+              © ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'} · All rights reserved
             </p>
             <p style="margin:4px 0 0;color:#d1d5db;font-size:11px;">
               For inquiries, reply to this email
@@ -261,7 +261,7 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
     ? `Every ${customDays} Days`
     : CYCLE_LABELS[cycleType]
 
-  const emailSubject = `Invoice ${invoiceNumber} — ${currencySymbol}${amount.toLocaleString()} due ${dueDateFormatted} | Pixel Marketing Agency`
+  const emailSubject = `Invoice ${invoiceNumber} — ${currencySymbol}${amount.toLocaleString()} due ${dueDateFormatted} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
 
   const emailBody = [
     `Dear ${clientName},`,
@@ -282,7 +282,7 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
     '',
     'Thank you for your business.',
     '',
-    '— Pixel Marketing Agency',
+    `— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`,
   ].join('\n')
 
   const emailHtml = buildInvoiceHtml({

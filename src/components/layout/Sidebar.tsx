@@ -132,7 +132,7 @@ function SidebarContent({
           <Building2 className="h-4 w-4 text-white" />
         </div>
         {!collapsed && (
-          <span className="font-bold text-white text-sm tracking-tight leading-tight">Pixel Marketing</span>
+          <span className="font-bold text-white text-sm tracking-tight leading-tight">{process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}</span>
         )}
       </div>
 
