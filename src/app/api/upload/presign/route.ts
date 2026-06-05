@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 const BUCKET = 'task-assets'
-const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
@@ -15,14 +14,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'filename and contentType required' }, { status: 400 })
   }
 
-  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  const ALLOWED_IMAGES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  const ALLOWED_AUDIO  = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/x-m4a']
+  const ALLOWED_VIDEO  = ['video/mp4', 'video/mov', 'video/webm', 'video/quicktime']
+  const allowed = [...ALLOWED_IMAGES, ...ALLOWED_AUDIO, ...ALLOWED_VIDEO]
+
   if (!allowed.includes(contentType)) {
-    return NextResponse.json({ error: 'Only image files allowed' }, { status: 400 })
+    return NextResponse.json({ error: `File type not allowed: ${contentType}` }, { status: 400 })
   }
 
-  const ext   = filename.split('.').pop()?.toLowerCase() ?? 'jpg'
-  const key   = `${user.id}/${Date.now()}.${ext}`
-  const admin = createAdminClient()
+  const ext    = filename.split('.').pop()?.toLowerCase() ?? 'bin'
+  const folder = ALLOWED_AUDIO.includes(contentType) ? 'audio' : ALLOWED_VIDEO.includes(contentType) ? 'video' : 'images'
+  const key    = `${folder}/${user.id}/${Date.now()}.${ext}`
+  const admin  = createAdminClient()
 
   const { data, error } = await admin.storage
     .from(BUCKET)
@@ -32,10 +36,5 @@ export async function POST(req: NextRequest) {
 
   const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(key)
 
-  return NextResponse.json({
-    signedUrl: data.signedUrl,
-    token:     data.token,
-    path:      key,
-    publicUrl,
-  })
+  return NextResponse.json({ signedUrl: data.signedUrl, token: data.token, path: key, publicUrl })
 }
