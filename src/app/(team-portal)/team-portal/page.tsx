@@ -144,9 +144,17 @@ function MarkDoneModal({
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       })
       if (!presignRes.ok) throw new Error('Presign failed')
-      const { signedUrl, publicUrl } = await presignRes.json()
-      await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
-      setDeliveryUrl(publicUrl)
+      const data = await presignRes.json()
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('api_key', data.apiKey)
+      formData.append('timestamp', String(data.timestamp))
+      formData.append('signature', data.signature)
+      formData.append('public_id', data.publicId)
+      formData.append('folder', data.folder)
+      if (data.eager) formData.append('eager', data.eager)
+      await fetch(data.uploadUrl, { method: 'POST', body: formData })
+      setDeliveryUrl(data.publicUrl)
     } catch (err) {
       console.error('Upload error', err)
     } finally {

@@ -1,8 +1,18 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase-server'
+import { v2 as cloudinary } from 'cloudinary'
 
-const BUCKET = 'task-assets'
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+const ALLOWED_IMAGES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_AUDIO  = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/x-m4a']
+const ALLOWED_VIDEO  = ['video/mp4', 'video/mov', 'video/webm', 'video/quicktime']
+const ALLOWED        = [...ALLOWED_IMAGES, ...ALLOWED_AUDIO, ...ALLOWED_VIDEO]
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
@@ -13,28 +23,47 @@ export async function POST(req: NextRequest) {
   if (!filename || !contentType) {
     return NextResponse.json({ error: 'filename and contentType required' }, { status: 400 })
   }
-
-  const ALLOWED_IMAGES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
-  const ALLOWED_AUDIO  = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/x-m4a']
-  const ALLOWED_VIDEO  = ['video/mp4', 'video/mov', 'video/webm', 'video/quicktime']
-  const allowed = [...ALLOWED_IMAGES, ...ALLOWED_AUDIO, ...ALLOWED_VIDEO]
-
-  if (!allowed.includes(contentType)) {
+  if (!ALLOWED.includes(contentType)) {
     return NextResponse.json({ error: `File type not allowed: ${contentType}` }, { status: 400 })
   }
 
-  const ext    = filename.split('.').pop()?.toLowerCase() ?? 'bin'
-  const folder = ALLOWED_AUDIO.includes(contentType) ? 'audio' : ALLOWED_VIDEO.includes(contentType) ? 'video' : 'images'
-  const key    = `${folder}/${user.id}/${Date.now()}.${ext}`
-  const admin  = createAdminClient()
+  const isAudio  = ALLOWED_AUDIO.includes(contentType)
+  const isVideo  = ALLOWED_VIDEO.includes(contentType)
+  const folder   = isAudio ? 'agency-os/audio' : isVideo ? 'agency-os/video' : 'agency-os/images'
+  const resourceType = isAudio || isVideo ? 'video' : 'image'  // Cloudinary uses 'video' for audio too
 
-  const { data, error } = await admin.storage
-    .from(BUCKET)
-    .createSignedUploadUrl(key)
+  const timestamp  = Math.round(Date.now() / 1000)
+  const publicId   = `${folder}/${user.id}_${timestamp}`
+  const eager      = !isAudio && !isVideo ? 'q_auto,f_auto' : undefined
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const paramsToSign: Record<string, string | number> = {
+    folder,
+    public_id:     publicId,
+    timestamp,
+    ...(eager ? { eager } : {}),
+  }
 
-  const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(key)
+  const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET!)
 
-  return NextResponse.json({ signedUrl: data.signedUrl, token: data.token, path: key, publicUrl })
+  // Upload URL for the client to POST directly to Cloudinary
+  const uploadUrl = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`
+
+  // Public URL after upload (Cloudinary constructs it from public_id)
+  const ext       = filename.split('.').pop()?.toLowerCase() ?? 'bin'
+  const publicUrl = cloudinary.url(publicId, {
+    resource_type: resourceType,
+    format:        ext,
+    secure:        true,
+  })
+
+  return NextResponse.json({
+    uploadUrl,
+    publicId,
+    publicUrl,
+    signature,
+    timestamp,
+    apiKey:   process.env.CLOUDINARY_API_KEY,
+    folder,
+    eager:    eager ?? null,
+  })
 }

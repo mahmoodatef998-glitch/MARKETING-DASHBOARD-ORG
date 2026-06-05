@@ -46,9 +46,16 @@ function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       })
-      const { signedUrl, publicUrl } = await res.json()
-      await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
-      setVoiceUrl(publicUrl)
+      const data = await res.json()
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('api_key', data.apiKey)
+      formData.append('timestamp', String(data.timestamp))
+      formData.append('signature', data.signature)
+      formData.append('public_id', data.publicId)
+      formData.append('folder', data.folder)
+      await fetch(data.uploadUrl, { method: 'POST', body: formData })
+      setVoiceUrl(data.publicUrl)
     } catch {}
     setVoiceUploading(false)
   }
