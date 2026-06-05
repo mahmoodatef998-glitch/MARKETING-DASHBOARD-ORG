@@ -28,10 +28,11 @@ const PLATFORMS = [
     help: 'https://developers.facebook.com/docs/pages/getting-started',
   },
   {
-    key:    'tiktok' as const,
-    label:  'TikTok',
-    icon:   Music2,
-    color:  'from-slate-700 to-slate-600',
+    key:         'tiktok' as const,
+    label:       'TikTok',
+    icon:        Music2,
+    color:       'from-slate-700 to-slate-600',
+    manualOnly:  true,
     fields: [
       { key: 'access_token', label: 'User Access Token', placeholder: 'act.example…', type: 'password' },
     ],
@@ -96,7 +97,14 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
             <Icon className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="font-semibold text-white text-sm">{cfg.label}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-white text-sm">{cfg.label}</p>
+              {(cfg as { manualOnly?: boolean }).manualOnly && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">
+                  Manual token only
+                </span>
+              )}
+            </div>
             {connection ? (
               <div className="flex items-center gap-1.5 mt-0.5">
                 {isExpired

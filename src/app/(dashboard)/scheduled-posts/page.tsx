@@ -57,6 +57,7 @@ export default function ScheduledPostsPage() {
   const [posts,    setPosts]    = useState<ScheduledPost[]>([])
   const [loading,  setLoading]  = useState(true)
   const [filter,   setFilter]   = useState<string>('all')
+  const [platform, setPlatform] = useState<string>('all')
 
   async function load() {
     const res = await fetch('/api/social/scheduled-posts')
@@ -76,8 +77,11 @@ export default function ScheduledPostsPage() {
     else toast('Failed to cancel', 'error')
   }
 
-  const statuses = ['all', 'pending', 'published', 'failed', 'cancelled']
-  const filtered = posts.filter(p => filter === 'all' || p.status === filter)
+  const statuses  = ['all', 'pending', 'published', 'failed', 'cancelled']
+  const platforms = ['all', 'instagram', 'facebook', 'tiktok']
+  const filtered  = posts
+    .filter(p => filter   === 'all' || p.status   === filter)
+    .filter(p => platform === 'all' || p.platform === platform)
 
   const counts = {
     pending:   posts.filter(p => p.status === 'pending').length,
@@ -109,17 +113,34 @@ export default function ScheduledPostsPage() {
         </Card>
       </div>
 
-      {/* Header + filter */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          {statuses.map(s => (
-            <button key={s} onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-                filter === s ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-              }`}>
-              {s}
-            </button>
-          ))}
+      {/* Header + filters */}
+      <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex flex-wrap gap-3">
+          {/* Status filter */}
+          <div className="flex gap-1.5">
+            {statuses.map(s => (
+              <button key={s} onClick={() => setFilter(s)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                  filter === s ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                }`}>
+                {s}
+              </button>
+            ))}
+          </div>
+          {/* Platform filter */}
+          <div className="flex gap-1.5 border-l border-slate-700 pl-3">
+            {platforms.map(p => {
+              const meta = PLATFORM_META[p]
+              return (
+                <button key={p} onClick={() => setPlatform(p)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                    platform === p ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-100 hover:bg-slate-800'
+                  }`}>
+                  {meta ? <span className={meta.color}>{meta.label}</span> : 'All platforms'}
+                </button>
+              )
+            })}
+          </div>
         </div>
         <Button variant="ghost" size="sm" onClick={load} className="gap-1.5 text-slate-400">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh

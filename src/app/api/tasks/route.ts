@@ -6,6 +6,7 @@ import { generateId, dbError } from '@/lib/utils'
 import { TaskCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
 import { sendSlack } from '@/lib/slack'
+import { rateLimit } from '@/lib/rate-limit'
 import type { Task } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -67,6 +68,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     return NextResponse.json({ id: generateId(), ...body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { status: 201 })
   }
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown'
+  const { ok } = rateLimit(ip, { limit: 60, window: 60_000 })
+  if (!ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

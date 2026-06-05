@@ -4,18 +4,24 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
 import { useTheme } from '@/lib/theme'
+import { getSupabaseClient } from '@/lib/supabase'
 
 const titles: Record<string, string> = {
-  '/dashboard':    'Dashboard',
-  '/reports':      'Reports & Analytics',
-  '/clients':      'Clients',
-  '/team':         'Team',
-  '/tasks':        'Tasks',
-  '/invoices':     'Invoices',
-  '/billing':      'Billing Plans',
-  '/automation':   'Automation',
-  '/ai-assistant': 'AI Assistant',
-  '/users':        'User Management',
+  '/dashboard':     'Dashboard',
+  '/reports':       'Reports & Analytics',
+  '/clients':       'Clients',
+  '/team':          'Team',
+  '/tasks':         'Tasks',
+  '/invoices':      'Invoices',
+  '/billing':       'Billing Plans',
+  '/automation':    'Automation',
+  '/ai-assistant':  'AI Assistant',
+  '/users':         'User Management',
+  '/activity-logs': 'Activity Log',
+  '/meetings':      'Meetings',
+  '/inbox':         'Inbox',
+  '/scheduled-posts': 'Scheduled Posts',
+  '/settings':      'Social Media',
 }
 
 const severityIcon = {
@@ -30,9 +36,22 @@ export default function Header() {
   const title = titles[pathname] ?? 'Agency OS'
 
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [open, setOpen] = useState(false)
+  const [open,      setOpen]      = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [userName,  setUserName]  = useState<string>('')
   const panelRef = useRef<HTMLDivElement>(null)
+
+  // Load current user name once
+  useEffect(() => {
+    getSupabaseClient().auth.getUser().then(({ data }) => {
+      if (!data.user) return
+      const name = data.user.user_metadata?.display_name
+        ?? data.user.user_metadata?.full_name
+        ?? data.user.email?.split('@')[0]
+        ?? 'A'
+      setUserName(name)
+    })
+  }, [])
 
   useEffect(() => {
     fetch('/api/notifications')
@@ -156,8 +175,15 @@ export default function Header() {
         </div>
 
         {/* Avatar */}
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
-          A
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold select-none">
+            {userName ? userName[0].toUpperCase() : 'A'}
+          </div>
+          {userName && (
+            <span className="hidden md:block text-sm text-slate-300 font-medium max-w-[120px] truncate">
+              {userName}
+            </span>
+          )}
         </div>
       </div>
     </header>
