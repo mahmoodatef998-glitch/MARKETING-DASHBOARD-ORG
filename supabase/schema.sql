@@ -78,9 +78,12 @@ CREATE TABLE IF NOT EXISTS public.tasks (
   published_at          timestamptz,
   scheduled_publish_at  timestamptz,
   publish_caption       text,
-  deleted_at            timestamptz,
-  created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now()
+  deleted_at              timestamptz,
+  reminder_48h_sent_at    timestamptz,
+  reminder_24h_sent_at    timestamptz,
+  confirmation_sent_at    timestamptz,
+  created_at              timestamptz NOT NULL DEFAULT now(),
+  updated_at              timestamptz NOT NULL DEFAULT now()
 );
 
 -- ── Task Comments ─────────────────────────────────────────────────────────────

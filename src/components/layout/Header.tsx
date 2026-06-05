@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon } from 'lucide-react'
+import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
 import { useTheme } from '@/lib/theme'
 import { getSupabaseClient } from '@/lib/supabase'
@@ -30,7 +30,7 @@ const severityIcon = {
   info:    <Zap className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />,
 }
 
-export default function Header() {
+export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const title = titles[pathname] ?? 'Agency OS'
@@ -85,10 +85,20 @@ export default function Header() {
   const unread = visible.length
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/50 backdrop-blur shrink-0">
-      <h1 className="text-xl font-semibold text-slate-100">{title}</h1>
+    <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-slate-800 bg-slate-950/50 backdrop-blur shrink-0">
+      <div className="flex items-center gap-3">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <h1 className="text-lg md:text-xl font-semibold text-slate-100">{title}</h1>
+      </div>
 
-      <div className="flex items-center gap-3" ref={panelRef}>
+      <div className="flex items-center gap-2 md:gap-3" ref={panelRef}>
         {/* Theme toggle */}
         <button
           onClick={toggle}
