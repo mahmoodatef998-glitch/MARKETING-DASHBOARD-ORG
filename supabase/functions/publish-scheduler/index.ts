@@ -124,12 +124,14 @@ Deno.serve(async () => {
         updated_at:       new Date().toISOString(),
       }).eq('id', post.id)
 
-      // Mark task as published
+      // Mark task as published — fetch current platforms first to avoid overwrite
+      const { data: currentTask } = await admin
+        .from('tasks').select('publish_platforms').eq('id', post.task_id).single()
+      const existing = currentTask?.publish_platforms ?? []
+      const merged   = existing.includes(post.platform) ? existing : [...existing, post.platform]
       await admin.from('tasks').update({
         published_at:      new Date().toISOString(),
-        publish_platforms: admin.rpc('array_append_unique', {
-          arr: 'publish_platforms', val: post.platform,
-        }),
+        publish_platforms: merged,
       }).eq('id', post.task_id)
 
       published++
