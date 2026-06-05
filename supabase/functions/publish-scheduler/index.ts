@@ -9,6 +9,7 @@ const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 interface ScheduledPost {
   id:          string
   task_id:     string
+  client_id:   string | null
   platform:    string
   caption:     string | null
   attempts:    number
@@ -16,6 +17,7 @@ interface ScheduledPost {
 }
 
 interface SocialConnection {
+  client_id:    string | null
   platform:     string
   page_id:      string | null
   ig_user_id:   string | null
@@ -32,10 +34,10 @@ Deno.serve(async () => {
   // Fetch due pending posts (max 20 per run)
   const { data: posts, error: fetchErr } = await admin
     .from('scheduled_posts')
-    .select('id, task_id, platform, caption, attempts, task:tasks(delivery_url, title)')
+    .select('id, task_id, client_id, platform, caption, attempts, task:tasks(delivery_url, title)')
     .eq('status', 'pending')
     .lte('scheduled_at', now)
-    .lt('attempts', 3)            // max 3 retries
+    .lt('attempts', 3)
     .order('scheduled_at', { ascending: true })
     .limit(20)
 
@@ -48,14 +50,21 @@ Deno.serve(async () => {
     return new Response(JSON.stringify({ published: 0 }), { status: 200 })
   }
 
-  // Load social connections once
+  // Load ALL active connections — keyed by "client_id:platform"
   const { data: connections } = await admin
     .from('social_connections')
-    .select('platform, page_id, ig_user_id, access_token')
+    .select('client_id, platform, page_id, ig_user_id, access_token')
     .eq('is_active', true)
 
   const connMap: Record<string, SocialConnection> = {}
-  for (const c of connections ?? []) connMap[c.platform] = c
+  for (const c of connections ?? []) {
+    connMap[`${c.client_id ?? '_'}:${c.platform}`] = c
+  }
+
+  function getConn(clientId: string | null, platform: string): SocialConnection | undefined {
+    // Try client-specific first, fall back to global (null client_id)
+    return connMap[`${clientId ?? '_'}:${platform}`] ?? connMap[`_:${platform}`]
+  }
 
   let published = 0
 
@@ -63,19 +72,19 @@ Deno.serve(async () => {
     const mediaUrl = post.task?.delivery_url
     if (!mediaUrl) {
       await admin.from('scheduled_posts').update({
-        status:  'failed',
-        error:   'No delivery_url on task',
+        status:   'failed',
+        error:    'No delivery_url on task',
         attempts: post.attempts + 1,
         updated_at: new Date().toISOString(),
       }).eq('id', post.id)
       continue
     }
 
-    const conn = connMap[post.platform]
+    const conn = getConn(post.client_id, post.platform)
     if (!conn) {
       await admin.from('scheduled_posts').update({
-        status:  'failed',
-        error:   `No active connection for platform: ${post.platform}`,
+        status:   'failed',
+        error:    `No active connection for client + platform: ${post.platform}`,
         attempts: post.attempts + 1,
         updated_at: new Date().toISOString(),
       }).eq('id', post.id)

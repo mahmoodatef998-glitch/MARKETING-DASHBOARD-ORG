@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient()
 
   // Verify task has a delivery_url
-  const { data: task } = await admin.from('tasks').select('delivery_url').eq('id', body.task_id).single()
+  const { data: task } = await admin.from('tasks').select('delivery_url, client_id').eq('id', body.task_id).single()
   if (!task?.delivery_url) {
     return NextResponse.json({ error: 'Task has no delivery_url — upload the file first.' }, { status: 422 })
   }
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
   const platforms: string[] = Array.isArray(body.platform) ? body.platform : [body.platform]
   const rows = platforms.map(p => ({
     task_id:      body.task_id,
+    client_id:    task.client_id ?? null,
     platform:     p,
     scheduled_at: body.scheduled_at,
     caption:      body.caption ?? null,
