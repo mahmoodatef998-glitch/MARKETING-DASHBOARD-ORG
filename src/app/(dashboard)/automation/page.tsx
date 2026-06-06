@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast'
-import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText, Bell, AlarmClock, CheckSquare } from 'lucide-react'
+import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText, Bell, AlarmClock, CheckSquare, UserCheck } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { AutomationLog, AutomationLogType } from '@/types'
 
@@ -15,6 +15,7 @@ const LOG_LABELS: Record<AutomationLogType, string> = {
   task_confirmation: 'Deadline Confirmation',
   task_completed:    'Task Completed → Client',
   task_in_review:    'Task Ready for Review',
+  task_assigned:     'Task Assigned',
 }
 
 const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
@@ -25,6 +26,7 @@ const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
   task_confirmation: Send,
   task_completed:    CheckSquare,
   task_in_review:    Mail,
+  task_assigned:     UserCheck,
 }
 
 export default function AutomationPage() {

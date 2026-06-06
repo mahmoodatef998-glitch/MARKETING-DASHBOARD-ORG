@@ -238,6 +238,7 @@ export type AutomationLogType =
   | 'task_confirmation'
   | 'task_completed'
   | 'task_in_review'
+  | 'task_assigned'
 
 export interface AutomationLog {
   id: string
