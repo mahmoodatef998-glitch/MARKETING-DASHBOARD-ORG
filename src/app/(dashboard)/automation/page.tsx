@@ -3,30 +3,36 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast'
-import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText, Bell, AlarmClock, CheckSquare, UserCheck } from 'lucide-react'
+import { Zap, Mail, CheckCircle, XCircle, RefreshCw, Clock, Send, FileText, Bell, AlarmClock, CheckSquare, UserCheck, Receipt, BarChart2, Package } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { AutomationLog, AutomationLogType } from '@/types'
 
 const LOG_LABELS: Record<AutomationLogType, string> = {
-  payment_reminder:  'Payment Reminder',
-  task_reminder:     'Overdue Task',
-  task_reminder_48h: '48h Task Reminder',
-  task_reminder_24h: '24h Task Reminder',
-  task_confirmation: 'Deadline Confirmation',
-  task_completed:    'Task Completed → Client',
-  task_in_review:    'Task Ready for Review',
-  task_assigned:     'Task Assigned',
+  payment_reminder:      'Payment Reminder',
+  task_reminder:         'Overdue Task',
+  task_reminder_48h:     '48h Task Reminder',
+  task_reminder_24h:     '24h Task Reminder',
+  task_confirmation:     'Deadline Confirmation',
+  task_completed:        'Task Completed → Client',
+  task_in_review:        'Task Ready for Review',
+  task_assigned:         'Task Assigned',
+  auto_invoice:          'Auto Invoice',
+  weekly_report:         'Weekly Report',
+  package_renewal_alert: 'Package Renewal Alert',
 }
 
 const LOG_ICONS: Record<AutomationLogType, React.ElementType> = {
-  payment_reminder:  FileText,
-  task_reminder:     Bell,
-  task_reminder_48h: AlarmClock,
-  task_reminder_24h: AlarmClock,
-  task_confirmation: Send,
-  task_completed:    CheckSquare,
-  task_in_review:    Mail,
-  task_assigned:     UserCheck,
+  payment_reminder:      FileText,
+  task_reminder:         Bell,
+  task_reminder_48h:     AlarmClock,
+  task_reminder_24h:     AlarmClock,
+  task_confirmation:     Send,
+  task_completed:        CheckSquare,
+  task_in_review:        Mail,
+  task_assigned:         UserCheck,
+  auto_invoice:          Receipt,
+  weekly_report:         BarChart2,
+  package_renewal_alert: Package,
 }
 
 export default function AutomationPage() {

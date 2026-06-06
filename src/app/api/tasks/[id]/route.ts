@@ -174,6 +174,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         })
       } catch (err) {
         console.error('[tasks] assignment email failed:', err)
+        await createAdminClient().from('automation_logs').insert({
+          type:            'task_assigned',
+          recipient_email: memberEmail ?? (body.assigned_to as string) ?? '',
+          subject:         `Task assigned: ${data.title}`,
+          status:          'failed',
+          error:           err instanceof Error ? err.message : String(err),
+          task_id:         id,
+          created_at:      new Date().toISOString(),
+        }).catch(() => {})
       }
     })()
   }

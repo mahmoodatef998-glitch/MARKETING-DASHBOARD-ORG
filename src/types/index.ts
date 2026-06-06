@@ -239,6 +239,9 @@ export type AutomationLogType =
   | 'task_completed'
   | 'task_in_review'
   | 'task_assigned'
+  | 'auto_invoice'
+  | 'weekly_report'
+  | 'package_renewal_alert'
 
 export interface AutomationLog {
   id: string
