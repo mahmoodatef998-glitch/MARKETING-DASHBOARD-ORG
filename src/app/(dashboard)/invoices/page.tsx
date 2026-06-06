@@ -164,8 +164,8 @@ function InvoiceDetailsModal({
         {inv.items && inv.items.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Line Items</p>
-            <div className="border border-slate-700 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="border border-slate-700 rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm min-w-[400px]">
                 <thead className="bg-slate-800/80">
                   <tr>
                     <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Description</th>
