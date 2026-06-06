@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
-import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { generateAndSendInvoice, nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
 import { rateLimit } from '@/lib/rate-limit'
 import { sendSlack } from '@/lib/slack'
 
@@ -140,6 +140,11 @@ export async function GET(req: NextRequest) {
         customDays:     plan.custom_days ?? undefined,
         completedTasks: doneTasks ?? [],
       })
+
+      // Advance next_invoice_date to the next cycle so cron won't re-generate
+      const nextDate = nextInvoiceDate(now, plan.cycle_type as CycleType, plan.custom_days ?? undefined)
+      await supabase.from('billing_plans').update({ next_invoice_date: toDateStr(nextDate) }).eq('id', plan.id)
+
       results.push({ type: 'auto_invoice', recipient: plan.client.email, status: 'sent' })
     } catch (err: any) {
       console.error('[cron] auto_invoice failed:', err.message)

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionInvoice, deleteNotionPage } from '@/lib/notion'
 import { dbError } from '@/lib/utils'
+import { nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,6 +12,64 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   return null
+}
+
+// ── Mark as paid / overdue ────────────────────────────────────────────────────
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await createServerClient()
+  const authErr  = await requireAdmin(supabase)
+  if (authErr) return authErr
+
+  const { action } = await req.json().catch(() => ({}))
+
+  if (action === 'mark_paid') {
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
+      .eq('id', id)
+      .single()
+
+    if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const { data, error } = await supabase
+      .from('invoices')
+      .update({ status: 'paid', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+
+    const client = inv.client as any
+    const plan = (client?.billing_plans as any[])?.find((p: any) => p.is_active)
+    if (plan && plan.cycle_type !== 'manual') {
+      const next = nextInvoiceDate(new Date(), plan.cycle_type as CycleType, plan.custom_days ?? undefined)
+      await supabase
+        .from('billing_plans')
+        .update({ next_invoice_date: toDateStr(next) })
+        .eq('id', plan.id)
+    }
+
+    return NextResponse.json({
+      ...data,
+      nextInvoiceDate: plan ? toDateStr(nextInvoiceDate(new Date(), plan.cycle_type as CycleType, plan.custom_days ?? undefined)) : null,
+    })
+  }
+
+  if (action === 'mark_overdue') {
+    const { data, error } = await supabase
+      .from('invoices')
+      .update({ status: 'overdue', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
