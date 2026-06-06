@@ -162,18 +162,21 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (!billingErr && billingPlan) {
-        // Fire first invoice immediately (non-blocking — don't fail user creation if email fails)
-        generateAndSendInvoice({
-          supabase:      admin,
-          clientId:      resolvedClientId!,
-          clientEmail:   email,
-          clientName:    display_name,
-          amount,
-          currency,
-          billingPlanId: billingPlan.id,
-          cycleType:     cycle,
-          customDays,
-        }).catch(err => console.error('[billing] first invoice failed:', err.message))
+        try {
+          await generateAndSendInvoice({
+            supabase:      admin,
+            clientId:      resolvedClientId!,
+            clientEmail:   email,
+            clientName:    display_name,
+            amount,
+            currency,
+            billingPlanId: billingPlan.id,
+            cycleType:     cycle,
+            customDays,
+          })
+        } catch (err) {
+          console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
+        }
       }
     }
   }
