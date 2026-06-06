@@ -367,33 +367,90 @@ function MarkDoneModal({
   )
 }
 
+const CONTENT_TYPES = [
+  { value: 'post',  label: 'Post',  desc: 'Feed post (image/video)' },
+  { value: 'reel',  label: 'Reel',  desc: 'Short-form vertical video' },
+  { value: 'story', label: 'Story', desc: 'Disappears after 24h' },
+] as const
+
 // ── NewPostModal ───────────────────────────────────────────────────────────────
 function NewPostModal({
-  doneTasks, connectedPlatforms, onSave, onClose,
+  doneTasks, connectedPlatforms, clients, onSave, onClose,
 }: {
   doneTasks:          Task[]
   connectedPlatforms: string[]
+  clients:            { id: string; name: string }[]
   onSave:             () => void
   onClose:            () => void
 }) {
+  const [source,       setSource]       = useState<'upload' | 'task'>('upload')
+  const [clientId,     setClientId]     = useState(clients[0]?.id ?? '')
   const [taskId,       setTaskId]       = useState('')
+  const [mediaUrl,     setMediaUrl]     = useState('')
+  const [uploading,    setUploading]    = useState(false)
+  const [uploadPct,    setUploadPct]    = useState(0)
+  const [contentType,  setContentType]  = useState<'post' | 'reel' | 'story'>('post')
   const [platforms,    setPlatforms]    = useState<string[]>([])
   const [scheduledAt,  setScheduledAt]  = useState('')
   const [caption,      setCaption]      = useState('')
   const [generating,   setGenerating]   = useState(false)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const tasksWithFile = doneTasks.filter(t => t.delivery_url)
+  const hasMedia = source === 'upload' ? !!mediaUrl : !!taskId
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadPct(0)
+    setError('')
+    try {
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      })
+      if (!presignRes.ok) throw new Error('Failed to get upload URL')
+      const data = await presignRes.json()
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('api_key', data.apiKey)
+      formData.append('timestamp', String(data.timestamp))
+      formData.append('signature', data.signature)
+      formData.append('public_id', data.publicId)
+      formData.append('folder', data.folder)
+      if (data.eager) formData.append('eager', data.eager)
+
+      const xhr = new XMLHttpRequest()
+      xhr.upload.onprogress = ev => {
+        if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100))
+      }
+      await new Promise<void>((resolve, reject) => {
+        xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Upload failed')))
+        xhr.onerror = () => reject(new Error('Network error'))
+        xhr.open('POST', data.uploadUrl)
+        xhr.send(formData)
+      })
+      setMediaUrl(data.publicUrl)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function handleGenerateCaption() {
-    if (!taskId) return
     setGenerating(true)
     try {
+      const body = taskId ? { task_id: taskId } : { media_url: mediaUrl, content_type: contentType }
       const res = await fetch('/api/ai/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         const { caption: gen } = await res.json()
@@ -409,20 +466,25 @@ function NewPostModal({
 
   async function handleSave() {
     setError('')
-    if (!taskId || platforms.length === 0 || !scheduledAt) {
+    if (!hasMedia || platforms.length === 0 || !scheduledAt) {
       setError('Please fill in all required fields.')
       return
     }
     setSaving(true)
+    const payload: Record<string, unknown> = {
+      platform:     platforms,
+      scheduled_at: new Date(scheduledAt).toISOString(),
+      caption,
+      content_type: contentType,
+      client_id:    clientId || undefined,
+    }
+    if (source === 'upload') payload.media_url = mediaUrl
+    else                     payload.task_id   = taskId
+
     const res = await fetch('/api/social/scheduled-posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task_id:      taskId,
-        platform:     platforms,
-        scheduled_at: new Date(scheduledAt).toISOString(),
-        caption,
-      }),
+      body: JSON.stringify(payload),
     })
     setSaving(false)
     if (res.ok) { onSave(); onClose() }
@@ -434,7 +496,8 @@ function NewPostModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-indigo-500/15 flex items-center justify-center">
@@ -447,46 +510,142 @@ function NewPostModal({
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {/* Task picker */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-slate-300">Select Task *</p>
-            {tasksWithFile.length === 0 ? (
-              <p className="text-xs text-slate-500 bg-slate-800/60 rounded-xl px-3 py-3">
-                No completed tasks with uploaded files yet. Mark a task as done and upload the file first.
-              </p>
-            ) : (
-              <select value={taskId} onChange={e => setTaskId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors">
-                <option value="">— choose a task —</option>
-                {tasksWithFile.map(t => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-              </select>
-            )}
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+
+          {/* Source toggle */}
+          <div className="flex gap-1 bg-slate-800/60 rounded-xl p-1">
+            <button onClick={() => setSource('upload')}
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                source === 'upload' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}>
+              Upload New File
+            </button>
+            <button onClick={() => setSource('task')}
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                source === 'task' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}>
+              From Task
+            </button>
           </div>
+
+          {/* Client selector */}
+          {clients.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-300">Client</p>
+              <select value={clientId} onChange={e => setClientId(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors">
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Upload section */}
+          {source === 'upload' && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-slate-300">Content Type *</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {CONTENT_TYPES.map(ct => (
+                    <button key={ct.value} type="button"
+                      onClick={() => setContentType(ct.value)}
+                      className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-semibold transition-all ${
+                        contentType === ct.value
+                          ? 'bg-indigo-600/15 border-indigo-500/50 text-indigo-300'
+                          : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                      }`}>
+                      <span className="font-bold">{ct.label}</span>
+                      <span className="font-normal text-[10px] opacity-70">{ct.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-slate-300">Media File *</p>
+                {mediaUrl ? (
+                  <div className="flex items-center gap-2 bg-slate-800/60 rounded-xl px-3 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 text-xs text-emerald-300 hover:underline truncate">
+                      File uploaded ↗
+                    </a>
+                    <button onClick={() => { setMediaUrl(''); if (fileRef.current) fileRef.current.value = '' }}
+                      className="text-slate-500 hover:text-red-400 transition-colors">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                    className="w-full flex flex-col items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-xl py-6 text-sm text-slate-400 hover:text-slate-300 transition-all disabled:opacity-50">
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+                        <span className="text-xs">Uploading… {uploadPct}%</span>
+                        <div className="w-32 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${uploadPct}%` }} />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <ImagePlus className="h-5 w-5" />
+                        <span className="text-xs">Click to upload image or video</span>
+                        <span className="text-[10px] text-slate-500">MP4, MOV, JPG, PNG, WebP</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <input ref={fileRef} type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp,video/mp4,video/mov,video/webm,video/quicktime"
+                  className="hidden" onChange={handleFile} disabled={uploading} />
+              </div>
+            </div>
+          )}
+
+          {/* Task picker section */}
+          {source === 'task' && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-300">Select Task *</p>
+              {tasksWithFile.length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-800/60 rounded-xl px-3 py-3">
+                  No completed tasks with uploaded files yet. Mark a task as done and attach a file first.
+                </p>
+              ) : (
+                <select value={taskId} onChange={e => setTaskId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors">
+                  <option value="">— choose a task —</option>
+                  {tasksWithFile.map(t => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* Platforms */}
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-slate-300">Platforms *</p>
-            <div className="flex flex-wrap gap-2">
-              {connectedPlatforms.map(p => {
-                const meta   = PLATFORM_META[p]
-                if (!meta) return null
-                const Icon   = meta.icon
-                const active = platforms.includes(p)
-                return (
-                  <button key={p} type="button" onClick={() => togglePlatform(p)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                      active ? meta.pill : 'text-slate-500 bg-transparent border-slate-700 hover:border-slate-500 hover:text-slate-300'
-                    }`}>
-                    <Icon className="h-3.5 w-3.5" />
-                    {meta.label}
-                    {active && <CheckCircle2 className="h-3 w-3" />}
-                  </button>
-                )
-              })}
-            </div>
+            {connectedPlatforms.length === 0 ? (
+              <p className="text-xs text-slate-500">No platforms connected. Go to Manage Accounts first.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {connectedPlatforms.map(p => {
+                  const meta   = PLATFORM_META[p]
+                  if (!meta) return null
+                  const Icon   = meta.icon
+                  const active = platforms.includes(p)
+                  return (
+                    <button key={p} type="button" onClick={() => togglePlatform(p)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                        active ? meta.pill : 'text-slate-500 bg-transparent border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                      }`}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {meta.label}
+                      {active && <CheckCircle2 className="h-3 w-3" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Scheduled time */}
@@ -500,12 +659,12 @@ function NewPostModal({
               className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors" />
           </div>
 
-          {/* Caption */}
+          {/* Caption + AI */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-300">Caption</p>
+              <p className="text-xs font-medium text-slate-300">Caption &amp; Hashtags</p>
               <button type="button" onClick={handleGenerateCaption}
-                disabled={generating || !taskId}
+                disabled={generating || !hasMedia}
                 className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-40 transition-colors">
                 {generating
                   ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating…</>
@@ -513,8 +672,9 @@ function NewPostModal({
               </button>
             </div>
             <textarea value={caption} onChange={e => setCaption(e.target.value)}
-              placeholder="Write caption or use AI Generate…" rows={4}
+              placeholder="Write your caption and hashtags, or use AI Generate above…" rows={4}
               className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none resize-none transition-colors" />
+            <p className="text-[10px] text-slate-600">Tip: hashtags go at the end of your caption or in the first comment.</p>
           </div>
 
           {error && (
@@ -530,7 +690,7 @@ function NewPostModal({
             Cancel
           </button>
           <button onClick={handleSave}
-            disabled={saving || !taskId || platforms.length === 0 || !scheduledAt}
+            disabled={saving || uploading || !hasMedia || platforms.length === 0 || !scheduledAt}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
             {saving
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Scheduling…</>
@@ -790,9 +950,10 @@ function ManageAccountsSection({ oauthSuccessClientId }: { oauthSuccessClientId?
 }
 
 // ── SocialTab ──────────────────────────────────────────────────────────────────
-function SocialTab({ tasks, connectedPlatforms, oauthSuccessClientId }: {
+function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }: {
   tasks: Task[]
   connectedPlatforms: string[]
+  clients: { id: string; name: string }[]
   oauthSuccessClientId?: string
 }) {
   const [subTab, setSubTab] = useState<'posts' | 'accounts'>(oauthSuccessClientId ? 'accounts' : 'posts')
@@ -973,6 +1134,7 @@ function SocialTab({ tasks, connectedPlatforms, oauthSuccessClientId }: {
             <NewPostModal
               doneTasks={doneTasks}
               connectedPlatforms={connectedPlatforms}
+              clients={clients}
               onSave={loadPosts}
               onClose={() => setShowNew(false)}
             />
@@ -1002,6 +1164,7 @@ export default function TeamPortalPage() {
   const [myId,               setMyId]               = useState<string | null>(null)
   const [myRole,             setMyRole]             = useState<string>('')
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([])
+  const [clients,            setClients]            = useState<{ id: string; name: string }[]>([])
   const [loading,            setLoading]            = useState(true)
   const [sending,            setSending]            = useState(false)
   // Auto-switch to social tab on OAuth return
@@ -1027,10 +1190,17 @@ export default function TeamPortalPage() {
       setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
 
       if (profile.role === 'media_buyer') {
-        const connRes = await fetch('/api/social/connections')
+        const [connRes, clientsRes] = await Promise.all([
+          fetch('/api/social/connections'),
+          fetch('/api/clients'),
+        ])
         if (connRes.ok) {
           const conns: SocialConnection[] = await connRes.json()
           setConnectedPlatforms(conns.filter(c => c.is_active).map(c => c.platform))
+        }
+        if (clientsRes.ok) {
+          const cl = await clientsRes.json()
+          setClients(Array.isArray(cl) ? cl : [])
         }
       }
 
@@ -1327,6 +1497,7 @@ export default function TeamPortalPage() {
         <SocialTab
           tasks={tasks}
           connectedPlatforms={connectedPlatforms}
+          clients={clients}
           oauthSuccessClientId={oauthSuccess ? oauthClientId : undefined}
         />
       )}
