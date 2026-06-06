@@ -28,6 +28,7 @@
       "Bash(start cmd *)",
       "Bash(xargs sed -i \"s|from '@/lib/supabase'|from '@/lib/supabase-server'|g\")",
       "Bash(git commit -m 'Split supabase into client/server modules to fix build *)",
+      "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__*",
       "mcp__f5258e52-5833-4392-bdfc-7a553f28bcab__list_deployments",
       "Bash(npx next *)",
       "Bash(curl -si http://localhost:3001)",
