@@ -145,15 +145,17 @@ export async function POST(req: NextRequest) {
         })
       } catch (err) {
         console.error('[tasks] assignment email failed:', err)
-        await admin.from('automation_logs').insert({
-          type:            'task_assigned',
-          recipient_email: memberEmail ?? task.assigned_to ?? '',
-          subject:         `Task assigned: ${task.title}`,
-          status:          'failed',
-          error:           err instanceof Error ? err.message : String(err),
-          task_id:         task.id,
-          created_at:      new Date().toISOString(),
-        }).catch(() => {})
+        try {
+          await admin.from('automation_logs').insert({
+            type:            'task_assigned',
+            recipient_email: memberEmail ?? task.assigned_to ?? '',
+            subject:         `Task assigned: ${task.title}`,
+            status:          'failed',
+            error:           err instanceof Error ? err.message : String(err),
+            task_id:         task.id,
+            created_at:      new Date().toISOString(),
+          })
+        } catch {}
       }
     })()
   }
