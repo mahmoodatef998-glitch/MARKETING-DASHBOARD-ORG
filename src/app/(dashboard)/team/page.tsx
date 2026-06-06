@@ -316,10 +316,16 @@ export default function TeamPage() {
                   <Mail className="h-3.5 w-3.5" />
                   <span className="truncate">{m.email}</span>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex items-center justify-between gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
                     {m.status}
                   </span>
+                  <button
+                    onClick={() => router.push(`/team/${m.id}`)}
+                    className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    <BarChart2 className="h-3 w-3" /> Dashboard
+                  </button>
                 </div>
               </CardContent>
             </Card>

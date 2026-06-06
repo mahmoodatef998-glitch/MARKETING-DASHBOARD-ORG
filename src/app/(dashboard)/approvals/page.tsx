@@ -32,7 +32,7 @@ const APPROVAL_STATUS_CONFIG: Record<
   { label: string; color: string; icon: React.ElementType }
 > = {
   pending: {
-    label: 'Awaiting Client',
+    label: 'Pending',
     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     icon: Clock,
   },
@@ -57,7 +57,7 @@ type FilterType = 'all' | 'pending' | 'client_approved' | 'admin_approved' | 're
 
 const FILTER_LABELS: Record<FilterType, string> = {
   all: 'All',
-  pending: 'Awaiting Client',
+  pending: 'Pending',
   client_approved: 'Client Approved',
   admin_approved: 'Approved',
   revision_requested: 'Revision',
@@ -164,7 +164,7 @@ export default function ApprovalsPage() {
           <div className="rounded-xl bg-slate-800 border border-slate-700 p-5">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="h-4 w-4 text-amber-400" />
-              <span className="text-xs text-slate-400 font-medium uppercase tracking-wide">Awaiting Client</span>
+              <span className="text-xs text-slate-400 font-medium uppercase tracking-wide">Pending</span>
             </div>
             <p className="text-3xl font-bold text-amber-400">{statCounts.pending}</p>
           </div>
@@ -317,22 +317,25 @@ export default function ApprovalsPage() {
                         ) : (
                           <RefreshCw className="h-3.5 w-3.5" />
                         )}
-                        Request Revision
+                        Revision
                       </button>
-                      {isClientApproved && (
-                        <button
-                          onClick={() => handleAction(task.id, 'admin_approve')}
-                          disabled={actionLoading === task.id + 'admin_approve'}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25 transition-colors disabled:opacity-50"
-                        >
-                          {actionLoading === task.id + 'admin_approve' ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <FileCheck className="h-3.5 w-3.5" />
-                          )}
-                          Approve + 15 AED
-                        </button>
-                      )}
+                      {/* Admin can approve directly — no need to wait for client */}
+                      <button
+                        onClick={() => handleAction(task.id, 'admin_approve')}
+                        disabled={actionLoading === task.id + 'admin_approve'}
+                        className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+                          isClientApproved
+                            ? 'bg-green-600 hover:bg-green-500 text-white border-green-500'
+                            : 'bg-green-500/15 hover:bg-green-500/25 text-green-400 border-green-500/30'
+                        }`}
+                      >
+                        {actionLoading === task.id + 'admin_approve' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <FileCheck className="h-3.5 w-3.5" />
+                        )}
+                        {isDesign ? 'Approve + 15 AED' : 'Approve'}
+                      </button>
                     </div>
                   )}
 
