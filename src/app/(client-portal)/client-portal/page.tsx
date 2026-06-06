@@ -247,7 +247,7 @@ function CompletedCard({ task, onAction }: { task: Task; onAction: () => void })
       )}
 
       {submitted && task.client_rating_note && (
-        <p className="mx-4 mb-3 text-xs text-slate-400 italic">"{task.client_rating_note}"</p>
+        <p className="mx-4 mb-3 text-xs text-slate-400 italic">&quot;{task.client_rating_note}&quot;</p>
       )}
 
       {open && !submitted && (
@@ -486,7 +486,7 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
       <div className="text-center py-16 text-slate-500">
         <Package className="h-12 w-12 mx-auto mb-4 opacity-20" />
         <p className="font-medium text-slate-400">No active package</p>
-        <p className="text-sm mt-1">Your service package will appear here once it's set up.</p>
+        <p className="text-sm mt-1">Your service package will appear here once it&apos;s set up.</p>
       </div>
     )
   }
@@ -647,7 +647,7 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <p className="font-bold text-white text-sm">{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {(inv as any).currency ?? 'USD'}</p>
+            <p className="font-bold text-white text-sm">{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
             <span className={`inline-flex items-center gap-1 text-xs font-medium ${col.text}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />
               {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
@@ -661,7 +661,7 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
       {open && (
         <div className="border-t border-slate-700/60 px-4 pb-4 pt-3 space-y-2">
           {inv.notes && (
-            <p className="text-xs text-slate-400 italic mb-3">"{inv.notes}"</p>
+            <p className="text-xs text-slate-400 italic mb-3">&quot;{inv.notes}&quot;</p>
           )}
           {(inv.items ?? []).length > 0 ? (
             <>
@@ -686,7 +686,7 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
               )}
               <div className="flex justify-between text-sm font-bold text-white pt-1">
                 <span>Total</span>
-                <span>{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2 })} {(inv as any).currency ?? 'USD'}</span>
+                <span>{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
               </div>
             </>
           ) : (

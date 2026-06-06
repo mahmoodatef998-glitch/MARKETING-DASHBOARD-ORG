@@ -19,7 +19,7 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const comments = (data ?? []).map((c: any) => ({
+  const comments = (data ?? []).map((c: { author?: { display_name?: string } | null } & Record<string, unknown>) => ({
     ...c,
     author_name: c.author?.display_name ?? null,
   }))
@@ -53,8 +53,9 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  const commentData = data as { author?: { display_name?: string } | null } & Record<string, unknown>
   return NextResponse.json(
-    { ...data, author_name: (data as any).author?.display_name ?? null },
+    { ...commentData, author_name: commentData.author?.display_name ?? null },
     { status: 201 }
   )
 }

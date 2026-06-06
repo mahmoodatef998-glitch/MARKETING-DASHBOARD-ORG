@@ -102,7 +102,7 @@ export default function GlobalSearch({ open, onClose }: Props) {
           )}
 
           {query.length >= 2 && !loading && !hasResults && (
-            <p className="text-xs text-slate-500 text-center py-8">No results for "{query}"</p>
+            <p className="text-xs text-slate-500 text-center py-8">No results for &quot;{query}&quot;</p>
           )}
 
           {/* Tasks */}

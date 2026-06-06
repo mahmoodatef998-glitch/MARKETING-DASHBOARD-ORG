@@ -191,7 +191,7 @@ export default function TeamMemberPage() {
         if (tasksRes.ok) {
           const allTasks: MemberTask[] = await tasksRes.json()
           const filtered = Array.isArray(allTasks)
-            ? allTasks.filter((t) => t.assigned_to === id || (t as any).assigned_to === id)
+            ? allTasks.filter((t) => t.assigned_to === id)
             : []
           setTasks(filtered)
         }

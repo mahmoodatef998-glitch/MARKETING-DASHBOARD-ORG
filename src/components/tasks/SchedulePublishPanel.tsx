@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Calendar, Camera, Globe, Music2, Clock, CheckCircle2, X, Loader2, AlertTriangle, ExternalLink } from 'lucide-react'
 
 interface ScheduledPost {
@@ -12,7 +12,8 @@ interface ScheduledPost {
   error:            string | null
 }
 
-const PLATFORM_META = {
+type PlatformMeta = { label: string; icon: React.ComponentType<{ className?: string }>; color: string }
+const PLATFORM_META: Record<string, PlatformMeta> = {
   instagram: { label: 'Instagram', icon: Camera, color: 'text-pink-400 bg-pink-500/10 border-pink-500/20' },
   facebook:  { label: 'Facebook',  icon: Globe,  color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   tiktok:    { label: 'TikTok',    icon: Music2, color: 'text-slate-300 bg-slate-700/50 border-slate-600/30' },
@@ -77,7 +78,7 @@ export default function SchedulePublishPanel({ taskId, hasDelivery }: { taskId: 
     setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
   }
 
-  const availablePlatforms = connections.filter(c => (PLATFORM_META as any)[c.platform])
+  const availablePlatforms = connections.filter(c => PLATFORM_META[c.platform])
   const pendingPosts        = posts.filter(p => p.status === 'pending' || p.status === 'publishing')
   const completedPosts      = posts.filter(p => p.status === 'published' || p.status === 'failed')
 
@@ -119,7 +120,7 @@ export default function SchedulePublishPanel({ taskId, hasDelivery }: { taskId: 
             <p className="text-xs text-slate-400 font-medium">Platforms</p>
             <div className="flex flex-wrap gap-2">
               {availablePlatforms.map(conn => {
-                const meta = (PLATFORM_META as any)[conn.platform]
+                const meta = PLATFORM_META[conn.platform]
                 const Icon = meta.icon
                 const active = platforms.includes(conn.platform)
                 return (
@@ -179,7 +180,7 @@ export default function SchedulePublishPanel({ taskId, hasDelivery }: { taskId: 
       {pendingPosts.length > 0 && (
         <div className="space-y-2">
           {pendingPosts.map(post => {
-            const meta = (PLATFORM_META as any)[post.platform] ?? { label: post.platform, icon: Calendar, color: 'text-slate-400' }
+            const meta = PLATFORM_META[post.platform] ?? { label: post.platform, icon: Calendar, color: 'text-slate-400' }
             const Icon = meta.icon
             return (
               <div key={post.id} className="flex items-center gap-3 bg-slate-800/40 rounded-xl px-3 py-2.5">
@@ -209,7 +210,7 @@ export default function SchedulePublishPanel({ taskId, hasDelivery }: { taskId: 
       {completedPosts.length > 0 && (
         <div className="space-y-1.5">
           {completedPosts.map(post => {
-            const meta = (PLATFORM_META as any)[post.platform] ?? { label: post.platform, icon: Calendar, color: 'text-slate-400' }
+            const meta = PLATFORM_META[post.platform] ?? { label: post.platform, icon: Calendar, color: 'text-slate-400' }
             const Icon = meta.icon
             return (
               <div key={post.id} className="flex items-center gap-3 rounded-xl px-3 py-2">

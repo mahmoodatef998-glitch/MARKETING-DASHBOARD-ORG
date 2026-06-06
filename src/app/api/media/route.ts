@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       return (res.resources ?? []) as CloudinaryResource[]
     }
 
-    let resources: CloudinaryResource[] = []
+    const resources: CloudinaryResource[] = []
 
     if (type === 'image' || type === 'all') {
       const imgs = await fetchFolder('image', 'agency-os/images').catch(() => [])

@@ -200,6 +200,7 @@ function MarkDoneModal({
 
   const canSchedule = isMediaBuyer && connectedPlatforms.length > 0
   const hasDelivery = !!deliveryUrl
+  const [minScheduleDateTime] = useState(() => new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16))
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -316,7 +317,7 @@ function MarkDoneModal({
                     </p>
                     <input type="datetime-local" value={scheduledAt}
                       onChange={e => setScheduledAt(e.target.value)}
-                      min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+                      min={minScheduleDateTime}
                       className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors" />
                   </div>
 
@@ -512,6 +513,8 @@ function NewPostModal({
     }
   }
 
+  const [minScheduleDateTime] = useState(() => new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16))
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
@@ -678,7 +681,7 @@ function NewPostModal({
             </p>
             <input type="datetime-local" value={scheduledAt}
               onChange={e => setScheduledAt(e.target.value)}
-              min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+              min={minScheduleDateTime}
               className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors" />
           </div>
 
