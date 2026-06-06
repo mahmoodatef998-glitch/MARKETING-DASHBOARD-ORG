@@ -21,8 +21,9 @@ export async function GET(req: NextRequest) {
   const state  = url.searchParams.get('state')
   const fbErr  = url.searchParams.get('error')
 
+  let returnTo = '/settings'
   const redirect = (err?: string, clientId?: string) => {
-    const base = `${APP_URL}/settings`
+    const base = `${APP_URL}${returnTo}`
     if (err)      return NextResponse.redirect(`${base}?error=${encodeURIComponent(err)}`)
     if (clientId) return NextResponse.redirect(`${base}?success=1&client_id=${clientId}`)
     return NextResponse.redirect(base)
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
   try {
     const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
     clientId = decoded.clientId
+    returnTo = decoded.returnTo ?? '/settings'
     if (!clientId) throw new Error('no clientId')
   } catch {
     return redirect('invalid_state')

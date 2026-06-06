@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
   CheckCircle2, ExternalLink, ImagePlus, Link2, X, Calendar, Camera,
   Globe, Music2, Mic, Sparkles, Search, RefreshCw, ChevronDown, ChevronUp,
-  Rss, Trash2, XCircle, PlusCircle, WifiOff,
+  Rss, Trash2, XCircle, PlusCircle, WifiOff, Users, Plus, Settings2,
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
 import { getSupabaseClient } from '@/lib/supabase'
@@ -541,12 +542,264 @@ function NewPostModal({
   )
 }
 
+// ── ManageAccountsSection ─────────────────────────────────────────────────────
+const MANUAL_PLATFORMS = [
+  {
+    key: 'instagram' as const,
+    label: 'Instagram',
+    icon: Camera,
+    color: 'from-pink-500 to-purple-500',
+    fields: [
+      { key: 'ig_user_id',   label: 'Instagram Business User ID', placeholder: '17841400000000000' },
+      { key: 'access_token', label: 'Page Access Token',          placeholder: 'EAABsbCS…',         type: 'password' as const },
+    ],
+  },
+  {
+    key: 'facebook' as const,
+    label: 'Facebook Page',
+    icon: Globe,
+    color: 'from-blue-600 to-blue-500',
+    fields: [
+      { key: 'page_id',      label: 'Facebook Page ID',  placeholder: '123456789012345' },
+      { key: 'access_token', label: 'Page Access Token', placeholder: 'EAABsbCS…',     type: 'password' as const },
+    ],
+  },
+  {
+    key: 'tiktok' as const,
+    label: 'TikTok',
+    icon: Music2,
+    color: 'from-slate-700 to-slate-600',
+    fields: [
+      { key: 'access_token', label: 'User Access Token', placeholder: 'act.example…', type: 'password' as const },
+    ],
+  },
+]
+
+interface Connection {
+  id: string
+  client_id: string
+  platform: string
+  page_id?: string
+  ig_user_id?: string
+  token_expires_at?: string
+  is_active: boolean
+  extra?: Record<string, string>
+}
+
+function ManageAccountsSection({ oauthSuccessClientId }: { oauthSuccessClientId?: string }) {
+  const [clients,     setClients]     = useState<{ id: string; name: string }[]>([])
+  const [selectedId,  setSelectedId]  = useState(oauthSuccessClientId ?? '')
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [loading,     setLoading]     = useState(false)
+  const [oauthLoading, setOauthLoading] = useState(false)
+  const [openForm,    setOpenForm]    = useState<string | null>(null)
+  const [form,        setForm]        = useState<Record<string, string>>({})
+  const [saving,      setSaving]      = useState(false)
+  const [banner,      setBanner]      = useState<{ type: 'success' | 'error'; msg: string } | null>(
+    oauthSuccessClientId ? { type: 'success', msg: 'Facebook & Instagram connected successfully!' } : null
+  )
+
+  useEffect(() => {
+    fetch('/api/clients').then(r => r.ok ? r.json() : []).then((data: { id: string; name: string }[]) => {
+      const list = Array.isArray(data) ? data : []
+      setClients(list)
+      if (list.length > 0 && !selectedId) setSelectedId(list[0].id)
+      else if (oauthSuccessClientId) setSelectedId(oauthSuccessClientId)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function loadConnections(clientId: string) {
+    if (!clientId) return
+    setLoading(true)
+    const res = await fetch(`/api/social/connections?client_id=${clientId}`)
+    if (res.ok) setConnections(await res.json())
+    setLoading(false)
+  }
+
+  useEffect(() => { if (selectedId) void loadConnections(selectedId) }, [selectedId])
+
+  function startOAuth() {
+    if (!selectedId) return
+    setOauthLoading(true)
+    window.location.href = `/api/social/oauth?client_id=${selectedId}&returnTo=/team-portal`
+  }
+
+  async function handleSave(platform: string) {
+    setSaving(true)
+    await fetch('/api/social/connections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: selectedId, platform, ...form }),
+    })
+    setOpenForm(null)
+    setForm({})
+    setSaving(false)
+    void loadConnections(selectedId)
+    setBanner({ type: 'success', msg: `${platform} connected!` })
+  }
+
+  async function handleDelete(id: string) {
+    await fetch('/api/social/connections', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    void loadConnections(selectedId)
+  }
+
+  const selectedClient = clients.find(c => c.id === selectedId)
+
+  return (
+    <div className="space-y-4">
+
+      {banner && (
+        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-xs ${
+          banner.type === 'success'
+            ? 'bg-green-500/10 border-green-500/20 text-green-300'
+            : 'bg-red-500/10 border-red-500/20 text-red-300'
+        }`}>
+          {banner.type === 'success'
+            ? <CheckCircle2 className="h-4 w-4 shrink-0" />
+            : <AlertTriangle className="h-4 w-4 shrink-0" />}
+          <span className="flex-1">{banner.msg}</span>
+          <button onClick={() => setBanner(null)} className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* Client selector */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-indigo-400" />
+          <p className="text-sm font-semibold text-white">Select Client</p>
+        </div>
+        {clients.length === 0 ? (
+          <p className="text-xs text-slate-500">No clients found.</p>
+        ) : (
+          <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setBanner(null) }}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer">
+            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+
+        {selectedId && (
+          <button onClick={startOAuth} disabled={oauthLoading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 text-white font-semibold text-sm transition-all">
+            {oauthLoading
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Redirecting…</>
+              : <><Link2 className="h-4 w-4" /> Connect Facebook & Instagram for {selectedClient?.name ?? '…'}</>}
+          </button>
+        )}
+        <p className="text-xs text-slate-500 text-center">
+          One click connects Facebook Pages + Instagram Business accounts automatically via OAuth.
+        </p>
+      </div>
+
+      {/* Platform cards */}
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {MANUAL_PLATFORMS.map(cfg => {
+            const conn  = connections.find(c => c.platform === cfg.key) ?? null
+            const Icon  = cfg.icon
+            const isExpired = conn?.token_expires_at ? new Date(conn.token_expires_at) < new Date() : false
+            const isOpen = openForm === cfg.key
+            return (
+              <div key={cfg.key} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${cfg.color} flex items-center justify-center shrink-0`}>
+                      <Icon className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white text-sm">{cfg.label}</p>
+                      {conn ? (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {isExpired
+                            ? <><AlertTriangle className="h-3 w-3 text-amber-400" /><span className="text-xs text-amber-400">Token expired</span></>
+                            : <><CheckCircle2 className="h-3 w-3 text-emerald-400" /><span className="text-xs text-emerald-400">
+                                Connected{conn.extra?.page_name ? ` — ${conn.extra.page_name}` : ''}
+                                {conn.extra?.ig_username ? ` (@${conn.extra.ig_username})` : ''}
+                              </span></>}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <XCircle className="h-3 w-3 text-slate-500" />
+                          <span className="text-xs text-slate-500">Not connected</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {conn ? (
+                      <>
+                        <button onClick={() => { setOpenForm(isOpen ? null : cfg.key); setForm({}) }}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">
+                          {isExpired ? 'Refresh' : 'Update'}
+                        </button>
+                        <button onClick={() => handleDelete(conn.id)}
+                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setOpenForm(isOpen ? null : cfg.key); setForm({}) }}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors">
+                        <Plus className="h-3.5 w-3.5" /> Manual
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isOpen && (
+                  <div className="border-t border-slate-800 px-4 py-3 space-y-3 bg-slate-950/40">
+                    {cfg.fields.map(f => (
+                      <div key={f.key} className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-300">{f.label}</label>
+                        <input
+                          type={f.type ?? 'text'}
+                          value={form[f.key] ?? ''}
+                          onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                          placeholder={f.placeholder}
+                          className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition-colors font-mono"
+                        />
+                      </div>
+                    ))}
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button onClick={() => { setOpenForm(null); setForm({}) }}
+                        className="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">
+                        Cancel
+                      </button>
+                      <button onClick={() => handleSave(cfg.key)} disabled={saving}
+                        className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-semibold transition-colors">
+                        {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</> : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── SocialTab ──────────────────────────────────────────────────────────────────
-function SocialTab({ tasks, connectedPlatforms }: { tasks: Task[]; connectedPlatforms: string[] }) {
-  const [posts,       setPosts]       = useState<ScheduledPost[]>([])
-  const [loading,     setLoading]     = useState(true)
+function SocialTab({ tasks, connectedPlatforms, oauthSuccessClientId }: {
+  tasks: Task[]
+  connectedPlatforms: string[]
+  oauthSuccessClientId?: string
+}) {
+  const [subTab, setSubTab] = useState<'posts' | 'accounts'>(oauthSuccessClientId ? 'accounts' : 'posts')
+  const [posts,        setPosts]        = useState<ScheduledPost[]>([])
+  const [loading,      setLoading]      = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
-  const [showNew,     setShowNew]     = useState(false)
+  const [showNew,      setShowNew]      = useState(false)
 
   async function loadPosts() {
     setLoading(true)
@@ -567,9 +820,7 @@ function SocialTab({ tasks, connectedPlatforms }: { tasks: Task[]; connectedPlat
   }
 
   const doneTasks = tasks.filter(t => t.status === 'done')
-
-  const filtered = posts.filter(p => statusFilter === 'all' || p.status === statusFilter)
-
+  const filtered  = posts.filter(p => statusFilter === 'all' || p.status === statusFilter)
   const counts = {
     pending:   posts.filter(p => p.status === 'pending').length,
     published: posts.filter(p => p.status === 'published').length,
@@ -577,168 +828,161 @@ function SocialTab({ tasks, connectedPlatforms }: { tasks: Task[]; connectedPlat
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
 
-      {/* Connected platforms */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Connected Accounts</p>
-        {connectedPlatforms.length === 0 ? (
-          <div className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3">
-            <WifiOff className="h-4 w-4 text-slate-500 shrink-0" />
-            <p className="text-xs text-slate-400">No social accounts connected yet. Ask your admin to connect accounts in Settings.</p>
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
+        <button onClick={() => setSubTab('posts')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'posts' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100'
+          }`}>
+          <Calendar className="h-3.5 w-3.5" /> Scheduled Posts
+        </button>
+        <button onClick={() => setSubTab('accounts')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'accounts' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100'
+          }`}>
+          <Settings2 className="h-3.5 w-3.5" /> Manage Accounts
+        </button>
+      </div>
+
+      {/* ── Scheduled Posts sub-tab ── */}
+      {subTab === 'posts' && (
+        <div className="space-y-4">
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-amber-400">{counts.pending}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Scheduled</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-green-400">{counts.published}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Published</p>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-red-400">{counts.failed}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Failed</p>
+            </div>
           </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {connectedPlatforms.map(p => {
-              const meta = PLATFORM_META[p]
-              if (!meta) return null
-              const Icon = meta.icon
-              return (
-                <div key={p} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold ${meta.pill}`}>
-                  <Icon className="h-4 w-4" />
-                  {meta.label}
-                  <CheckCircle2 className="h-3.5 w-3.5 opacity-70" />
-                </div>
-              )
-            })}
+
+          {/* Filters + New Post */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap">
+              {(['all', 'pending', 'published', 'failed', 'cancelled'] as const).map(s => (
+                <button key={s} onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                    statusFilter === s ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                  }`}>
+                  {s === 'all' ? 'All' : STATUS_CONFIG[s]?.label ?? s}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={loadPosts}
+                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+                <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              </button>
+              {connectedPlatforms.length > 0 && (
+                <button onClick={() => setShowNew(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  <PlusCircle className="h-3.5 w-3.5" /> New Post
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
-          <p className="text-lg font-bold text-amber-400">{counts.pending}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Scheduled</p>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
-          <p className="text-lg font-bold text-green-400">{counts.published}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Published</p>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
-          <p className="text-lg font-bold text-red-400">{counts.failed}</p>
-          <p className="text-xs text-slate-500 mt-0.5">Failed</p>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-1.5 flex-wrap">
-          {(['all', 'pending', 'published', 'failed', 'cancelled'] as const).map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-                statusFilter === s ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-              }`}>
-              {s === 'all' ? 'All' : STATUS_CONFIG[s]?.label ?? s}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={loadPosts}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </button>
-          {connectedPlatforms.length > 0 && (
-            <button onClick={() => setShowNew(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-              <PlusCircle className="h-3.5 w-3.5" /> New Post
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Posts list */}
-      {loading ? (
-        <div className="flex items-center justify-center h-32">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl py-12 text-center">
-          <Calendar className="h-9 w-9 mx-auto mb-2 text-slate-700" />
-          <p className="text-sm text-slate-500">No scheduled posts yet</p>
-          {connectedPlatforms.length > 0 && (
-            <button onClick={() => setShowNew(true)}
-              className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
-              + Schedule your first post
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(post => {
-            const meta = PLATFORM_META[post.platform]
-            const Icon = meta?.icon ?? Globe
-            const cfg  = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.pending
-            const StatusIcon = cfg.icon
-            return (
-              <div key={post.id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0 space-y-2">
-                    {/* Platform + status */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta?.pill ?? ''}`}>
-                        <Icon className="h-3 w-3" /> {meta?.label ?? post.platform}
-                      </span>
-                      <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
-                        <StatusIcon className="h-3 w-3" /> {cfg.label}
-                      </span>
-                      {post.task?.title && (
-                        <span className="text-xs text-slate-400 truncate">{post.task.title}</span>
-                      )}
+          {/* Posts list */}
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl py-12 text-center">
+              <Calendar className="h-9 w-9 mx-auto mb-2 text-slate-700" />
+              <p className="text-sm text-slate-500">No scheduled posts yet</p>
+              {connectedPlatforms.length > 0 && (
+                <button onClick={() => setShowNew(true)}
+                  className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                  + Schedule your first post
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map(post => {
+                const meta = PLATFORM_META[post.platform]
+                const Icon = meta?.icon ?? Globe
+                const cfg  = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.pending
+                const StatusIcon = cfg.icon
+                return (
+                  <div key={post.id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta?.pill ?? ''}`}>
+                            <Icon className="h-3 w-3" /> {meta?.label ?? post.platform}
+                          </span>
+                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
+                            <StatusIcon className="h-3 w-3" /> {cfg.label}
+                          </span>
+                          {post.task?.title && (
+                            <span className="text-xs text-slate-400 truncate">{post.task.title}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                          <Clock className="h-3.5 w-3.5" />
+                          {new Date(post.scheduled_at).toLocaleString([], {
+                            weekday: 'short', month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </div>
+                        {post.caption && (
+                          <p className="text-xs text-slate-400 line-clamp-2 bg-slate-800/40 rounded-lg px-3 py-2">
+                            {post.caption}
+                          </p>
+                        )}
+                        {post.error && (
+                          <p className="text-xs text-red-400 flex items-center gap-1.5">
+                            <XCircle className="h-3.5 w-3.5 shrink-0" /> {post.error}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {post.task?.delivery_url && (
+                          <a href={post.task.delivery_url} target="_blank" rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors">
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
+                        {post.status === 'pending' && (
+                          <button onClick={() => cancelPost(post.id)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Time */}
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                      <Clock className="h-3.5 w-3.5" />
-                      {new Date(post.scheduled_at).toLocaleString([], {
-                        weekday: 'short', month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </div>
-
-                    {/* Caption */}
-                    {post.caption && (
-                      <p className="text-xs text-slate-400 line-clamp-2 bg-slate-800/40 rounded-lg px-3 py-2">
-                        {post.caption}
-                      </p>
-                    )}
-
-                    {/* Error */}
-                    {post.error && (
-                      <p className="text-xs text-red-400 flex items-center gap-1.5">
-                        <XCircle className="h-3.5 w-3.5 shrink-0" /> {post.error}
-                      </p>
-                    )}
                   </div>
+                )
+              })}
+            </div>
+          )}
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    {post.task?.delivery_url && (
-                      <a href={post.task.delivery_url} target="_blank" rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                    {post.status === 'pending' && (
-                      <button onClick={() => cancelPost(post.id)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {showNew && (
+            <NewPostModal
+              doneTasks={doneTasks}
+              connectedPlatforms={connectedPlatforms}
+              onSave={loadPosts}
+              onClose={() => setShowNew(false)}
+            />
+          )}
         </div>
       )}
 
-      {showNew && (
-        <NewPostModal
-          doneTasks={doneTasks}
-          connectedPlatforms={connectedPlatforms}
-          onSave={loadPosts}
-          onClose={() => setShowNew(false)}
-        />
+      {/* ── Manage Accounts sub-tab ── */}
+      {subTab === 'accounts' && (
+        <ManageAccountsSection oauthSuccessClientId={oauthSuccessClientId} />
       )}
     </div>
   )
@@ -746,6 +990,11 @@ function SocialTab({ tasks, connectedPlatforms }: { tasks: Task[]; connectedPlat
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function TeamPortalPage() {
+  const searchParams = useSearchParams()
+  const oauthSuccess  = searchParams.get('success') === '1'
+  const oauthClientId = searchParams.get('client_id') ?? undefined
+  const oauthError    = searchParams.get('error') ?? undefined
+
   const [tasks,              setTasks]              = useState<Task[]>([])
   const [messages,           setMessages]           = useState<Message[]>([])
   const [newMsg,             setNewMsg]             = useState('')
@@ -755,7 +1004,10 @@ export default function TeamPortalPage() {
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([])
   const [loading,            setLoading]            = useState(true)
   const [sending,            setSending]            = useState(false)
-  const [tab,                setTab]                = useState<'tasks' | 'social' | 'calendar' | 'chat'>('tasks')
+  // Auto-switch to social tab on OAuth return
+  const [tab, setTab] = useState<'tasks' | 'social' | 'calendar' | 'chat'>(
+    oauthSuccess || oauthError ? 'social' : 'tasks'
+  )
   const [doneModal,          setDoneModal]          = useState<Task | null>(null)
   const [completedOpen,      setCompletedOpen]      = useState(false)
   const [online,             setOnline]             = useState(false)
@@ -1072,7 +1324,11 @@ export default function TeamPortalPage() {
 
       {/* ── Social Media Tab (media buyers only) ─────────── */}
       {tab === 'social' && isMediaBuyer && (
-        <SocialTab tasks={tasks} connectedPlatforms={connectedPlatforms} />
+        <SocialTab
+          tasks={tasks}
+          connectedPlatforms={connectedPlatforms}
+          oauthSuccessClientId={oauthSuccess ? oauthClientId : undefined}
+        />
       )}
 
       {/* ── Calendar Tab ─────────────────────────────────── */}

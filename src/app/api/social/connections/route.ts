@@ -2,21 +2,18 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
+async function requireSocialAccess(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return null
+  if (profile?.role !== 'admin' && profile?.role !== 'media_buyer') return null
   return user
 }
 
 export async function GET(req: NextRequest) {
   const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await requireSocialAccess(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const allowed = profile?.role === 'admin' || profile?.role === 'media_buyer'
-  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const clientId = new URL(req.url).searchParams.get('client_id')
   const admin    = createAdminClient()
@@ -36,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
-  const user = await requireAdmin(supabase)
+  const user = await requireSocialAccess(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
@@ -67,7 +64,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const supabase = await createServerClient()
-  const user = await requireAdmin(supabase)
+  const user = await requireSocialAccess(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await req.json().catch(() => ({}))

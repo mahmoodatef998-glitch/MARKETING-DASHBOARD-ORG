@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/settings?error=${encodeURIComponent('FB_APP_ID not configured')}`)
   }
 
-  const state = Buffer.from(JSON.stringify({ clientId, userId: user.id })).toString('base64url')
+  const returnTo = new URL(req.url).searchParams.get('returnTo') ?? '/settings'
+  const state = Buffer.from(JSON.stringify({ clientId, userId: user.id, returnTo })).toString('base64url')
 
   const oauthUrl = new URL('https://www.facebook.com/dialog/oauth')
   oauthUrl.searchParams.set('client_id',     FB_APP_ID)
