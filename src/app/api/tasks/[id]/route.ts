@@ -141,13 +141,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // ── When task is assigned/reassigned → notify new team member ────────────────
   const assigneeChanged = body.assigned_to && body.assigned_to !== oldTask?.assigned_to
   if (assigneeChanged && data) {
-    void (async () => {
-      try {
-        const admin2 = createAdminClient()
-        const { data: authUser } = await admin2.auth.admin.getUserById(body.assigned_to as string)
-        const memberEmail = authUser?.user?.email
-        if (!memberEmail) return
-
+    const admin2 = createAdminClient()
+    let memberEmail: string | undefined
+    try {
+      const { data: authUser } = await admin2.auth.admin.getUserById(body.assigned_to as string)
+      memberEmail = authUser?.user?.email
+      if (memberEmail) {
         const memberName = data.assignee?.display_name ?? memberEmail
         const details = [
           `Task: ${data.title}`,
@@ -164,7 +163,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         })
 
         await sendEmail({ to: memberEmail, subject, body: emailBody })
-        await createAdminClient().from('automation_logs').insert({
+        await admin2.from('automation_logs').insert({
           type:            'task_assigned',
           recipient_email: memberEmail,
           subject,
@@ -172,9 +171,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           task_id:         id,
           created_at:      new Date().toISOString(),
         })
-      } catch (err) {
-        console.error('[tasks] assignment email failed:', err)
-        await createAdminClient().from('automation_logs').insert({
+      }
+    } catch (err) {
+      console.error('[tasks] assignment email failed:', err)
+      try {
+        await admin2.from('automation_logs').insert({
           type:            'task_assigned',
           recipient_email: memberEmail ?? (body.assigned_to as string) ?? '',
           subject:         `Task assigned: ${data.title}`,
@@ -182,9 +183,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           error:           err instanceof Error ? err.message : String(err),
           task_id:         id,
           created_at:      new Date().toISOString(),
-        }).catch(() => {})
-      }
-    })()
+        })
+      } catch {}
+    }
   }
 
   // Log activity
