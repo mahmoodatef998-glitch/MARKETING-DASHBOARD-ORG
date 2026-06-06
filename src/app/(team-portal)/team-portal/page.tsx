@@ -5,7 +5,7 @@ import {
   CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
   CheckCircle2, ExternalLink, ImagePlus, Link2, X, Calendar, Camera,
   Globe, Music2, Mic, Sparkles, Search, RefreshCw, ChevronDown, ChevronUp,
-  Rss, Trash2, XCircle, PlusCircle, WifiOff, Users, Plus, Settings2,
+  Rss, Trash2, XCircle, PlusCircle, WifiOff, Users, Plus, Settings2, BarChart2,
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
 import { getSupabaseClient } from '@/lib/supabase'
@@ -374,6 +374,15 @@ const CONTENT_TYPES = [
 ] as const
 
 // ── NewPostModal ───────────────────────────────────────────────────────────────
+interface DeliverableTask {
+  id: string
+  title: string
+  delivery_url: string
+  task_type?: string | null
+  assignee_name?: string | null
+  client_name?: string | null
+}
+
 function NewPostModal({
   doneTasks, connectedPlatforms, clients, onSave, onClose,
 }: {
@@ -383,20 +392,29 @@ function NewPostModal({
   onSave:             () => void
   onClose:            () => void
 }) {
-  const [source,       setSource]       = useState<'upload' | 'task'>('upload')
-  const [clientId,     setClientId]     = useState(clients[0]?.id ?? '')
-  const [taskId,       setTaskId]       = useState('')
-  const [mediaUrl,     setMediaUrl]     = useState('')
-  const [uploading,    setUploading]    = useState(false)
-  const [uploadPct,    setUploadPct]    = useState(0)
-  const [contentType,  setContentType]  = useState<'post' | 'reel' | 'story'>('post')
-  const [platforms,    setPlatforms]    = useState<string[]>([])
-  const [scheduledAt,  setScheduledAt]  = useState('')
-  const [caption,      setCaption]      = useState('')
-  const [generating,   setGenerating]   = useState(false)
-  const [saving,       setSaving]       = useState(false)
-  const [error,        setError]        = useState('')
+  const [source,           setSource]           = useState<'upload' | 'task'>('upload')
+  const [clientId,         setClientId]         = useState(clients[0]?.id ?? '')
+  const [taskId,           setTaskId]           = useState('')
+  const [mediaUrl,         setMediaUrl]         = useState('')
+  const [uploading,        setUploading]        = useState(false)
+  const [uploadPct,        setUploadPct]        = useState(0)
+  const [contentType,      setContentType]      = useState<'post' | 'reel' | 'story'>('post')
+  const [platforms,        setPlatforms]        = useState<string[]>([])
+  const [scheduledAt,      setScheduledAt]      = useState('')
+  const [caption,          setCaption]          = useState('')
+  const [generating,       setGenerating]       = useState(false)
+  const [saving,           setSaving]           = useState(false)
+  const [error,            setError]            = useState('')
+  const [deliverableTasks, setDeliverableTasks] = useState<DeliverableTask[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Fetch all team deliverable tasks once when modal opens
+  useEffect(() => {
+    fetch('/api/tasks/deliverables')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: DeliverableTask[]) => setDeliverableTasks(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   const tasksWithFile = doneTasks.filter(t => t.delivery_url)
   const hasMedia = source === 'upload' ? !!mediaUrl : !!taskId
@@ -605,7 +623,7 @@ function NewPostModal({
           {source === 'task' && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-slate-300">Select Task *</p>
-              {tasksWithFile.length === 0 ? (
+              {deliverableTasks.length === 0 ? (
                 <p className="text-xs text-slate-500 bg-slate-800/60 rounded-xl px-3 py-3">
                   No completed tasks with uploaded files yet. Mark a task as done and attach a file first.
                 </p>
@@ -613,8 +631,13 @@ function NewPostModal({
                 <select value={taskId} onChange={e => setTaskId(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors">
                   <option value="">— choose a task —</option>
-                  {tasksWithFile.map(t => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
+                  {deliverableTasks.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                      {t.assignee_name ? ` · ${t.assignee_name}` : ''}
+                      {t.client_name ? ` · ${t.client_name}` : ''}
+                      {t.task_type ? ` [${t.task_type.replace(/_/g, ' ')}]` : ''}
+                    </option>
                   ))}
                 </select>
               )}
@@ -949,6 +972,135 @@ function ManageAccountsSection({ oauthSuccessClientId }: { oauthSuccessClientId?
   )
 }
 
+// ── DashboardTab ───────────────────────────────────────────────────────────────
+interface Earning {
+  id: string
+  amount: number
+  task_title?: string | null
+  client_name?: string | null
+  approved_at?: string | null
+}
+
+function DashboardTab({ tasks }: { tasks: Task[] }) {
+  const [earnings,        setEarnings]        = useState<Earning[]>([])
+  const [earningsLoading, setEarningsLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/earnings')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Earning[]) => setEarnings(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setEarningsLoading(false))
+  }, [])
+
+  const totalTasks    = tasks.length
+  const doneTasks     = tasks.filter(t => t.status === 'done')
+  const inProgress    = tasks.filter(t => t.status === 'in_progress' || t.status === 'review')
+  const overdueTasks  = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done')
+
+  // On-time rate: done tasks without overdue flag
+  const doneOnTime   = doneTasks.filter(t => !(t.due_date && new Date(t.due_date) < new Date()))
+  const onTimeRate   = doneTasks.length > 0 ? Math.round((doneOnTime.length / doneTasks.length) * 100) : 0
+
+  // Revision rate: done tasks that had revision_notes
+  const revisedTasks = doneTasks.filter(t => t.revision_notes)
+  const revisionRate = doneTasks.length > 0 ? Math.round((revisedTasks.length / doneTasks.length) * 100) : 0
+
+  const totalEarned  = earnings.reduce((s, e) => s + (e.amount ?? 0), 0)
+
+  return (
+    <div className="space-y-5">
+
+      {/* Task stats */}
+      <div>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Task Overview</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Total Tasks',  value: totalTasks,        color: 'text-white' },
+            { label: 'Completed',    value: doneTasks.length,  color: 'text-green-400' },
+            { label: 'In Progress',  value: inProgress.length, color: 'text-blue-400' },
+            { label: 'Overdue',      value: overdueTasks.length, color: 'text-red-400' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+              <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Performance rates */}
+      {doneTasks.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Performance</p>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-300">On-time Rate</span>
+                <span className={`font-semibold ${onTimeRate >= 80 ? 'text-green-400' : onTimeRate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{onTimeRate}%</span>
+              </div>
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${onTimeRate >= 80 ? 'bg-green-500' : onTimeRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${onTimeRate}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">{doneOnTime.length} of {doneTasks.length} done tasks delivered on time</p>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-300">Revision Rate</span>
+                <span className={`font-semibold ${revisionRate === 0 ? 'text-green-400' : revisionRate <= 20 ? 'text-amber-400' : 'text-red-400'}`}>{revisionRate}%</span>
+              </div>
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${revisionRate === 0 ? 'bg-green-500' : revisionRate <= 20 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${revisionRate}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">{revisedTasks.length} of {doneTasks.length} done tasks had revisions</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Earnings */}
+      {earningsLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
+        </div>
+      ) : earnings.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Earnings</p>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+            <div className="text-3xl font-extrabold text-green-400">{totalEarned} AED</div>
+            <div className="text-xs text-slate-500 mt-1">Total Earned</div>
+          </div>
+          <div className="space-y-2">
+            {earnings.map(e => (
+              <div key={e.id} className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{e.task_title ?? 'Task'}</p>
+                  {e.client_name && <p className="text-xs text-slate-500 mt-0.5">{e.client_name}</p>}
+                  {e.approved_at && (
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      {new Date(e.approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+                <span className="text-sm font-bold text-green-400 shrink-0">{e.amount} AED</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 text-center">Earnings are credited for approved design tasks</p>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500 text-center py-4">Design task approvals will appear here</p>
+      )}
+    </div>
+  )
+}
+
 // ── SocialTab ──────────────────────────────────────────────────────────────────
 function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }: {
   tasks: Task[]
@@ -1168,7 +1320,7 @@ export default function TeamPortalPage() {
   const [loading,            setLoading]            = useState(true)
   const [sending,            setSending]            = useState(false)
   // Auto-switch to social tab on OAuth return
-  const [tab, setTab] = useState<'tasks' | 'social' | 'calendar' | 'chat'>(
+  const [tab, setTab] = useState<'tasks' | 'dashboard' | 'social' | 'calendar' | 'chat'>(
     oauthSuccess || oauthError ? 'social' : 'tasks'
   )
   const [doneModal,          setDoneModal]          = useState<Task | null>(null)
@@ -1324,12 +1476,13 @@ export default function TeamPortalPage() {
     </div>
   )
 
-  // Tabs config — social tab only for media buyers
+  // Tabs config — social tab only for media buyers; My Stats for all
   const tabs = [
-    { id: 'tasks'    as const, label: 'My Tasks',    icon: CheckSquare   },
+    { id: 'tasks'     as const, label: 'My Tasks',    icon: CheckSquare   },
+    { id: 'dashboard' as const, label: 'My Stats',    icon: BarChart2     },
     ...(isMediaBuyer ? [{ id: 'social' as const, label: 'Social Media', icon: Rss }] : []),
-    { id: 'calendar' as const, label: 'Calendar',    icon: Calendar      },
-    { id: 'chat'     as const, label: 'Chat',        icon: MessageCircle },
+    { id: 'calendar'  as const, label: 'Calendar',    icon: Calendar      },
+    { id: 'chat'      as const, label: 'Chat',        icon: MessageCircle },
   ]
 
   return (
@@ -1490,6 +1643,11 @@ export default function TeamPortalPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── My Stats Tab ─────────────────────────────────── */}
+      {tab === 'dashboard' && (
+        <DashboardTab tasks={tasks} />
       )}
 
       {/* ── Social Media Tab (media buyers only) ─────────── */}

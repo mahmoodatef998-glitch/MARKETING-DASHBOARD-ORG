@@ -4,7 +4,7 @@ import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
   ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
   Package, TrendingUp, RotateCcw, Zap, CreditCard, ChevronDown, ChevronUp,
-  Receipt, Calendar, DollarSign, Repeat2, Mic, X,
+  Receipt, Calendar, DollarSign, Repeat2, Mic, X, Eye,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
@@ -286,6 +286,191 @@ function CompletedCard({ task, onAction }: { task: Task; onAction: () => void })
           </button>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+// ─── Review Tab ───────────────────────────────────────────────────────────────
+interface ApprovalTask {
+  id: string
+  title: string
+  task_type?: string | null
+  delivery_url?: string | null
+  approval_status: 'pending' | 'client_approved' | 'admin_approved'
+}
+
+function ReviewTab({ onPendingCount }: { onPendingCount?: (count: number) => void }) {
+  const [tasks,        setTasks]        = useState<ApprovalTask[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [revising,     setRevising]     = useState<Record<string, boolean>>({})
+  const [revisionNote, setRevisionNote] = useState<Record<string, string>>({})
+  const [actioning,    setActioning]    = useState<Record<string, boolean>>({})
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/approvals')
+      if (res.ok) {
+        const data = await res.json()
+        const list: ApprovalTask[] = Array.isArray(data) ? data : (data.data ?? [])
+        setTasks(list)
+        onPendingCount?.(list.filter(t => t.approval_status === 'pending').length)
+      }
+    } catch {}
+    setLoading(false)
+  }, [onPendingCount])
+
+  useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  async function handleApprove(taskId: string) {
+    setActioning(prev => ({ ...prev, [taskId]: true }))
+    await fetch('/api/approvals', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, action: 'client_approve' }),
+    })
+    setActioning(prev => ({ ...prev, [taskId]: false }))
+    fetchTasks()
+  }
+
+  async function handleRevision(taskId: string) {
+    const note = revisionNote[taskId] ?? ''
+    if (!note.trim()) return
+    setActioning(prev => ({ ...prev, [taskId]: true }))
+    await fetch('/api/approvals', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, action: 'revision_requested', note }),
+    })
+    setActioning(prev => ({ ...prev, [taskId]: false }))
+    setRevising(prev => ({ ...prev, [taskId]: false }))
+    setRevisionNote(prev => ({ ...prev, [taskId]: '' }))
+    fetchTasks()
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+    </div>
+  )
+
+  if (tasks.length === 0) return (
+    <div className="text-center py-16 text-slate-500">
+      <Eye className="h-10 w-10 mx-auto mb-3 opacity-20" />
+      <p className="font-medium text-slate-400">No designs pending approval</p>
+      <p className="text-sm mt-1">Completed deliverables will appear here for your review.</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      {tasks.map(task => {
+        const isRevising = !!revising[task.id]
+        const isActioning = !!actioning[task.id]
+
+        return (
+          <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 p-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h3 className="font-semibold text-white text-sm">{task.title}</h3>
+                  {task.task_type && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 capitalize">
+                      {task.task_type.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
+                {/* Approval status badge */}
+                {task.approval_status === 'pending' && (
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium">
+                    ⏳ Awaiting your approval
+                  </span>
+                )}
+                {task.approval_status === 'client_approved' && (
+                  <div className="space-y-0.5">
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 font-medium">
+                      <CheckCircle2 className="h-3 w-3" /> Approved by you ✓
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">Awaiting admin final approval</p>
+                  </div>
+                )}
+                {task.approval_status === 'admin_approved' && (
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-medium">
+                    <CheckCircle2 className="h-3 w-3" /> Fully Approved ✓
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Delivery URL */}
+            {task.delivery_url && (
+              <div className="mx-4 mb-3">
+                <a
+                  href={task.delivery_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" /> View Delivery
+                </a>
+              </div>
+            )}
+
+            {/* Action buttons — only for pending */}
+            {task.approval_status === 'pending' && (
+              <div className="px-4 pb-4 space-y-2">
+                {!isRevising ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprove(task.id)}
+                      disabled={isActioning}
+                      className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                    >
+                      {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setRevising(prev => ({ ...prev, [task.id]: true }))}
+                      disabled={isActioning}
+                      className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                    >
+                      <RefreshCw className="h-4 w-4" /> Request Revision
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea
+                      autoFocus
+                      value={revisionNote[task.id] ?? ''}
+                      onChange={e => setRevisionNote(prev => ({ ...prev, [task.id]: e.target.value }))}
+                      placeholder="Describe what needs to be changed…"
+                      rows={3}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleRevision(task.id)}
+                        disabled={!(revisionNote[task.id] ?? '').trim() || isActioning}
+                        className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-xl transition-colors"
+                      >
+                        {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        Send Revision Request
+                      </button>
+                      <button
+                        onClick={() => { setRevising(prev => ({ ...prev, [task.id]: false })); setRevisionNote(prev => ({ ...prev, [task.id]: '' })) }}
+                        className="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -737,9 +922,10 @@ export default function ClientPortalPage() {
   const [pkgs,        setPkgs]        = useState<ClientPackage[]>([])
   const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
   const [loading,     setLoading]     = useState(true)
-  const [tab,         setTab]         = useState<'package' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
-  const [detailTask,  setDetailTask]  = useState<Task | null>(null)
-  const [clientId,    setClientId]    = useState<string | null>(null)
+  const [tab,                setTab]                = useState<'package' | 'review' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
+  const [pendingReviewCount, setPendingReviewCount] = useState(0)
+  const [detailTask,         setDetailTask]         = useState<Task | null>(null)
+  const [clientId,           setClientId]           = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [tasksRes, invoicesRes, pkgRes, billRes] = await Promise.all([
@@ -786,6 +972,8 @@ export default function ClientPortalPage() {
   const reviewTasks = tasks.filter(t => t.status === 'review')
   const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'review')
   const doneTasks   = tasks.filter(t => t.status === 'done')
+
+
 
   return (
     <div className="space-y-5">
@@ -841,11 +1029,12 @@ export default function ClientPortalPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-800 overflow-x-auto">
         {([
-          { key: 'package',   label: 'My Package', icon: Package,      badge: pkgs.length,        badgeColor: 'bg-indigo-500/20 text-indigo-400' },
-          { key: 'tasks',     label: 'Tasks',      icon: CheckSquare,  badge: activeTasks.length + reviewTasks.length, badgeColor: 'bg-slate-700 text-slate-300' },
-          { key: 'completed', label: 'Completed',  icon: CheckCircle2, badge: doneTasks.length,   badgeColor: 'bg-green-500/20 text-green-400' },
-          { key: 'calendar',  label: 'Calendar',   icon: CalendarDays, badge: 0,                  badgeColor: '' },
-          { key: 'invoices',  label: 'Invoices',   icon: FileText,     badge: 0,                  badgeColor: '' },
+          { key: 'package',   label: 'My Package', icon: Package,      badge: pkgs.length,        badgeColor: 'bg-indigo-500/20 text-indigo-400', badgeDot: false },
+          { key: 'review',    label: 'Review',     icon: Eye,          badge: pendingReviewCount, badgeColor: 'bg-red-500/20 text-red-400',        badgeDot: false },
+          { key: 'tasks',     label: 'Tasks',      icon: CheckSquare,  badge: activeTasks.length + reviewTasks.length, badgeColor: 'bg-slate-700 text-slate-300', badgeDot: false },
+          { key: 'completed', label: 'Completed',  icon: CheckCircle2, badge: doneTasks.length,   badgeColor: 'bg-green-500/20 text-green-400',    badgeDot: false },
+          { key: 'calendar',  label: 'Calendar',   icon: CalendarDays, badge: 0,                  badgeColor: '',                                  badgeDot: false },
+          { key: 'invoices',  label: 'Invoices',   icon: FileText,     badge: 0,                  badgeColor: '',                                  badgeDot: false },
         ] as const).map(({ key, label, icon: Icon, badge, badgeColor }) => (
           <button
             key={key}
@@ -867,6 +1056,9 @@ export default function ClientPortalPage() {
       {tab === 'package' && (
         <PackageTab pkgs={pkgs} doneTasks={doneTasks.length} totalTasks={tasks.length} />
       )}
+
+      {/* Review tab */}
+      {tab === 'review' && <ReviewTab onPendingCount={setPendingReviewCount} />}
 
       {/* Tasks tab */}
       {tab === 'tasks' && (

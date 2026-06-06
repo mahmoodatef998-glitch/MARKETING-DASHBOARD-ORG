@@ -125,8 +125,30 @@ export interface Task {
   revision_voice_url?: string
   client_rating?: number
   client_rating_note?: string
+  approval_status?: 'pending' | 'client_approved' | 'admin_approved' | 'revision_requested'
+  client_approved_at?: string
+  admin_approved_at?: string
+  approved_by?: string
   created_at: string
   updated_at: string
+}
+
+// ─── Earnings ─────────────────────────────────────────────────────────────────
+export interface Earning {
+  id: string
+  user_id: string
+  task_id: string
+  amount: number
+  currency: string
+  note?: string
+  created_at: string
+  task?: {
+    id: string
+    title: string
+    task_type: string
+    client?: { name: string } | null
+  }
+  user?: { display_name: string; role: string }
 }
 
 export interface TaskComment {
