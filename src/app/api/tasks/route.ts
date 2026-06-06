@@ -6,6 +6,9 @@ import { generateId, dbError } from '@/lib/utils'
 import { TaskCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_TASKS } from '@/lib/demo-data'
 import { sendSlack } from '@/lib/slack'
+import { sendEmail } from '@/lib/gmail'
+import { generateEmailContent } from '@/lib/gemini'
+import { createAdminClient } from '@/lib/supabase-server'
 import { rateLimit } from '@/lib/rate-limit'
 import type { Task } from '@/types'
 
@@ -101,6 +104,49 @@ export async function POST(req: NextRequest) {
   try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
   if (task.assigned_to) {
     void sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`)
+
+    // Email notification to the assigned team member
+    void (async () => {
+      try {
+        const admin = createAdminClient()
+        const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to!)
+        const memberEmail = authUser?.user?.email
+        if (!memberEmail) return
+
+        const { data: profile } = await admin.from('profiles').select('display_name').eq('id', task.assigned_to!).single()
+        const memberName = profile?.display_name ?? memberEmail
+
+        const { data: client } = task.client_id
+          ? await admin.from('clients').select('name').eq('id', task.client_id).single()
+          : { data: null }
+
+        const details = [
+          `Task: ${task.title}`,
+          task.description ? `Description: ${task.description}` : null,
+          `Priority: ${task.priority}`,
+          task.due_date ? `Due date: ${task.due_date}` : null,
+          client?.name ? `Client: ${client.name}` : null,
+        ].filter(Boolean).join('\n')
+
+        const { subject, body: emailBody } = await generateEmailContent({
+          type:          'task_assigned',
+          recipientName: memberName,
+          details,
+        })
+
+        await sendEmail({ to: memberEmail, subject, body: emailBody })
+        await admin.from('automation_logs').insert({
+          type:            'task_assigned',
+          recipient_email: memberEmail,
+          subject,
+          status:          'sent',
+          task_id:         task.id,
+          created_at:      new Date().toISOString(),
+        })
+      } catch (err) {
+        console.error('[tasks] assignment email failed:', err)
+      }
+    })()
   }
   return NextResponse.json(task, { status: 201 })
 }

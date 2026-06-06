@@ -10,6 +10,7 @@ export type EmailType =
   | 'task_confirmation'
   | 'task_completed'
   | 'task_in_review'
+  | 'task_assigned'
   | 'client_welcome'
   | 'weekly_report'
 
@@ -62,6 +63,12 @@ Recipient (client): ${opts.recipientName}
 Task details: ${opts.details}
 Return JSON: { "subject": "...", "body": "..." }
 Be enthusiastic and clear. Ask them to log in to the client portal to review and either approve or request revisions. Plain text body, no HTML.`,
+
+    task_assigned: `Write a professional task assignment notification email to a team member.
+Recipient (team member): ${opts.recipientName}
+Task details: ${opts.details}
+Return JSON: { "subject": "...", "body": "..." }
+Tone: clear, motivating, and professional. Include ALL task details (title, description, priority, due date, client). Mention the due date prominently. Encourage them to start promptly. Plain text body, no HTML.`,
 
     client_welcome: `Write a warm welcome email to a new client onboarding to a marketing agency's dashboard.
 Recipient: ${opts.recipientName}
