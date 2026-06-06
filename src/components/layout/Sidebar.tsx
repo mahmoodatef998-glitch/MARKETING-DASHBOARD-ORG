@@ -25,6 +25,7 @@ import {
   Calendar,
   CalendarDays,
   Activity,
+  ImageIcon,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -42,7 +43,8 @@ const nav = [
   { href: '/scheduled-posts', label: 'Scheduled',    icon: Calendar },
   { href: '/automation',      label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',    label: 'AI Assistant', icon: Bot },
-  { href: '/activity-logs',   label: 'Activity Log', icon: Activity },
+  { href: '/media-library',   label: 'Media Library', icon: ImageIcon },
+  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity },
   { href: '/users',           label: 'Users',        icon: ShieldCheck },
   { href: '/settings',        label: 'Social Media', icon: Settings },
 ]
