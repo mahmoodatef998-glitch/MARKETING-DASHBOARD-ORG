@@ -4,12 +4,67 @@ import {
   CheckSquare, MessageCircle, Clock, AlertTriangle, Send, Loader2,
   CheckCircle2, ExternalLink, ImagePlus, Link2, X, Calendar, Camera,
   Globe, Music2, Mic, Sparkles, Search, RefreshCw, ChevronDown, ChevronUp,
+  Rss, Trash2, XCircle, PlusCircle, WifiOff,
 } from 'lucide-react'
 import type { Task, Message } from '@/types'
 import { getSupabaseClient } from '@/lib/supabase'
 import { CalendarView } from '@/components/calendar/CalendarView'
 
-// ── Task filter component ──────────────────────────────────────────────────────
+// ── Shared constants ───────────────────────────────────────────────────────────
+const PLATFORM_META: Record<string, { label: string; icon: React.ElementType; pill: string; color: string; bg: string }> = {
+  instagram: { label: 'Instagram', icon: Camera, pill: 'text-pink-400 bg-pink-500/10 border-pink-500/20',   color: 'text-pink-400',  bg: 'bg-pink-500/10' },
+  facebook:  { label: 'Facebook',  icon: Globe,  pill: 'text-blue-400 bg-blue-500/10 border-blue-500/20',   color: 'text-blue-400',  bg: 'bg-blue-500/10' },
+  tiktok:    { label: 'TikTok',    icon: Music2, pill: 'text-slate-300 bg-slate-700/60 border-slate-600/30', color: 'text-slate-300', bg: 'bg-slate-700/60' },
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  pending:   { label: 'Scheduled', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',  icon: Clock },
+  published: { label: 'Published', color: 'text-green-400 bg-green-500/10 border-green-500/20',  icon: CheckCircle2 },
+  failed:    { label: 'Failed',    color: 'text-red-400 bg-red-500/10 border-red-500/20',        icon: XCircle },
+  cancelled: { label: 'Cancelled', color: 'text-slate-400 bg-slate-700/40 border-slate-600/30',  icon: XCircle },
+}
+
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: 'bg-red-500/10 text-red-400 border-red-500/20',
+  high:   'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  low:    'bg-slate-500/10 text-slate-400 border-slate-500/20',
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  todo:        'bg-slate-500/10 text-slate-400',
+  in_progress: 'bg-blue-500/10 text-blue-400',
+  review:      'bg-amber-500/10 text-amber-400',
+  done:        'bg-green-500/10 text-green-400',
+  overdue:     'bg-red-500/10 text-red-400',
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface ScheduledPost {
+  id: string
+  task_id: string | null
+  platform: string
+  scheduled_at: string
+  caption: string | null
+  status: string
+  error: string | null
+  task?: { id: string; title: string; delivery_url: string | null } | null
+}
+
+interface SocialConnection {
+  id: string
+  platform: string
+  is_active: boolean
+  extra?: Record<string, unknown>
+}
+
+interface ScheduleInfo {
+  platforms:   string[]
+  scheduledAt: string
+  caption:     string
+}
+
+// ── TaskFilter ─────────────────────────────────────────────────────────────────
 function TaskFilter({ tasks, render }: { tasks: Task[]; render: (filtered: Task[]) => React.ReactNode }) {
   const [search,   setSearch]   = useState('')
   const [priority, setPriority] = useState('all')
@@ -64,40 +119,9 @@ function TaskFilter({ tasks, render }: { tasks: Task[]; render: (filtered: Task[
   )
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  urgent: 'bg-red-500/10 text-red-400 border-red-500/20',
-  high:   'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  low:    'bg-slate-500/10 text-slate-400 border-slate-500/20',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  todo:        'bg-slate-500/10 text-slate-400',
-  in_progress: 'bg-blue-500/10 text-blue-400',
-  review:      'bg-amber-500/10 text-amber-400',
-  done:        'bg-green-500/10 text-green-400',
-  overdue:     'bg-red-500/10 text-red-400',
-}
-
-const PLATFORM_META: Record<string, { label: string; icon: React.ElementType; pill: string }> = {
-  instagram: { label: 'Instagram', icon: Camera, pill: 'text-pink-400 bg-pink-500/10 border-pink-500/20' },
-  facebook:  { label: 'Facebook',  icon: Globe,  pill: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  tiktok:    { label: 'TikTok',    icon: Music2, pill: 'text-slate-300 bg-slate-700/60 border-slate-600/30' },
-}
-
-interface ScheduleInfo {
-  platforms:   string[]
-  scheduledAt: string
-  caption:     string
-}
-
-// ─── Mark Done Modal ──────────────────────────────────────────────────────────
+// ── MarkDoneModal ──────────────────────────────────────────────────────────────
 function MarkDoneModal({
-  task,
-  isMediaBuyer,
-  connectedPlatforms,
-  onConfirm,
-  onCancel,
+  task, isMediaBuyer, connectedPlatforms, onConfirm, onCancel,
 }: {
   task:               Task
   isMediaBuyer:       boolean
@@ -130,8 +154,6 @@ function MarkDoneModal({
     } catch {}
     setGeneratingCaption(false)
   }
-
-  const hasDelivery = !!deliveryUrl
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -176,12 +198,11 @@ function MarkDoneModal({
   }
 
   const canSchedule = isMediaBuyer && connectedPlatforms.length > 0
+  const hasDelivery = !!deliveryUrl
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
@@ -194,16 +215,12 @@ function MarkDoneModal({
           </button>
         </div>
 
-        {/* Body — scrollable */}
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-
-          {/* Task name */}
           <div className="bg-slate-800/60 rounded-xl p-3">
             <p className="text-xs text-slate-400 mb-0.5">Task</p>
             <p className="font-medium text-white text-sm">{task.title}</p>
           </div>
 
-          {/* Reference image */}
           {task.reference_image_url && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
@@ -216,7 +233,6 @@ function MarkDoneModal({
             </div>
           )}
 
-          {/* ── Delivery link ────────────────────────────────────── */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Link2 className="h-3.5 w-3.5 text-slate-400" />
@@ -249,10 +265,8 @@ function MarkDoneModal({
             )}
           </div>
 
-          {/* ── Schedule Publishing (media buyer only) ───────────── */}
           {canSchedule && (
             <div className="border-t border-slate-800 pt-4 space-y-3">
-              {/* Toggle */}
               <button
                 type="button"
                 onClick={() => setScheduleOn(o => !o)}
@@ -272,8 +286,7 @@ function MarkDoneModal({
               </button>
 
               {scheduleOn && (
-                <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
-                  {/* Platform selector */}
+                <div className="space-y-3">
                   <div className="space-y-1.5">
                     <p className="text-xs text-slate-400 font-medium">Platforms</p>
                     <div className="flex flex-wrap gap-2">
@@ -296,7 +309,6 @@ function MarkDoneModal({
                     </div>
                   </div>
 
-                  {/* Datetime */}
                   <div className="space-y-1.5">
                     <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5" /> Publish Time
@@ -307,12 +319,10 @@ function MarkDoneModal({
                       className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors" />
                   </div>
 
-                  {/* Caption */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-slate-400 font-medium">Caption</p>
-                      <button type="button" onClick={handleGenerateCaption}
-                        disabled={generatingCaption}
+                      <button type="button" onClick={handleGenerateCaption} disabled={generatingCaption}
                         className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50 transition-colors">
                         {generatingCaption
                           ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating…</>
@@ -324,8 +334,7 @@ function MarkDoneModal({
                       className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none resize-none transition-colors" />
                   </div>
 
-                  {/* Validation hint */}
-                  {scheduleOn && (!hasDelivery) && (
+                  {scheduleOn && !hasDelivery && (
                     <p className="text-xs text-amber-400 flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                       Add a delivery file/link above to enable scheduling.
@@ -335,10 +344,8 @@ function MarkDoneModal({
               )}
             </div>
           )}
-
         </div>
 
-        {/* Footer */}
         <div className="px-5 pb-5 pt-3 flex gap-3 border-t border-slate-800/60 shrink-0">
           <button onClick={onCancel}
             className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
@@ -359,7 +366,385 @@ function MarkDoneModal({
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ── NewPostModal ───────────────────────────────────────────────────────────────
+function NewPostModal({
+  doneTasks, connectedPlatforms, onSave, onClose,
+}: {
+  doneTasks:          Task[]
+  connectedPlatforms: string[]
+  onSave:             () => void
+  onClose:            () => void
+}) {
+  const [taskId,       setTaskId]       = useState('')
+  const [platforms,    setPlatforms]    = useState<string[]>([])
+  const [scheduledAt,  setScheduledAt]  = useState('')
+  const [caption,      setCaption]      = useState('')
+  const [generating,   setGenerating]   = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState('')
+
+  const tasksWithFile = doneTasks.filter(t => t.delivery_url)
+
+  async function handleGenerateCaption() {
+    if (!taskId) return
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/ai/caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId }),
+      })
+      if (res.ok) {
+        const { caption: gen } = await res.json()
+        setCaption(gen)
+      }
+    } catch {}
+    setGenerating(false)
+  }
+
+  function togglePlatform(p: string) {
+    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+  }
+
+  async function handleSave() {
+    setError('')
+    if (!taskId || platforms.length === 0 || !scheduledAt) {
+      setError('Please fill in all required fields.')
+      return
+    }
+    setSaving(true)
+    const res = await fetch('/api/social/scheduled-posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_id:      taskId,
+        platform:     platforms,
+        scheduled_at: new Date(scheduledAt).toISOString(),
+        caption,
+      }),
+    })
+    setSaving(false)
+    if (res.ok) { onSave(); onClose() }
+    else {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Failed to schedule post.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/15 flex items-center justify-center">
+              <Calendar className="h-4 w-4 text-indigo-400" />
+            </div>
+            <span className="font-semibold text-white text-sm">Schedule New Post</span>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* Task picker */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-slate-300">Select Task *</p>
+            {tasksWithFile.length === 0 ? (
+              <p className="text-xs text-slate-500 bg-slate-800/60 rounded-xl px-3 py-3">
+                No completed tasks with uploaded files yet. Mark a task as done and upload the file first.
+              </p>
+            ) : (
+              <select value={taskId} onChange={e => setTaskId(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors">
+                <option value="">— choose a task —</option>
+                {tasksWithFile.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Platforms */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-slate-300">Platforms *</p>
+            <div className="flex flex-wrap gap-2">
+              {connectedPlatforms.map(p => {
+                const meta   = PLATFORM_META[p]
+                if (!meta) return null
+                const Icon   = meta.icon
+                const active = platforms.includes(p)
+                return (
+                  <button key={p} type="button" onClick={() => togglePlatform(p)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                      active ? meta.pill : 'text-slate-500 bg-transparent border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                    }`}>
+                    <Icon className="h-3.5 w-3.5" />
+                    {meta.label}
+                    {active && <CheckCircle2 className="h-3 w-3" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Scheduled time */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-slate-400" /> Publish Time *
+            </p>
+            <input type="datetime-local" value={scheduledAt}
+              onChange={e => setScheduledAt(e.target.value)}
+              min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+              className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors" />
+          </div>
+
+          {/* Caption */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-slate-300">Caption</p>
+              <button type="button" onClick={handleGenerateCaption}
+                disabled={generating || !taskId}
+                className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-40 transition-colors">
+                {generating
+                  ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating…</>
+                  : <><Sparkles className="h-3 w-3" /> AI Generate</>}
+              </button>
+            </div>
+            <textarea value={caption} onChange={e => setCaption(e.target.value)}
+              placeholder="Write caption or use AI Generate…" rows={4}
+              className="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 outline-none resize-none transition-colors" />
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-400 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {error}
+            </p>
+          )}
+        </div>
+
+        <div className="px-5 pb-5 pt-3 flex gap-3 border-t border-slate-800/60 shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleSave}
+            disabled={saving || !taskId || platforms.length === 0 || !scheduledAt}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
+            {saving
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Scheduling…</>
+              : <><Calendar className="h-4 w-4" /> Schedule Post</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── SocialTab ──────────────────────────────────────────────────────────────────
+function SocialTab({ tasks, connectedPlatforms }: { tasks: Task[]; connectedPlatforms: string[] }) {
+  const [posts,       setPosts]       = useState<ScheduledPost[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [showNew,     setShowNew]     = useState(false)
+
+  async function loadPosts() {
+    setLoading(true)
+    const res = await fetch('/api/social/scheduled-posts')
+    if (res.ok) setPosts(await res.json())
+    setLoading(false)
+  }
+
+  useEffect(() => { void loadPosts() }, [])
+
+  async function cancelPost(id: string) {
+    await fetch('/api/social/scheduled-posts', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    void loadPosts()
+  }
+
+  const doneTasks = tasks.filter(t => t.status === 'done')
+
+  const filtered = posts.filter(p => statusFilter === 'all' || p.status === statusFilter)
+
+  const counts = {
+    pending:   posts.filter(p => p.status === 'pending').length,
+    published: posts.filter(p => p.status === 'published').length,
+    failed:    posts.filter(p => p.status === 'failed').length,
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* Connected platforms */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Connected Accounts</p>
+        {connectedPlatforms.length === 0 ? (
+          <div className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3">
+            <WifiOff className="h-4 w-4 text-slate-500 shrink-0" />
+            <p className="text-xs text-slate-400">No social accounts connected yet. Ask your admin to connect accounts in Settings.</p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {connectedPlatforms.map(p => {
+              const meta = PLATFORM_META[p]
+              if (!meta) return null
+              const Icon = meta.icon
+              return (
+                <div key={p} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold ${meta.pill}`}>
+                  <Icon className="h-4 w-4" />
+                  {meta.label}
+                  <CheckCircle2 className="h-3.5 w-3.5 opacity-70" />
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <p className="text-lg font-bold text-amber-400">{counts.pending}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Scheduled</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <p className="text-lg font-bold text-green-400">{counts.published}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Published</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <p className="text-lg font-bold text-red-400">{counts.failed}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Failed</p>
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
+          {(['all', 'pending', 'published', 'failed', 'cancelled'] as const).map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                statusFilter === s ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+              }`}>
+              {s === 'all' ? 'All' : STATUS_CONFIG[s]?.label ?? s}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadPosts}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </button>
+          {connectedPlatforms.length > 0 && (
+            <button onClick={() => setShowNew(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+              <PlusCircle className="h-3.5 w-3.5" /> New Post
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Posts list */}
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl py-12 text-center">
+          <Calendar className="h-9 w-9 mx-auto mb-2 text-slate-700" />
+          <p className="text-sm text-slate-500">No scheduled posts yet</p>
+          {connectedPlatforms.length > 0 && (
+            <button onClick={() => setShowNew(true)}
+              className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Schedule your first post
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(post => {
+            const meta = PLATFORM_META[post.platform]
+            const Icon = meta?.icon ?? Globe
+            const cfg  = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.pending
+            const StatusIcon = cfg.icon
+            return (
+              <div key={post.id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {/* Platform + status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta?.pill ?? ''}`}>
+                        <Icon className="h-3 w-3" /> {meta?.label ?? post.platform}
+                      </span>
+                      <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
+                        <StatusIcon className="h-3 w-3" /> {cfg.label}
+                      </span>
+                      {post.task?.title && (
+                        <span className="text-xs text-slate-400 truncate">{post.task.title}</span>
+                      )}
+                    </div>
+
+                    {/* Time */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      {new Date(post.scheduled_at).toLocaleString([], {
+                        weekday: 'short', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </div>
+
+                    {/* Caption */}
+                    {post.caption && (
+                      <p className="text-xs text-slate-400 line-clamp-2 bg-slate-800/40 rounded-lg px-3 py-2">
+                        {post.caption}
+                      </p>
+                    )}
+
+                    {/* Error */}
+                    {post.error && (
+                      <p className="text-xs text-red-400 flex items-center gap-1.5">
+                        <XCircle className="h-3.5 w-3.5 shrink-0" /> {post.error}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {post.task?.delivery_url && (
+                      <a href={post.task.delivery_url} target="_blank" rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                    {post.status === 'pending' && (
+                      <button onClick={() => cancelPost(post.id)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {showNew && (
+        <NewPostModal
+          doneTasks={doneTasks}
+          connectedPlatforms={connectedPlatforms}
+          onSave={loadPosts}
+          onClose={() => setShowNew(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function TeamPortalPage() {
   const [tasks,              setTasks]              = useState<Task[]>([])
   const [messages,           setMessages]           = useState<Message[]>([])
@@ -370,7 +755,7 @@ export default function TeamPortalPage() {
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([])
   const [loading,            setLoading]            = useState(true)
   const [sending,            setSending]            = useState(false)
-  const [tab,                setTab]                = useState<'tasks' | 'calendar' | 'chat'>('tasks')
+  const [tab,                setTab]                = useState<'tasks' | 'social' | 'calendar' | 'chat'>('tasks')
   const [doneModal,          setDoneModal]          = useState<Task | null>(null)
   const [completedOpen,      setCompletedOpen]      = useState(false)
   const [online,             setOnline]             = useState(false)
@@ -389,11 +774,10 @@ export default function TeamPortalPage() {
       const tasksData = await tasksRes.json()
       setTasks(Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []))
 
-      // Load social connections for media buyer scheduling
       if (profile.role === 'media_buyer') {
         const connRes = await fetch('/api/social/connections')
         if (connRes.ok) {
-          const conns: { platform: string; is_active: boolean }[] = await connRes.json()
+          const conns: SocialConnection[] = await connRes.json()
           setConnectedPlatforms(conns.filter(c => c.is_active).map(c => c.platform))
         }
       }
@@ -410,44 +794,34 @@ export default function TeamPortalPage() {
     load()
   }, [])
 
-  // Realtime: tasks assigned to me
+  // Realtime: tasks
   useEffect(() => {
     if (!myId) return
     const supabase = getSupabaseClient()
     const tasksCh = supabase
       .channel(`team-portal:tasks:${myId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `assigned_to=eq.${myId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `assigned_to=eq.${myId}` },
         async () => {
           const res  = await fetch('/api/tasks?limit=200')
           const data = await res.json()
           setTasks(Array.isArray(data) ? data : (data.data ?? []))
-        }
-      )
+        })
       .subscribe()
     return () => { supabase.removeChannel(tasksCh) }
   }, [myId])
 
-  // Realtime: incoming messages
+  // Realtime: messages
   useEffect(() => {
     if (!myId) return
     const supabase = getSupabaseClient()
     const channel = supabase
       .channel(`messages:${myId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${myId}` },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${myId}` },
         (payload) => {
           const msg = payload.new as Message
-          setMessages(prev => {
-            if (prev.some(m => m.id === msg.id)) return prev
-            return [...prev, msg]
-          })
-        }
-      )
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+        })
       .subscribe((status) => setOnline(status === 'SUBSCRIBED'))
-
     return () => { supabase.removeChannel(channel) }
   }, [myId])
 
@@ -480,12 +854,9 @@ export default function TeamPortalPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...task,
-        status:      newStatus,
-        task_type:   task.task_type   ?? null,
-        due_date:    task.due_date    ?? null,
-        assigned_to: task.assigned_to ?? null,
-        client_id:   task.client_id   ?? null,
+        ...task, status: newStatus,
+        task_type: task.task_type ?? null, due_date: task.due_date ?? null,
+        assigned_to: task.assigned_to ?? null, client_id: task.client_id ?? null,
       }),
     })
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
@@ -494,23 +865,15 @@ export default function TeamPortalPage() {
   async function confirmDone(deliveryUrl: string, schedule?: ScheduleInfo) {
     if (!doneModal) return
     const task = doneModal
-
-    // 1 — update task status + delivery URL
     await fetch(`/api/tasks/${task.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...task,
-        status:       'done',
-        delivery_url: deliveryUrl || null,
-        task_type:    task.task_type   ?? null,
-        due_date:     task.due_date    ?? null,
-        assigned_to:  task.assigned_to ?? null,
-        client_id:    task.client_id   ?? null,
+        ...task, status: 'done', delivery_url: deliveryUrl || null,
+        task_type: task.task_type ?? null, due_date: task.due_date ?? null,
+        assigned_to: task.assigned_to ?? null, client_id: task.client_id ?? null,
       }),
     })
-
-    // 2 — schedule post if media buyer filled it in
     if (schedule && schedule.platforms.length > 0 && schedule.scheduledAt) {
       await fetch('/api/social/scheduled-posts', {
         method: 'POST',
@@ -523,11 +886,8 @@ export default function TeamPortalPage() {
         }),
       })
     }
-
     setTasks(prev => prev.map(t =>
-      t.id === task.id
-        ? { ...t, status: 'done' as Task['status'], delivery_url: deliveryUrl || undefined }
-        : t
+      t.id === task.id ? { ...t, status: 'done' as Task['status'], delivery_url: deliveryUrl || undefined } : t
     ))
     setDoneModal(null)
   }
@@ -541,6 +901,14 @@ export default function TeamPortalPage() {
       <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
     </div>
   )
+
+  // Tabs config — social tab only for media buyers
+  const tabs = [
+    { id: 'tasks'    as const, label: 'My Tasks',    icon: CheckSquare   },
+    ...(isMediaBuyer ? [{ id: 'social' as const, label: 'Social Media', icon: Rss }] : []),
+    { id: 'calendar' as const, label: 'Calendar',    icon: Calendar      },
+    { id: 'chat'     as const, label: 'Chat',        icon: MessageCircle },
+  ]
 
   return (
     <div className="space-y-6">
@@ -561,28 +929,11 @@ export default function TeamPortalPage() {
         </div>
       </div>
 
-      {/* Media buyer badge */}
-      {isMediaBuyer && (
-        <div className="flex items-center gap-2 bg-indigo-500/8 border border-indigo-500/20 rounded-xl px-4 py-2.5">
-          <Calendar className="h-4 w-4 text-indigo-400 shrink-0" />
-          <p className="text-xs text-indigo-300">
-            <span className="font-semibold">Media Buyer:</span>{' '}
-            {connectedPlatforms.length > 0
-              ? `You can schedule posts on ${connectedPlatforms.join(', ')} directly when marking tasks done.`
-              : 'Ask your admin to connect social accounts in Settings to enable scheduling.'}
-          </p>
-        </div>
-      )}
-
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-800">
-        {([
-          { id: 'tasks',    label: 'My Tasks',        icon: CheckSquare    },
-          { id: 'calendar', label: 'Calendar',        icon: Calendar       },
-          { id: 'chat',     label: 'Chat with Admin', icon: MessageCircle  },
-        ] as const).map(({ id, label, icon: Icon }) => (
+      <div className="flex gap-1 border-b border-slate-800 overflow-x-auto">
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               tab === id ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-100'
             }`}>
             <Icon className="h-4 w-4" /> {label}
@@ -590,11 +941,9 @@ export default function TeamPortalPage() {
         ))}
       </div>
 
-      {/* ── My Tasks Tab ──────────────────────────────────────────── */}
+      {/* ── My Tasks Tab ──────────────────────────────────── */}
       {tab === 'tasks' && (
         <div className="space-y-3">
-
-          {/* Active tasks */}
           {activeTasks.length > 0 ? (
             <TaskFilter tasks={activeTasks} render={(filtered) => (
               <>
@@ -609,7 +958,6 @@ export default function TeamPortalPage() {
                         {task.description && (
                           <p className="text-sm text-slate-400 mt-1">{task.description}</p>
                         )}
-                        {/* Revision notes inline */}
                         {task.revision_notes && (
                           <div className="mt-2 flex items-start gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                             <RefreshCw className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -625,7 +973,6 @@ export default function TeamPortalPage() {
                             </div>
                           </div>
                         )}
-                        {/* Reference image */}
                         {task.reference_image_url && (
                           <div className="mt-2 rounded-xl overflow-hidden border border-indigo-500/20 bg-slate-800">
                             <div className="px-3 py-1.5 border-b border-indigo-500/10 flex items-center gap-1.5">
@@ -658,22 +1005,15 @@ export default function TeamPortalPage() {
                           </div>
                         )}
                       </div>
-
                       <div className="flex items-center gap-2">
-                        <select
-                          value={task.status}
-                          onChange={e => updateStatus(task.id, e.target.value)}
-                          className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}
-                        >
+                        <select value={task.status} onChange={e => updateStatus(task.id, e.target.value)}
+                          className={`text-xs px-2 py-1 rounded-md border-0 outline-none cursor-pointer ${STATUS_COLOR[task.status]}`}>
                           <option value="todo">To Do</option>
                           <option value="in_progress">In Progress</option>
                           <option value="review">Review</option>
                         </select>
-
-                        <button
-                          onClick={() => setDoneModal(task)}
-                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 font-medium transition-colors border border-green-500/20"
-                        >
+                        <button onClick={() => setDoneModal(task)}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 font-medium transition-colors border border-green-500/20">
                           <CheckCircle2 className="h-3 w-3" />
                           {isMediaBuyer && connectedPlatforms.length > 0 ? 'Done & Publish' : 'Done'}
                         </button>
@@ -690,18 +1030,14 @@ export default function TeamPortalPage() {
             </div>
           ) : null}
 
-          {/* Completed section */}
           {doneTasks.length > 0 && (
             <div className="pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setCompletedOpen(o => !o)}
-                className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 py-1.5 w-full transition-colors"
-              >
+              <button onClick={() => setCompletedOpen(o => !o)}
+                className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 py-1.5 w-full transition-colors">
                 {completedOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 <CheckCircle2 className="h-3.5 w-3.5 text-green-500/60" />
                 <span className="font-medium">{doneTasks.length} completed task{doneTasks.length > 1 ? 's' : ''}</span>
               </button>
-
               {completedOpen && (
                 <div className="space-y-2 mt-2">
                   {doneTasks.map(task => (
@@ -734,12 +1070,17 @@ export default function TeamPortalPage() {
         </div>
       )}
 
-      {/* ── My Calendar Tab ───────────────────────────────────────── */}
+      {/* ── Social Media Tab (media buyers only) ─────────── */}
+      {tab === 'social' && isMediaBuyer && (
+        <SocialTab tasks={tasks} connectedPlatforms={connectedPlatforms} />
+      )}
+
+      {/* ── Calendar Tab ─────────────────────────────────── */}
       {tab === 'calendar' && (
         <CalendarView tasks={tasks} showAssignee={false} />
       )}
 
-      {/* ── Chat Tab ──────────────────────────────────────────────── */}
+      {/* ── Chat Tab ─────────────────────────────────────── */}
       {tab === 'chat' && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[500px]">
           <div className="flex-1 overflow-y-auto p-4 space-y-3">

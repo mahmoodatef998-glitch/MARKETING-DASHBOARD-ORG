@@ -12,8 +12,11 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
 
 export async function GET(req: NextRequest) {
   const supabase = await createServerClient()
-  const user = await requireAdmin(supabase)
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const allowed = profile?.role === 'admin' || profile?.role === 'media_buyer'
+  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const clientId = new URL(req.url).searchParams.get('client_id')
   const admin    = createAdminClient()
