@@ -11,6 +11,9 @@ export async function GET(
   const { id } = await params
   const supabase = await createServerClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { data, error } = await supabase
     .from('task_comments')
     .select('*, author:profiles(display_name)')

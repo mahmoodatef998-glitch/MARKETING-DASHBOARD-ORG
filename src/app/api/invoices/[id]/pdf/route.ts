@@ -19,6 +19,11 @@ export async function GET(
 
   if (error || !inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
+  const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
+  if (profile?.role === 'client' && inv.client_id !== profile.client_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const items: { description: string; quantity: number; unit_price: number; total: number }[] = inv.items ?? []
   const fmt = (n: number) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const statusColor: Record<string, string> = {

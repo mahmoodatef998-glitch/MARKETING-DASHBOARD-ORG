@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
     // package (clients only)
     package: packageData,
   } = await req.json()
+
+  const VALID_ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'client']
+  if (!VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
+
   const admin = createAdminClient()
 
   // Create auth user

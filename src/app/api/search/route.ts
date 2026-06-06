@@ -18,25 +18,23 @@ export async function GET(req: NextRequest) {
   const q = new URL(req.url).searchParams.get('q')?.trim() ?? ''
   if (q.length < 2) return NextResponse.json({ tasks: [], clients: [], invoices: [] })
 
+  const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
+  const isClient = profile?.role === 'client'
+  if (isClient && !profile.client_id) return NextResponse.json({ tasks: [], clients: [], invoices: [] })
+
   const pattern = `%${q}%`
 
-  const [tasksRes, clientsRes, invoicesRes] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('id, title, status, priority, due_date, client:clients(name)')
-      .ilike('title', pattern)
-      .limit(6),
-    supabase
-      .from('clients')
-      .select('id, name, email, status')
-      .or(`name.ilike.${pattern},email.ilike.${pattern}`)
-      .limit(6),
-    supabase
-      .from('invoices')
-      .select('id, invoice_number, total, status, client:clients(name)')
-      .or(`invoice_number.ilike.${pattern},notes.ilike.${pattern}`)
-      .limit(6),
-  ])
+  let tasksQuery    = supabase.from('tasks').select('id, title, status, priority, due_date, client:clients(name)').ilike('title', pattern).limit(6)
+  let clientsQuery  = supabase.from('clients').select('id, name, email, status').or(`name.ilike.${pattern},email.ilike.${pattern}`).limit(6)
+  let invoicesQuery = supabase.from('invoices').select('id, invoice_number, total, status, client:clients(name)').or(`invoice_number.ilike.${pattern},notes.ilike.${pattern}`).limit(6)
+
+  if (isClient) {
+    tasksQuery    = tasksQuery.eq('client_id', profile.client_id!)
+    clientsQuery  = clientsQuery.eq('id', profile.client_id!)
+    invoicesQuery = invoicesQuery.eq('client_id', profile.client_id!)
+  }
+
+  const [tasksRes, clientsRes, invoicesRes] = await Promise.all([tasksQuery, clientsQuery, invoicesQuery])
 
   return NextResponse.json({
     tasks:    tasksRes.data    ?? [],
