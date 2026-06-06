@@ -217,11 +217,12 @@ function MeetingCard({
   const [markingDone, setMarkingDone] = useState(false)
   const [deleting,    setDeleting]    = useState(false)
 
-  const now       = new Date()
-  const meetingDt = new Date(meeting.scheduled_at)
-  const isPast    = meetingDt < now
-  const isDone    = meeting.status === 'done'
-  const diffDays  = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
+  const now         = new Date()
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+  const meetingDt   = new Date(meeting.scheduled_at)
+  const isPast      = meetingDt < startOfToday
+  const isDone      = meeting.status === 'done'
+  const diffDays    = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
 
   const displayName = meeting.client?.name ?? meeting.client_name
 
@@ -413,10 +414,11 @@ export default function MeetingsPage() {
     }
   }
 
-  const now      = new Date()
-  const upcoming = meetings.filter(m => m.status === 'pending')
-  const done     = meetings.filter(m => m.status === 'done')
-  const overdue  = upcoming.filter(m => new Date(m.scheduled_at) < now)
+  const now         = new Date()
+  const startOfDay  = new Date(now); startOfDay.setHours(0, 0, 0, 0)
+  const upcoming    = meetings.filter(m => m.status === 'pending')
+  const done        = meetings.filter(m => m.status === 'done')
+  const overdue     = upcoming.filter(m => new Date(m.scheduled_at) < startOfDay)
   const todayCount = upcoming.filter(m =>
     new Date(m.scheduled_at).toDateString() === now.toDateString()
   ).length
