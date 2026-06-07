@@ -174,10 +174,10 @@ function MarkDoneModal({
       formData.append('timestamp', String(data.timestamp))
       formData.append('signature', data.signature)
       formData.append('public_id', data.publicId)
-      formData.append('folder', data.folder)
       if (data.eager) formData.append('eager', data.eager)
-      await fetch(data.uploadUrl, { method: 'POST', body: formData })
-      setDeliveryUrl(data.publicUrl)
+      const upRes = await fetch(data.uploadUrl, { method: 'POST', body: formData })
+      const uploaded = await upRes.json()
+      setDeliveryUrl(uploaded.secure_url ?? data.publicUrl)
     } catch (err) {
       console.error('Upload error', err)
     } finally {
@@ -385,17 +385,18 @@ interface DeliverableTask {
 }
 
 function NewPostModal({
-  doneTasks, connectedPlatforms, clients, onSave, onClose,
+  doneTasks, connectedPlatforms, clients, onSave, onClose, preSelectedTaskId,
 }: {
   doneTasks:          Task[]
   connectedPlatforms: string[]
   clients:            { id: string; name: string }[]
   onSave:             () => void
   onClose:            () => void
+  preSelectedTaskId?: string
 }) {
-  const [source,           setSource]           = useState<'upload' | 'task'>('upload')
+  const [source,           setSource]           = useState<'upload' | 'task'>(preSelectedTaskId ? 'task' : 'upload')
   const [clientId,         setClientId]         = useState(clients[0]?.id ?? '')
-  const [taskId,           setTaskId]           = useState('')
+  const [taskId,           setTaskId]           = useState(preSelectedTaskId ?? '')
   const [mediaUrl,         setMediaUrl]         = useState('')
   const [uploading,        setUploading]        = useState(false)
   const [uploadPct,        setUploadPct]        = useState(0)
@@ -441,7 +442,6 @@ function NewPostModal({
       formData.append('timestamp', String(data.timestamp))
       formData.append('signature', data.signature)
       formData.append('public_id', data.publicId)
-      formData.append('folder', data.folder)
       if (data.eager) formData.append('eager', data.eager)
 
       const xhr = new XMLHttpRequest()
@@ -454,7 +454,8 @@ function NewPostModal({
         xhr.open('POST', data.uploadUrl)
         xhr.send(formData)
       })
-      setMediaUrl(data.publicUrl)
+      const uploadedData = JSON.parse(xhr.responseText) as { secure_url?: string }
+      setMediaUrl(uploadedData.secure_url ?? data.publicUrl)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -1112,10 +1113,12 @@ function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }:
   oauthSuccessClientId?: string
 }) {
   const [subTab, setSubTab] = useState<'posts' | 'accounts'>(oauthSuccessClientId ? 'accounts' : 'posts')
-  const [posts,        setPosts]        = useState<ScheduledPost[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [showNew,      setShowNew]      = useState(false)
+  const [posts,             setPosts]             = useState<ScheduledPost[]>([])
+  const [loading,           setLoading]           = useState(true)
+  const [statusFilter,      setStatusFilter]      = useState('all')
+  const [showNew,           setShowNew]           = useState(false)
+  const [deliverableTasks,  setDeliverableTasks]  = useState<DeliverableTask[]>([])
+  const [preScheduleTaskId, setPreScheduleTaskId] = useState<string | undefined>()
 
   async function loadPosts() {
     setLoading(true)
@@ -1125,6 +1128,13 @@ function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }:
   }
 
   useEffect(() => { void loadPosts() }, [])
+
+  useEffect(() => {
+    fetch('/api/tasks/deliverables')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: DeliverableTask[]) => setDeliverableTasks(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   async function cancelPost(id: string) {
     await fetch('/api/social/scheduled-posts', {
@@ -1142,6 +1152,10 @@ function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }:
     published: posts.filter(p => p.status === 'published').length,
     failed:    posts.filter(p => p.status === 'failed').length,
   }
+  const scheduledTaskIds = new Set(
+    posts.filter(p => p.task_id && p.status !== 'cancelled').map(p => p.task_id!)
+  )
+  const readyToPublish = deliverableTasks.filter(t => !scheduledTaskIds.has(t.id))
 
   return (
     <div className="space-y-4">
@@ -1165,6 +1179,44 @@ function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }:
       {/* ── Scheduled Posts sub-tab ── */}
       {subTab === 'posts' && (
         <div className="space-y-4">
+
+          {/* Ready to Publish */}
+          {readyToPublish.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Send className="h-3.5 w-3.5" /> Ready to Publish ({readyToPublish.length})
+              </p>
+              {readyToPublish.map(task => (
+                <div key={task.id} className="bg-slate-900 border border-indigo-500/20 rounded-xl p-3 flex items-center gap-3">
+                  {task.delivery_url && (
+                    <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 shrink-0">
+                      {/\.(mp4|mov|webm|avi)/i.test(task.delivery_url) ? (
+                        <video src={task.delivery_url} className="w-full h-full object-cover" muted />
+                      ) : (
+                        <img src={task.delivery_url} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{task.title}</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {(task as unknown as { client_name?: string }).client_name ?? ''}
+                      {(task as unknown as { assignee_name?: string }).assignee_name
+                        ? ` · ${(task as unknown as { assignee_name?: string }).assignee_name}`
+                        : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setPreScheduleTaskId(task.id); setShowNew(true) }}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors shrink-0"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Schedule
+                  </button>
+                </div>
+              ))}
+              <div className="border-t border-slate-800/60" />
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
@@ -1290,8 +1342,9 @@ function SocialTab({ tasks, connectedPlatforms, clients, oauthSuccessClientId }:
               doneTasks={doneTasks}
               connectedPlatforms={connectedPlatforms}
               clients={clients}
-              onSave={loadPosts}
-              onClose={() => setShowNew(false)}
+              onSave={() => { void loadPosts() }}
+              onClose={() => { setShowNew(false); setPreScheduleTaskId(undefined) }}
+              preSelectedTaskId={preScheduleTaskId}
             />
           )}
         </div>
@@ -1482,7 +1535,7 @@ export default function TeamPortalPage() {
   // Tabs config — social tab only for media buyers; My Stats for all
   const tabs = [
     { id: 'tasks'     as const, label: 'My Tasks',    icon: CheckSquare   },
-    { id: 'dashboard' as const, label: 'My Stats',    icon: BarChart2     },
+    { id: 'dashboard' as const, label: 'My Dashboard', icon: BarChart2     },
     ...(isMediaBuyer ? [{ id: 'social' as const, label: 'Social Media', icon: Rss }] : []),
     { id: 'calendar'  as const, label: 'Calendar',    icon: Calendar      },
     { id: 'chat'      as const, label: 'Chat',        icon: MessageCircle },
