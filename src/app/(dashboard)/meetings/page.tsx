@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import {
   CalendarDays, Plus, CheckCircle2, Clock, Trash2, Loader2,
-  Users, X, AlarmClock, ChevronDown, Pencil,
+  Users, X, AlarmClock, ChevronDown, Pencil, FileText,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -219,28 +219,55 @@ function NewMeetingModal({
   )
 }
 
-// ─── Edit Meeting Modal ───────────────────────────────────────────────────────
-function EditMeetingModal({
-  meeting, clients, onSave, onClose,
+// ─── Meeting Detail Modal ─────────────────────────────────────────────────────
+function MeetingDetailModal({
+  meeting,
+  clients,
+  onEdit,
+  onDone,
+  onDelete,
+  onClose,
 }: {
   meeting: Meeting
   clients: Client[]
-  onSave: (id: string, d: { title: string; client_name?: string; client_id?: string; scheduled_at: string; notes?: string }) => Promise<void>
-  onClose: () => void
+  onEdit:   (id: string, d: { title: string; client_name?: string; client_id?: string; scheduled_at: string; notes?: string }) => Promise<void>
+  onDone:   (id: string) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onClose:  () => void
 }) {
+  const [mode,        setMode]        = useState<'view' | 'edit'>('view')
   const [title,       setTitle]       = useState(meeting.title)
   const [clientName,  setClientName]  = useState(meeting.client_name ?? meeting.client?.name ?? '')
   const [clientId,    setClientId]    = useState(meeting.client_id ?? '')
   const [scheduledAt, setScheduledAt] = useState(
     new Date(meeting.scheduled_at).toISOString().slice(0, 16)
   )
-  const [notes,  setNotes]  = useState(meeting.notes ?? '')
-  const [saving, setSaving] = useState(false)
+  const [notes,          setNotes]          = useState(meeting.notes ?? '')
+  const [saving,         setSaving]         = useState(false)
+  const [markingDone,    setMarkingDone]    = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
+
+  const now          = new Date()
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+  const meetingDt    = new Date(meeting.scheduled_at)
+  const isPast       = meetingDt < startOfToday
+  const isDone       = meeting.status === 'done'
+  const diffDays     = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
+  const displayName  = meeting.client?.name ?? meeting.client_name
+
+  let timeLabel = ''
+  if (!isDone) {
+    if (isPast)              timeLabel = 'Overdue'
+    else if (diffDays === 0) timeLabel = 'Today'
+    else if (diffDays === 1) timeLabel = 'Tomorrow'
+    else                     timeLabel = `In ${diffDays} days`
+  }
 
   async function handleSave() {
     if (!title.trim() || !scheduledAt) return
     setSaving(true)
-    await onSave(meeting.id, {
+    await onEdit(meeting.id, {
       title:        title.trim(),
       client_name:  clientName.trim() || undefined,
       client_id:    clientId || undefined,
@@ -250,43 +277,202 @@ function EditMeetingModal({
     setSaving(false)
   }
 
+  async function handleDone() {
+    setMarkingDone(true)
+    await onDone(meeting.id)
+    setMarkingDone(false)
+    onClose()
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    await onDelete(meeting.id)
+    setDeleting(false)
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-              <Pencil className="h-4 w-4 text-amber-400" />
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+              mode === 'edit' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
+            }`}>
+              {mode === 'edit'
+                ? <Pencil      className="h-4 w-4 text-amber-400" />
+                : <CalendarDays className="h-4 w-4 text-indigo-400" />}
             </div>
-            <span className="font-semibold text-white text-sm">Edit Meeting</span>
+            <span className="font-semibold text-white text-sm">
+              {mode === 'edit' ? 'Edit Meeting' : 'Meeting Details'}
+            </span>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <MeetingForm
-          clients={clients}
-          title={title} setTitle={setTitle}
-          clientName={clientName} setClientName={setClientName}
-          clientId={clientId} setClientId={setClientId}
-          scheduledAt={scheduledAt} setScheduledAt={setScheduledAt}
-          notes={notes} setNotes={setNotes}
-        />
+        {/* Body — view mode */}
+        {mode === 'view' && (
+          <div className="p-5 space-y-4">
+            {/* Title + status */}
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                isDone         ? 'bg-green-500/10'  :
+                isPast         ? 'bg-red-500/10'    :
+                diffDays === 0 ? 'bg-amber-500/10'  :
+                                 'bg-indigo-500/10'
+              }`}>
+                {isDone         ? <CheckCircle2 className="h-5 w-5 text-green-400" />  :
+                 isPast         ? <AlarmClock   className="h-5 w-5 text-red-400" />    :
+                 diffDays === 0 ? <Clock        className="h-5 w-5 text-amber-400" />  :
+                                  <CalendarDays className="h-5 w-5 text-indigo-400" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className={`font-bold text-base leading-tight ${isDone ? 'line-through text-slate-400' : 'text-white'}`}>
+                  {meeting.title}
+                </h2>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {isDone ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-medium">Done</span>
+                  ) : timeLabel ? (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+                      isPast         ? 'bg-red-500/10 text-red-400 border-red-500/20'       :
+                      diffDays === 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                       'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                    }`}>{timeLabel}</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
 
-        <div className="px-5 pb-5 flex gap-3">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!title.trim() || !scheduledAt || saving}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-            Save Changes
-          </button>
-        </div>
+            {/* Divider */}
+            <div className="border-t border-slate-800" />
+
+            {/* Details rows */}
+            <div className="space-y-3">
+              {/* Date & time */}
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Date &amp; Time</p>
+                  <p className="text-sm text-slate-200 font-medium">
+                    {meetingDt.toLocaleString([], {
+                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Client */}
+              {displayName && (
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Client</p>
+                    <p className="text-sm text-slate-200 font-medium flex items-center gap-1.5">
+                      {displayName}
+                      {meeting.client_id && (
+                        <span className="text-xs text-indigo-400 font-normal">· registered</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {meeting.notes && (
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <FileText className="h-3.5 w-3.5 text-slate-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-500">Notes</p>
+                    <p className="text-sm text-slate-300 mt-0.5 leading-relaxed whitespace-pre-wrap">{meeting.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-800" />
+
+            {/* Actions */}
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setMode('edit')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600/15 hover:bg-amber-600/25 text-amber-400 text-sm font-medium transition-colors border border-amber-500/20">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+
+              {!isDone && (
+                <>
+                  {!confirmDelete ? (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium transition-colors border border-red-500/20">
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">Sure?</span>
+                      <button onClick={handleDelete} disabled={deleting}
+                        className="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors disabled:opacity-60">
+                        {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Yes, delete'}
+                      </button>
+                      <button onClick={() => setConfirmDelete(false)}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleDone}
+                    disabled={markingDone}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
+                    {markingDone ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Mark Done
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Body — edit mode */}
+        {mode === 'edit' && (
+          <>
+            <MeetingForm
+              clients={clients}
+              title={title} setTitle={setTitle}
+              clientName={clientName} setClientName={setClientName}
+              clientId={clientId} setClientId={setClientId}
+              scheduledAt={scheduledAt} setScheduledAt={setScheduledAt}
+              notes={notes} setNotes={setNotes}
+            />
+            <div className="px-5 pb-5 flex gap-3">
+              <button onClick={() => setMode('view')}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
+                Back
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!title.trim() || !scheduledAt || saving}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                Save Changes
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -295,13 +481,13 @@ function EditMeetingModal({
 // ─── Meeting Card ─────────────────────────────────────────────────────────────
 function MeetingCard({
   meeting,
+  onView,
   onDone,
-  onEdit,
   onDelete,
 }: {
-  meeting: Meeting
+  meeting:  Meeting
+  onView:   (meeting: Meeting) => void
   onDone:   (id: string) => Promise<void>
-  onEdit:   (meeting: Meeting) => void
   onDelete: (id: string) => Promise<void>
 }) {
   const [markingDone, setMarkingDone] = useState(false)
@@ -324,13 +510,15 @@ function MeetingCard({
     else                     timeLabel = `In ${diffDays} days`
   }
 
-  async function handleDone() {
+  async function handleDone(e: React.MouseEvent) {
+    e.stopPropagation()
     setMarkingDone(true)
     await onDone(meeting.id)
     setMarkingDone(false)
   }
 
-  async function handleDelete() {
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
     if (!confirm('Delete this meeting?')) return
     setDeleting(true)
     await onDelete(meeting.id)
@@ -338,12 +526,15 @@ function MeetingCard({
   }
 
   return (
-    <Card className={`transition-all ${
-      isDone         ? 'opacity-60' :
-      isPast         ? 'border-red-500/20' :
-      diffDays === 0 ? 'border-amber-500/20' :
-                       'hover:border-slate-600'
-    }`}>
+    <Card
+      onClick={() => onView(meeting)}
+      className={`cursor-pointer transition-all ${
+        isDone         ? 'opacity-60' :
+        isPast         ? 'border-red-500/20 hover:border-red-500/40' :
+        diffDays === 0 ? 'border-amber-500/20 hover:border-amber-500/40' :
+                         'hover:border-indigo-500/40'
+      }`}
+    >
       <CardContent className="py-4">
         <div className="flex items-start gap-4">
           {/* Icon */}
@@ -397,12 +588,12 @@ function MeetingCard({
             </div>
 
             {meeting.notes && (
-              <p className="mt-1.5 text-xs text-slate-500 line-clamp-2">{meeting.notes}</p>
+              <p className="mt-1.5 text-xs text-slate-500 line-clamp-1">{meeting.notes}</p>
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Actions — stop propagation so clicks don't open detail modal */}
+          <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
             {!isDone && (
               <button onClick={handleDone} disabled={markingDone}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold transition-colors">
@@ -412,12 +603,6 @@ function MeetingCard({
                 Done
               </button>
             )}
-            <button
-              onClick={() => onEdit(meeting)}
-              title="Edit meeting"
-              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors">
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
             <button onClick={handleDelete} disabled={deleting}
               className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50">
               {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -437,7 +622,7 @@ export default function MeetingsPage() {
   const [loading,  setLoading]  = useState(true)
   const [filter,   setFilter]   = useState<'all' | 'upcoming' | 'done'>('upcoming')
   const [showNew,  setShowNew]  = useState(false)
-  const [editing,  setEditing]  = useState<Meeting | null>(null)
+  const [viewing,  setViewing]  = useState<Meeting | null>(null)
   const [apiError, setApiError] = useState('')
 
   async function load() {
@@ -501,7 +686,7 @@ export default function MeetingsPage() {
         prev.map(m => m.id === id ? updated : m)
             .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
       )
-      setEditing(null)
+      setViewing(null)
       toast('Meeting updated', 'success')
     } else {
       const err = await res.json().catch(() => ({}))
@@ -640,8 +825,8 @@ export default function MeetingsPage() {
             <MeetingCard
               key={m.id}
               meeting={m}
+              onView={setViewing}
               onDone={handleDone}
-              onEdit={setEditing}
               onDelete={handleDelete}
             />
           ))}
@@ -652,12 +837,14 @@ export default function MeetingsPage() {
         <NewMeetingModal clients={clients} onSave={handleCreate} onClose={() => setShowNew(false)} />
       )}
 
-      {editing && (
-        <EditMeetingModal
-          meeting={editing}
+      {viewing && (
+        <MeetingDetailModal
+          meeting={viewing}
           clients={clients}
-          onSave={handleEdit}
-          onClose={() => setEditing(null)}
+          onEdit={handleEdit}
+          onDone={handleDone}
+          onDelete={handleDelete}
+          onClose={() => setViewing(null)}
         />
       )}
     </div>
