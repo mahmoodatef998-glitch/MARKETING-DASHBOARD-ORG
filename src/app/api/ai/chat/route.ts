@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
   if (!message) return NextResponse.json({ error: 'message is required' }, { status: 400 })
 
   const [{ data: clients }, { data: tasks }, { data: invoices }] = await Promise.all([
-    supabase.from('clients').select('id, name, email, status, country').limit(50),
-    supabase.from('tasks').select('id, title, status, priority, due_date').limit(50),
-    supabase.from('invoices').select('id, invoice_number, total, status, due_date').limit(50),
+    supabase.from('clients').select('id, name, email, status, country').is('deleted_at', null).limit(50),
+    supabase.from('tasks').select('id, title, status, priority, due_date').is('deleted_at', null).limit(50),
+    supabase.from('invoices').select('id, invoice_number, total, status, due_date').is('deleted_at', null).limit(50),
   ])
 
   const reply = await chatWithAssistant({

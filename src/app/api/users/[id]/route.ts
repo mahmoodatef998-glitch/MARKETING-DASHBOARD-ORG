@@ -83,7 +83,7 @@ export async function DELETE(_: NextRequest, { params }: Ctx) {
     .single()
 
   if (profile?.client_id) {
-    await admin.from('clients').delete().eq('id', profile.client_id)
+    await admin.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', profile.client_id)
   }
 
   const { error } = await admin.auth.admin.deleteUser(id)

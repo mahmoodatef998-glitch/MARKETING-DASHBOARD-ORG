@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
     const { data } = await supabase
       .from('clients')
       .select('name, email, phone, status, website, address, created_at')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
     csv = toCSV((data ?? []) as Record<string, unknown>[], ['name', 'email', 'phone', 'status', 'website', 'address', 'created_at'])
     filename = 'clients.csv'
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest) {
     const { data } = await supabase
       .from('invoices')
       .select('invoice_number, status, total, tax, due_date, issued_date, client:clients(name)')
+      .is('deleted_at', null)
       .order('issued_date', { ascending: false })
     const rows = (data ?? []).map((i) => {
       const row = i as Record<string, unknown>

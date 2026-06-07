@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         .select('title, task_type, due_date')
         .eq('client_id', plan.client_id)
         .eq('status', 'done')
+        .eq('approval_status', 'admin_approved')
         .is('deleted_at', null)
         .gte('updated_at', toDateStr(periodStart))
 
@@ -171,6 +172,7 @@ export async function GET(req: NextRequest) {
     .from('invoices')
     .select('*, client:clients(*)')
     .eq('status', 'sent')
+    .is('deleted_at', null)
     .lt('due_date', today)
 
   for (const invoice of overdueInvoices ?? []) {
@@ -342,6 +344,7 @@ export async function GET(req: NextRequest) {
       .from('clients')
       .select('id, name, email')
       .eq('status', 'active')
+      .is('deleted_at', null)
 
     for (const client of activeClients ?? []) {
       try {

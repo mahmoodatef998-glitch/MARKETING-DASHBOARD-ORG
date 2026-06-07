@@ -126,7 +126,8 @@ CREATE TABLE IF NOT EXISTS public.automation_logs (
                   CHECK (type IN (
                     'payment_reminder','task_reminder','task_reminder_48h',
                     'task_reminder_24h','task_confirmation','task_completed',
-                    'task_in_review','task_assigned','weekly_report','client_welcome'
+                    'task_in_review','task_assigned','weekly_report','client_welcome',
+                    'auto_invoice','package_renewal_alert'
                   )),
   recipient_email text NOT NULL,
   subject         text NOT NULL,
@@ -377,3 +378,16 @@ ALTER TABLE public.scheduled_posts ADD COLUMN IF NOT EXISTS published_at timesta
 CREATE INDEX IF NOT EXISTS idx_tasks_approval_status ON public.tasks(approval_status);
 CREATE INDEX IF NOT EXISTS idx_clients_deleted_at    ON public.clients(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_invoices_deleted_at   ON public.invoices(deleted_at);
+
+-- Expand automation_logs.type CHECK to include auto_invoice and package_renewal_alert
+DO $$
+BEGIN
+  ALTER TABLE public.automation_logs DROP CONSTRAINT IF EXISTS automation_logs_type_check;
+  ALTER TABLE public.automation_logs ADD CONSTRAINT automation_logs_type_check
+    CHECK (type IN (
+      'payment_reminder','task_reminder','task_reminder_48h',
+      'task_reminder_24h','task_confirmation','task_completed',
+      'task_in_review','task_assigned','weekly_report','client_welcome',
+      'auto_invoice','package_renewal_alert'
+    ));
+END $$;

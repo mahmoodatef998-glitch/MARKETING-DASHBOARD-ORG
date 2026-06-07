@@ -28,6 +28,7 @@ export async function GET(
     .from('invoices')
     .select('*, client:clients(id, name, email, phone, country)')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
 
   if (error || !inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })

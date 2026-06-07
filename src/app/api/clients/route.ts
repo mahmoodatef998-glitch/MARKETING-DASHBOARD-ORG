@@ -27,6 +27,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('clients')
     .select('*, billing_plans(id, cycle_type, amount, currency, custom_days, next_invoice_date, is_active)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json(data)
