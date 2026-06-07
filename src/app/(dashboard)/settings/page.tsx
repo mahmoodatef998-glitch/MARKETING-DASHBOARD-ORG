@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Camera, Globe, Music2, CheckCircle2, XCircle, Loader2, Plus, Trash2, AlertTriangle, ExternalLink, Link2, Users } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { Client } from '@/types'
 
 const PLATFORMS = [
@@ -179,12 +180,27 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const searchParams   = useSearchParams()
+  const router         = useRouter()
   const [clients,      setClients]     = useState<Client[]>([])
   const [selectedId,   setSelectedId]  = useState<string>('')
   const [connections,  setConnections] = useState<Connection[]>([])
   const [loading,      setLoading]     = useState(true)
   const [oauthLoading, setOauthLoading] = useState(false)
   const [banner,       setBanner]      = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  // Role guard — only admin and media_buyer may access this page
+  useEffect(() => {
+    const client = getSupabaseClient()
+    client.auth.getUser().then(({ data }) => {
+      if (!data.user) { router.replace('/login'); return }
+      client.from('profiles').select('role').eq('id', data.user.id).single()
+        .then(({ data: profile }) => {
+          if (profile?.role && !['admin', 'media_buyer'].includes(profile.role)) {
+            router.replace('/dashboard')
+          }
+        })
+    })
+  }, [router])
 
   // Handle OAuth redirect result
   useEffect(() => {

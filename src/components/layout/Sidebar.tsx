@@ -32,25 +32,26 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-// Items marked adminOnly are hidden from non-admin roles
-const nav = [
-  { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, adminOnly: false },
-  { href: '/reports',         label: 'Reports',       icon: BarChart2,       adminOnly: true  },
-  { href: '/clients',         label: 'Clients',       icon: Users,           adminOnly: true  },
-  { href: '/team',            label: 'Team',          icon: UserCheck,       adminOnly: true  },
-  { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     adminOnly: false },
-  { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       adminOnly: false },
-  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    adminOnly: false },
-  { href: '/invoices',        label: 'Invoices',      icon: FileText,        adminOnly: true  },
-  { href: '/billing',         label: 'Billing',       icon: CreditCard,      adminOnly: true  },
-  { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   adminOnly: false },
-  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        adminOnly: false },
-  { href: '/automation',      label: 'Automation',    icon: Zap,             adminOnly: true  },
-  { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             adminOnly: false },
-  { href: '/media-library',   label: 'Media Library', icon: ImageIcon,       adminOnly: false },
-  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity,        adminOnly: true  },
-  { href: '/users',           label: 'Users',         icon: ShieldCheck,     adminOnly: true  },
-  { href: '/settings',        label: 'Social Media',  icon: Settings,        adminOnly: true  },
+// roles: null = visible to all authenticated dashboard users
+//        string[] = visible only to users whose role is in the list
+const nav: { href: string; label: string; icon: React.ElementType; roles: string[] | null }[] = [
+  { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, roles: null },
+  { href: '/reports',         label: 'Reports',       icon: BarChart2,       roles: ['admin'] },
+  { href: '/clients',         label: 'Clients',       icon: Users,           roles: ['admin'] },
+  { href: '/team',            label: 'Team',          icon: UserCheck,       roles: ['admin'] },
+  { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     roles: null },
+  { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       roles: null },
+  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    roles: null },
+  { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
+  { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
+  { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },
+  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        roles: ['admin', 'media_buyer'] },
+  { href: '/automation',      label: 'Automation',    icon: Zap,             roles: ['admin'] },
+  { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             roles: null },
+  { href: '/media-library',   label: 'Media Library', icon: ImageIcon,       roles: null },
+  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity,        roles: ['admin'] },
+  { href: '/users',           label: 'Users',         icon: ShieldCheck,     roles: ['admin'] },
+  { href: '/settings',        label: 'Social Media',  icon: Settings,        roles: ['admin', 'media_buyer'] },
 ]
 
 interface SidebarProps {
@@ -158,8 +159,7 @@ function SidebarContent({
   onNavClick:   () => void
   myDashboard?: string | null
 }) {
-  const isAdmin = userRole === 'admin'
-  const visibleNav = nav.filter(item => !item.adminOnly || isAdmin)
+  const visibleNav = nav.filter(item => !item.roles || item.roles.includes(userRole))
 
   return (
     <>

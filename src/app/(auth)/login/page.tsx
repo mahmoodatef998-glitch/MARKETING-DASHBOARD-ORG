@@ -37,7 +37,7 @@ export default function LoginPage() {
       const res     = await fetch('/api/profile')
       const profile = await res.json()
       if (profile.role === 'client') router.push('/client-portal')
-      else if (profile.role === 'admin') router.push('/dashboard')
+      else if (profile.role === 'admin' || profile.role === 'media_buyer') router.push('/dashboard')
       else router.push('/team-portal')
     } catch { router.push('/dashboard') }
   }
