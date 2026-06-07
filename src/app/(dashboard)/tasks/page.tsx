@@ -32,20 +32,25 @@ const TASK_TYPE_OPTIONS = [
 ] as const
 
 function ImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
-  const [uploading, setUploading] = useState(false)
+  const [uploading,   setUploading]   = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     try {
       const presignRes = await fetch('/api/upload/presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       })
-      if (!presignRes.ok) throw new Error('Presign failed')
+      if (!presignRes.ok) {
+        const err = await presignRes.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Presign failed')
+      }
       const data = await presignRes.json()
       const formData = new FormData()
       formData.append('file', file)
@@ -53,15 +58,20 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (url: strin
       formData.append('timestamp', String(data.timestamp))
       formData.append('signature', data.signature)
       formData.append('public_id', data.publicId)
-      formData.append('folder', data.folder)
       if (data.eager) formData.append('eager', data.eager)
       const uploadRes = await fetch(data.uploadUrl, { method: 'POST', body: formData })
-      if (!uploadRes.ok) throw new Error('Upload failed')
-      onChange(data.publicUrl)
+      if (!uploadRes.ok) {
+        const errBody = await uploadRes.json().catch(() => ({}))
+        throw new Error(errBody?.error?.message ?? 'Cloudinary upload failed')
+      }
+      const uploaded = await uploadRes.json()
+      onChange(uploaded.secure_url ?? data.publicUrl)
     } catch (err) {
       console.error('Image upload error:', err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed — check Cloudinary credentials')
     } finally {
       setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
     }
   }
 
@@ -86,13 +96,19 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (url: strin
         </div>
       ) : (
         <button type="button" onClick={() => inputRef.current?.click()}
-          className="w-full border-2 border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-xl py-6 flex flex-col items-center gap-2 text-slate-500 hover:text-slate-300 transition-all">
+          disabled={uploading}
+          className="w-full border-2 border-dashed border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-500/5 disabled:opacity-60 rounded-xl py-6 flex flex-col items-center gap-2 text-slate-500 hover:text-slate-300 transition-all">
           {uploading
             ? <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
             : <ImagePlus className="h-6 w-6" />}
           <span className="text-xs">{uploading ? 'Uploading…' : 'Click to upload reference image'}</span>
           <span className="text-[11px] text-slate-600">PNG, JPG, WebP up to 10 MB</span>
         </button>
+      )}
+      {uploadError && (
+        <p className="text-xs text-red-400 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3 shrink-0" /> {uploadError}
+        </p>
       )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
     </div>
