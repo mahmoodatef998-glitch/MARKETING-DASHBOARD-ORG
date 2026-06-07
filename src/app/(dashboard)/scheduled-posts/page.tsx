@@ -484,7 +484,7 @@ export default function PublishingHubPage() {
     setLoading(true)
     try {
       const [tasksRes, postsRes] = await Promise.all([
-        fetch('/api/tasks?status=done'),
+        fetch('/api/tasks?status=done&approval_status=admin_approved'),
         fetch('/api/social/scheduled-posts'),
       ])
       const [tasks, posts]: [ReadyTask[], ScheduledPost[]] = await Promise.all([

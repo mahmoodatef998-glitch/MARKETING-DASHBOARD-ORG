@@ -348,12 +348,12 @@ export default function DashboardPage() {
     } else if (role === 'media_buyer') {
       Promise.all([
         fetch('/api/social/scheduled-posts').then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch('/api/tasks').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/tasks?status=done&approval_status=admin_approved').then(r => r.ok ? r.json() : []).catch(() => []),
       ]).then(([posts, tasks]) => {
         const allTasks = Array.isArray(tasks) ? (tasks as TaskWithDelivery[]) : []
         setMbData({
           posts:      Array.isArray(posts) ? posts : [],
-          readyTasks: allTasks.filter(t => t.status === 'done' && t.delivery_url),
+          readyTasks: allTasks.filter(t => t.delivery_url),
         })
         setLoading(false)
       }).catch(() => setLoading(false))

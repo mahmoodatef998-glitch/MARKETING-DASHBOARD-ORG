@@ -51,9 +51,11 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status')
     const clientId = searchParams.get('client_id')
     const assignedTo = searchParams.get('assigned_to')
+    const approvalStatus = searchParams.get('approval_status')
     if (status) query = query.eq('status', status)
     if (clientId) query = query.eq('client_id', clientId)
     if (assignedTo) query = query.eq('assigned_to', assignedTo)
+    if (approvalStatus) query = query.eq('approval_status', approvalStatus)
   }
 
   const { data, error } = await query

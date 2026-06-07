@@ -49,6 +49,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('id', id)
     .single()
 
+  // Auto-queue for admin approval when any task is marked done
+  if (body.status === 'done' && oldTask?.status !== 'done') {
+    updated.approval_status = 'pending'
+  }
+
   const { data, error } = await supabase
     .from('tasks')
     .update(updated)
