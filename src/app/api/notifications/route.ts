@@ -19,23 +19,37 @@ export async function GET() {
 
   const today = new Date().toISOString().split('T')[0]
 
+  const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
+  const isClient = profile?.role === 'client'
+
+  let tasksQuery = supabase
+    .from('tasks')
+    .select('id, title, status, due_date')
+    .in('status', ['overdue', 'todo', 'in_progress'])
+    .is('deleted_at', null)
+  let invoicesQuery = supabase
+    .from('invoices')
+    .select('id, invoice_number, status, total')
+    .eq('status', 'overdue')
+
+  if (isClient) {
+    if (!profile.client_id) return NextResponse.json([])
+    tasksQuery   = tasksQuery.eq('client_id', profile.client_id)
+    invoicesQuery = invoicesQuery.eq('client_id', profile.client_id)
+  }
+
   const [tasksRes, invoicesRes, logsRes] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('id, title, status, due_date')
-      .in('status', ['overdue', 'todo', 'in_progress'])
-      .is('deleted_at', null),
-    supabase
-      .from('invoices')
-      .select('id, invoice_number, status, total')
-      .eq('status', 'overdue'),
-    supabase
-      .from('automation_logs')
-      .select('id, type, subject, status, created_at')
-      .eq('status', 'failed')
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(3),
+    tasksQuery,
+    invoicesQuery,
+    isClient
+      ? Promise.resolve({ data: [] })
+      : supabase
+          .from('automation_logs')
+          .select('id, type, subject, status, created_at')
+          .eq('status', 'failed')
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(3),
   ])
 
   const notifications: Notification[] = []

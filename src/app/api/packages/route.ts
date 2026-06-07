@@ -13,6 +13,11 @@ export async function GET(req: NextRequest) {
   const clientId = new URL(req.url).searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
 
+  const { data: callerProfile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
+  if (callerProfile?.role === 'client' && clientId !== callerProfile.client_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { data: packages, error } = await supabase
     .from('client_packages')
     .select('*, items:package_items(*)')

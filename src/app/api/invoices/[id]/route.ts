@@ -80,12 +80,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json()
 
-  let updated: any = { ...body, updated_at: new Date().toISOString(), due_date: body.due_date || null }
+  let updated: Record<string, unknown> = {
+    invoice_number: body.invoice_number,
+    client_id:      body.client_id,
+    status:         body.status,
+    due_date:       body.due_date || null,
+    issued_date:    body.issued_date,
+    notes:          body.notes ?? null,
+    updated_at:     new Date().toISOString(),
+  }
 
   if (body.items) {
-    const subtotal = body.items.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0)
+    const subtotal = (body.items as Array<{quantity: number; unit_price: number}>).reduce((s, i) => s + i.quantity * i.unit_price, 0)
     const tax = body.tax ?? 0
-    updated = { ...updated, subtotal, total: subtotal + (subtotal * tax) / 100 }
+    updated = { ...updated, items: body.items, subtotal, total: subtotal + (subtotal * tax) / 100, tax }
   }
 
   const { data, error } = await supabase

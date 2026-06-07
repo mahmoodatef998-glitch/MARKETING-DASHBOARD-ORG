@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSupabaseClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -28,8 +28,9 @@ import {
   Activity,
   ImageIcon,
   X,
+  PieChart,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const nav = [
   { href: '/dashboard',       label: 'Dashboard',    icon: LayoutDashboard },
@@ -42,7 +43,7 @@ const nav = [
   { href: '/invoices',        label: 'Invoices',     icon: FileText },
   { href: '/billing',         label: 'Billing',      icon: CreditCard },
   { href: '/inbox',           label: 'Inbox',        icon: MessageSquare },
-  { href: '/scheduled-posts', label: 'Scheduled',    icon: Calendar },
+  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar },
   { href: '/automation',      label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',    label: 'AI Assistant', icon: Bot },
   { href: '/media-library',   label: 'Media Library', icon: ImageIcon },
@@ -59,7 +60,27 @@ interface SidebarProps {
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const router   = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed,   setCollapsed]   = useState(false)
+  const [myDashboard, setMyDashboard] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (DEMO) return
+    const client = getSupabaseClient()
+    client.auth.getUser().then(({ data }) => {
+      if (!data.user) return
+      client
+        .from('profiles')
+        .select('role, id')
+        .eq('id', data.user.id)
+        .single()
+        .then(({ data: profile }) => {
+          const teamRoles = ['video_maker', 'designer', 'ai_video', 'media_buyer']
+          if (profile?.role && teamRoles.includes(profile.role)) {
+            setMyDashboard(`/team/${profile.id}`)
+          }
+        })
+    })
+  }, [])
 
   async function handleLogout() {
     if (!DEMO) await supabase.auth.signOut()
@@ -84,6 +105,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           collapsed={collapsed}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
+          myDashboard={myDashboard}
         />
         {/* Collapse toggle */}
         <button
@@ -114,6 +136,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           collapsed={false}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
+          myDashboard={myDashboard}
         />
       </aside>
     </>
@@ -121,12 +144,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 }
 
 function SidebarContent({
-  pathname, collapsed, onLogout, onNavClick,
+  pathname, collapsed, onLogout, onNavClick, myDashboard,
 }: {
-  pathname:    string
-  collapsed:   boolean
-  onLogout:    () => void
-  onNavClick:  () => void
+  pathname:     string
+  collapsed:    boolean
+  onLogout:     () => void
+  onNavClick:   () => void
+  myDashboard?: string | null
 }) {
   return (
     <>
@@ -142,6 +166,27 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
+        {/* My Dashboard — only for team members */}
+        {myDashboard && (
+          <Link
+            href={myDashboard}
+            title={collapsed ? 'My Dashboard' : undefined}
+            onClick={onNavClick}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+              pathname.startsWith('/team/')
+                ? 'bg-indigo-600/20 text-indigo-400'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+            )}
+          >
+            <PieChart className={cn('h-4 w-4 shrink-0', pathname.startsWith('/team/') && 'text-indigo-400')} />
+            {!collapsed && <span>My Dashboard</span>}
+            {pathname.startsWith('/team/') && !collapsed && (
+              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            )}
+          </Link>
+        )}
+
         {nav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (

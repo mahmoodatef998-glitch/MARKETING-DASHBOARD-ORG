@@ -8,10 +8,16 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
   // Use admin client so RLS can't silently block message reads
   const admin = createAdminClient()
   const { searchParams } = new URL(req.url)
   const partnerId = searchParams.get('partner')
+
+  if (partnerId && !UUID_RE.test(partnerId)) {
+    return NextResponse.json({ error: 'Invalid partner ID' }, { status: 400 })
+  }
 
   let query = admin
     .from('messages')
@@ -40,9 +46,13 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const UUID_POST_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   const { receiver_id, content } = await req.json()
   if (!receiver_id || !content?.trim()) {
     return NextResponse.json({ error: 'receiver_id and content are required' }, { status: 400 })
+  }
+  if (!UUID_POST_RE.test(receiver_id)) {
+    return NextResponse.json({ error: 'Invalid receiver_id' }, { status: 400 })
   }
 
   // Use admin client to bypass RLS on insert

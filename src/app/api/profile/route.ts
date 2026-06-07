@@ -17,7 +17,7 @@ export async function GET() {
     // First time — auto-create admin profile
     const { data: newProfile } = await supabase
       .from('profiles')
-      .insert({ id: user.id, role: 'admin', display_name: user.email })
+      .insert({ id: user.id, role: 'video_maker', display_name: user.email })
       .select()
       .single()
     return NextResponse.json({ ...newProfile, email: user.email })

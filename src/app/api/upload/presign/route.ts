@@ -36,19 +36,19 @@ export async function POST(req: NextRequest) {
   const publicId   = `${folder}/${user.id}_${timestamp}`
   const eager      = !isAudio && !isVideo ? 'q_auto,f_auto' : undefined
 
+  // Sign only public_id + timestamp (+ eager). Do NOT include folder separately —
+  // publicId already encodes the full path, so sending folder to Cloudinary would
+  // cause it to be prepended again, resulting in a double-folder path.
   const paramsToSign: Record<string, string | number> = {
-    folder,
-    public_id:     publicId,
+    public_id: publicId,
     timestamp,
     ...(eager ? { eager } : {}),
   }
 
   const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET!)
 
-  // Upload URL for the client to POST directly to Cloudinary
   const uploadUrl = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`
 
-  // Public URL after upload (Cloudinary constructs it from public_id)
   const ext       = filename.split('.').pop()?.toLowerCase() ?? 'bin'
   const publicUrl = cloudinary.url(publicId, {
     resource_type: resourceType,
@@ -62,8 +62,7 @@ export async function POST(req: NextRequest) {
     publicUrl,
     signature,
     timestamp,
-    apiKey:   process.env.CLOUDINARY_API_KEY,
-    folder,
-    eager:    eager ?? null,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    eager:  eager ?? null,
   })
 }

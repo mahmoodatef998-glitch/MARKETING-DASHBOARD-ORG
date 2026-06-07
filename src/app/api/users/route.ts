@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
     // package (clients only)
     package: packageData,
   } = await req.json()
+
+  const VALID_ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'client']
+  if (!VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
+
   const admin = createAdminClient()
 
   // Create auth user
@@ -156,18 +162,21 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (!billingErr && billingPlan) {
-        // Fire first invoice immediately (non-blocking — don't fail user creation if email fails)
-        generateAndSendInvoice({
-          supabase:      admin,
-          clientId:      resolvedClientId!,
-          clientEmail:   email,
-          clientName:    display_name,
-          amount,
-          currency,
-          billingPlanId: billingPlan.id,
-          cycleType:     cycle,
-          customDays,
-        }).catch(err => console.error('[billing] first invoice failed:', err.message))
+        try {
+          await generateAndSendInvoice({
+            supabase:      admin,
+            clientId:      resolvedClientId!,
+            clientEmail:   email,
+            clientName:    display_name,
+            amount,
+            currency,
+            billingPlanId: billingPlan.id,
+            cycleType:     cycle,
+            customDays,
+          })
+        } catch (err) {
+          console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
+        }
       }
     }
   }

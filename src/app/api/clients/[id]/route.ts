@@ -20,8 +20,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (authErr) return authErr
 
   const body = await req.json()
-  const { billing_plan, ...clientBody } = body
-  const updated = { ...clientBody, updated_at: new Date().toISOString() }
+  const { billing_plan } = body
+  const updated = {
+    name:       body.name,
+    email:      body.email,
+    phone:      body.phone ?? null,
+    status:     body.status,
+    country:    body.country ?? null,
+    notes:      body.notes ?? null,
+    notion_id:  body.notion_id ?? null,
+    updated_at: new Date().toISOString(),
+  }
 
   const { data, error } = await supabase
     .from('clients')

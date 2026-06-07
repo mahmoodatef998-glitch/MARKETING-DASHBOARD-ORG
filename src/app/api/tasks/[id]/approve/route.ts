@@ -32,6 +32,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  if (task.status === 'done') {
+    return NextResponse.json({ error: 'Task already approved' }, { status: 409 })
+  }
+
   const updates: Record<string, unknown> = {
     status:     'done',
     updated_at: new Date().toISOString(),

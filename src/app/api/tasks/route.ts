@@ -106,18 +106,18 @@ export async function POST(req: NextRequest) {
     void sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`)
 
     // Email notification to the assigned team member
-    void (async () => {
-      try {
-        const admin = createAdminClient()
-        const { data: authUser } = await admin.auth.admin.getUserById(task.assigned_to!)
-        const memberEmail = authUser?.user?.email
-        if (!memberEmail) return
+    const adminClient = createAdminClient()
+    let memberEmail: string | undefined
+    try {
+      const { data: authUser } = await adminClient.auth.admin.getUserById(task.assigned_to)
+      memberEmail = authUser?.user?.email
 
-        const { data: profile } = await admin.from('profiles').select('display_name').eq('id', task.assigned_to!).single()
+      if (memberEmail) {
+        const { data: profile } = await adminClient.from('profiles').select('display_name').eq('id', task.assigned_to).single()
         const memberName = profile?.display_name ?? memberEmail
 
         const { data: client } = task.client_id
-          ? await admin.from('clients').select('name').eq('id', task.client_id).single()
+          ? await adminClient.from('clients').select('name').eq('id', task.client_id).single()
           : { data: null }
 
         const details = [
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
         })
 
         await sendEmail({ to: memberEmail, subject, body: emailBody })
-        await admin.from('automation_logs').insert({
+        await adminClient.from('automation_logs').insert({
           type:            'task_assigned',
           recipient_email: memberEmail,
           subject,
@@ -143,9 +143,11 @@ export async function POST(req: NextRequest) {
           task_id:         task.id,
           created_at:      new Date().toISOString(),
         })
-      } catch (err) {
-        console.error('[tasks] assignment email failed:', err)
-        await admin.from('automation_logs').insert({
+      }
+    } catch (err) {
+      console.error('[tasks] assignment email failed:', err)
+      try {
+        await adminClient.from('automation_logs').insert({
           type:            'task_assigned',
           recipient_email: memberEmail ?? task.assigned_to ?? '',
           subject:         `Task assigned: ${task.title}`,
@@ -153,9 +155,9 @@ export async function POST(req: NextRequest) {
           error:           err instanceof Error ? err.message : String(err),
           task_id:         task.id,
           created_at:      new Date().toISOString(),
-        }).catch(() => {})
-      }
-    })()
+        })
+      } catch {}
+    }
   }
   return NextResponse.json(task, { status: 201 })
 }

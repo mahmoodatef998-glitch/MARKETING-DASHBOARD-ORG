@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
-import { generateAndSendInvoice, nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
 import { rateLimit } from '@/lib/rate-limit'
 import { sendSlack } from '@/lib/slack'
 
@@ -141,10 +141,6 @@ export async function GET(req: NextRequest) {
         completedTasks: doneTasks ?? [],
       })
 
-      // Advance next_invoice_date to the next cycle so cron won't re-generate
-      const nextDate = nextInvoiceDate(now, plan.cycle_type as CycleType, plan.custom_days ?? undefined)
-      await supabase.from('billing_plans').update({ next_invoice_date: toDateStr(nextDate) }).eq('id', plan.id)
-
       await supabase.from('automation_logs').insert({
         type:            'auto_invoice',
         recipient_email: plan.client.email,
@@ -155,14 +151,16 @@ export async function GET(req: NextRequest) {
       results.push({ type: 'auto_invoice', recipient: plan.client.email, status: 'sent' })
     } catch (err: any) {
       console.error('[cron] auto_invoice failed:', err.message)
-      await supabase.from('automation_logs').insert({
-        type:            'auto_invoice',
-        recipient_email: plan.client.email,
-        subject:         `Invoice generation failed for ${plan.client.name}`,
-        status:          'failed',
-        error:           err.message,
-        created_at:      now.toISOString(),
-      }).catch(() => {})
+      try {
+        await supabase.from('automation_logs').insert({
+          type:            'auto_invoice',
+          recipient_email: plan.client.email,
+          subject:         `Invoice generation failed for ${plan.client.name}`,
+          status:          'failed',
+          error:           err.message,
+          created_at:      now.toISOString(),
+        })
+      } catch {}
       results.push({ type: 'auto_invoice', recipient: plan.client.email, status: 'failed' })
     }
   }
@@ -211,6 +209,7 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
     .not('status', 'in', '("done","overdue")')
+    .is('deleted_at', null)
     .lt('due_date', today)
 
   for (const task of overdueTasks ?? []) {
@@ -239,15 +238,17 @@ export async function GET(req: NextRequest) {
       })
       results.push({ type: 'task_reminder', recipient: email, status: 'sent' })
     } catch (err: any) {
-      await supabase.from('automation_logs').insert({
-        type:            'task_reminder',
-        recipient_email: task.assigned_to,
-        subject:         'Overdue Task Reminder',
-        status:          'failed',
-        error:           err.message,
-        task_id:         task.id,
-        created_at:      now.toISOString(),
-      }).catch(() => {})
+      try {
+        await supabase.from('automation_logs').insert({
+          type:            'task_reminder',
+          recipient_email: task.assigned_to,
+          subject:         'Overdue Task Reminder',
+          status:          'failed',
+          error:           err.message,
+          task_id:         task.id,
+          created_at:      now.toISOString(),
+        })
+      } catch {}
       results.push({ type: 'task_reminder', recipient: task.assigned_to, status: 'failed' })
     }
   }
@@ -422,14 +423,16 @@ export async function GET(req: NextRequest) {
       })
       results.push({ type: 'package_renewal_alert', recipient: client.email, status: 'sent' })
     } catch (err: any) {
-      await supabase.from('automation_logs').insert({
-        type:            'package_renewal_alert',
-        recipient_email: client.email,
-        subject:         `Package renewal alert failed for ${client.name}`,
-        status:          'failed',
-        error:           err.message,
-        created_at:      now.toISOString(),
-      }).catch(() => {})
+      try {
+        await supabase.from('automation_logs').insert({
+          type:            'package_renewal_alert',
+          recipient_email: client.email,
+          subject:         `Package renewal alert failed for ${client.name}`,
+          status:          'failed',
+          error:           err.message,
+          created_at:      now.toISOString(),
+        })
+      } catch {}
       results.push({ type: 'package_renewal_alert', recipient: client.email, status: 'failed' })
     }
   }
