@@ -10,6 +10,42 @@ import {
 import type { Task, Message } from '@/types'
 import { getSupabaseClient } from '@/lib/supabase'
 import { CalendarView } from '@/components/calendar/CalendarView'
+import { DonutChart } from '@/components/charts'
+
+// ── Dashboard chart helpers ────────────────────────────────────────────────────
+function byMonth(tasks: Task[]): { label: string; done: number; total: number }[] {
+  const now = new Date()
+  const months: { label: string; done: number; total: number }[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const label = d.toLocaleString('en-US', { month: 'short' })
+    const inMonth = tasks.filter((t) => {
+      const created = new Date(t.created_at)
+      return created.getMonth() === d.getMonth() && created.getFullYear() === d.getFullYear()
+    })
+    months.push({ label, total: inMonth.length, done: inMonth.filter((t) => t.status === 'done').length })
+  }
+  return months
+}
+
+function MonthlyBars({ data }: { data: { label: string; done: number; total: number }[] }) {
+  const max = Math.max(...data.map((d) => d.total), 1)
+  return (
+    <div className="flex items-end gap-2 h-20">
+      {data.map((d) => (
+        <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+          <div className="w-full flex flex-col justify-end" style={{ height: 64 }}>
+            <div className="relative w-full rounded-t-md overflow-hidden" style={{ height: `${(d.total / max) * 64}px`, minHeight: d.total > 0 ? 4 : 0 }}>
+              <div className="absolute inset-0 bg-slate-700 rounded-t-md" />
+              <div className="absolute bottom-0 left-0 right-0 bg-indigo-500 rounded-t-md transition-all" style={{ height: `${d.total > 0 ? (d.done / d.total) * 100 : 0}%` }} />
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-500">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // ── Shared constants ───────────────────────────────────────────────────────────
 const PLATFORM_META: Record<string, { label: string; icon: React.ElementType; pill: string; color: string; bg: string }> = {
@@ -997,88 +1033,136 @@ function DashboardTab({ tasks }: { tasks: Task[] }) {
       .finally(() => setEarningsLoading(false))
   }, [])
 
-  const totalTasks    = tasks.length
   const doneTasks     = tasks.filter(t => t.status === 'done')
-  const inProgress    = tasks.filter(t => t.status === 'in_progress' || t.status === 'review')
+  const inProgress    = tasks.filter(t => t.status === 'in_progress')
+  const reviewTasks   = tasks.filter(t => t.status === 'review')
+  const todoTasks     = tasks.filter(t => t.status === 'todo')
   const overdueTasks  = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done')
 
-  // On-time rate: done tasks without overdue flag
-  const doneOnTime   = doneTasks.filter(t => !(t.due_date && new Date(t.due_date) < new Date()))
-  const onTimeRate   = doneTasks.length > 0 ? Math.round((doneOnTime.length / doneTasks.length) * 100) : 0
+  const doneOnTime    = doneTasks.filter(t => !(t.due_date && new Date(t.due_date) < new Date()))
+  const onTimeRate    = doneTasks.length > 0 ? Math.round((doneOnTime.length / doneTasks.length) * 100) : null
+  const revisedTasks  = doneTasks.filter(t => t.revision_notes)
+  const revisionRate  = doneTasks.length > 0 ? Math.round((revisedTasks.length / doneTasks.length) * 100) : null
+  const completionRate = tasks.length > 0 ? Math.round((doneTasks.length / tasks.length) * 100) : null
 
-  // Revision rate: done tasks that had revision_notes
-  const revisedTasks = doneTasks.filter(t => t.revision_notes)
-  const revisionRate = doneTasks.length > 0 ? Math.round((revisedTasks.length / doneTasks.length) * 100) : 0
+  const totalEarned   = earnings.reduce((s, e) => s + (e.amount ?? 0), 0)
+  const monthlyData   = byMonth(tasks)
 
-  const totalEarned  = earnings.reduce((s, e) => s + (e.amount ?? 0), 0)
+  const donutSegments = [
+    { label: 'Done',        value: doneTasks.length,   color: '#22c55e' },
+    { label: 'In Progress', value: inProgress.length,  color: '#3b82f6' },
+    { label: 'Review',      value: reviewTasks.length, color: '#f59e0b' },
+    { label: 'To Do',       value: todoTasks.length,   color: '#64748b' },
+    { label: 'Overdue',     value: overdueTasks.length, color: '#ef4444' },
+  ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
 
-      {/* Task stats */}
-      <div>
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Task Overview</p>
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: 'Total Tasks',  value: tasks.length,        color: 'text-indigo-400', bg: 'bg-indigo-500/10', icon: BarChart2 },
+          { label: 'Completed',    value: doneTasks.length,    color: 'text-green-400',  bg: 'bg-green-500/10',  icon: CheckCircle2 },
+          { label: 'In Progress',  value: inProgress.length,   color: 'text-blue-400',   bg: 'bg-blue-500/10',   icon: Clock },
+          { label: 'Overdue',      value: overdueTasks.length, color: 'text-red-400',    bg: 'bg-red-500/10',    icon: AlertTriangle },
+        ].map(({ label, value, color, bg, icon: Icon }) => (
+          <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+              <Icon className={`h-4 w-4 ${color}`} />
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-tight">{label}</p>
+              <p className={`text-xl font-bold ${color}`}>{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 gap-3">
+
+        {/* Donut — status distribution */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p className="text-xs font-semibold text-slate-400 mb-3">Task Status Distribution</p>
+          <div className="flex items-center gap-5">
+            <DonutChart segments={donutSegments} size={110} />
+            <div className="space-y-1.5 flex-1">
+              {donutSegments.filter(s => s.value > 0).map((s) => (
+                <div key={s.label} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                    <span className="text-slate-400">{s.label}</span>
+                  </div>
+                  <span className="font-semibold text-slate-200">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly bars */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-slate-400">Monthly Activity</p>
+            <div className="flex items-center gap-3 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block" /> Done</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-slate-700 inline-block" /> Total</span>
+            </div>
+          </div>
+          <MonthlyBars data={monthlyData} />
+        </div>
+      </div>
+
+      {/* Performance metrics */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p className="text-xs font-semibold text-slate-400 mb-3">Performance</p>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: 'Total Tasks',  value: totalTasks,        color: 'text-white' },
-            { label: 'Completed',    value: doneTasks.length,  color: 'text-green-400' },
-            { label: 'In Progress',  value: inProgress.length, color: 'text-blue-400' },
-            { label: 'Overdue',      value: overdueTasks.length, color: 'text-red-400' },
+            {
+              label: 'On-time Rate',
+              value: onTimeRate !== null ? `${onTimeRate}%` : 'N/A',
+              color: onTimeRate === null ? 'text-slate-500' : onTimeRate >= 70 ? 'text-green-400' : onTimeRate >= 40 ? 'text-amber-400' : 'text-red-400',
+            },
+            {
+              label: 'Revision Rate',
+              value: revisionRate !== null ? `${revisionRate}%` : 'N/A',
+              color: revisionRate === null ? 'text-slate-500' : revisionRate <= 20 ? 'text-green-400' : revisionRate <= 40 ? 'text-amber-400' : 'text-red-400',
+            },
+            {
+              label: 'Completion',
+              value: completionRate !== null ? `${completionRate}%` : 'N/A',
+              color: completionRate === null ? 'text-slate-500' : completionRate >= 70 ? 'text-green-400' : 'text-amber-400',
+            },
+            {
+              label: 'In Review',
+              value: reviewTasks.length,
+              color: 'text-amber-400',
+            },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-              <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+            <div key={label} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+              <p className="text-[10px] text-slate-500 mb-0.5">{label}</p>
+              <p className={`text-xl font-bold ${color}`}>{value}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Performance rates */}
-      {doneTasks.length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Performance</p>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300">On-time Rate</span>
-                <span className={`font-semibold ${onTimeRate >= 80 ? 'text-green-400' : onTimeRate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{onTimeRate}%</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${onTimeRate >= 80 ? 'bg-green-500' : onTimeRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                  style={{ width: `${onTimeRate}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">{doneOnTime.length} of {doneTasks.length} done tasks delivered on time</p>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300">Revision Rate</span>
-                <span className={`font-semibold ${revisionRate === 0 ? 'text-green-400' : revisionRate <= 20 ? 'text-amber-400' : 'text-red-400'}`}>{revisionRate}%</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${revisionRate === 0 ? 'bg-green-500' : revisionRate <= 20 ? 'bg-amber-500' : 'bg-red-500'}`}
-                  style={{ width: `${revisionRate}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">{revisedTasks.length} of {doneTasks.length} done tasks had revisions</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Earnings */}
       {earningsLoading ? (
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-6">
           <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
         </div>
       ) : earnings.length > 0 ? (
         <div className="space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Earnings</p>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-            <div className="text-3xl font-extrabold text-green-400">{totalEarned} AED</div>
-            <div className="text-xs text-slate-500 mt-1">Total Earned</div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Earned</p>
+              <p className="text-2xl font-extrabold text-green-400">{totalEarned} AED</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-green-400" />
+            </div>
           </div>
           <div className="space-y-2">
             {earnings.map(e => (
@@ -1096,10 +1180,9 @@ function DashboardTab({ tasks }: { tasks: Task[] }) {
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-500 text-center">Earnings are credited for approved design tasks</p>
         </div>
       ) : (
-        <p className="text-xs text-slate-500 text-center py-4">Design task approvals will appear here</p>
+        <p className="text-xs text-slate-500 text-center py-4">Approved task earnings will appear here</p>
       )}
     </div>
   )
