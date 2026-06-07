@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   CalendarDays, Plus, CheckCircle2, Clock, Trash2, Loader2,
   Users, X, AlarmClock, ChevronDown, Pencil, FileText,
@@ -617,6 +618,7 @@ function MeetingCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MeetingsPage() {
   const { toast }  = useToast()
+  const router     = useRouter()
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [clients,  setClients]  = useState<Client[]>([])
   const [loading,  setLoading]  = useState(true)
@@ -624,6 +626,20 @@ export default function MeetingsPage() {
   const [showNew,  setShowNew]  = useState(false)
   const [viewing,  setViewing]  = useState<Meeting | null>(null)
   const [apiError, setApiError] = useState('')
+
+  // Role guard — meetings are admin-only
+  useEffect(() => {
+    import('@/lib/supabase').then(({ getSupabaseClient }) => {
+      const client = getSupabaseClient()
+      client.auth.getUser().then(({ data }) => {
+        if (!data.user) { router.replace('/login'); return }
+        client.from('profiles').select('role').eq('id', data.user.id).single()
+          .then(({ data: profile }) => {
+            if (profile?.role && profile.role !== 'admin') router.replace('/dashboard')
+          })
+      })
+    })
+  }, [router])
 
   async function load() {
     setApiError('')

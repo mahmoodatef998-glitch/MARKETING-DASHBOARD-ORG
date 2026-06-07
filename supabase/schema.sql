@@ -379,6 +379,23 @@ CREATE INDEX IF NOT EXISTS idx_tasks_approval_status ON public.tasks(approval_st
 CREATE INDEX IF NOT EXISTS idx_clients_deleted_at    ON public.clients(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_invoices_deleted_at   ON public.invoices(deleted_at);
 
+-- Create meetings table (if not created by initial schema run)
+CREATE TABLE IF NOT EXISTS public.meetings (
+  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title        text NOT NULL,
+  client_id    uuid REFERENCES public.clients(id) ON DELETE SET NULL,
+  client_name  text,
+  scheduled_at timestamptz NOT NULL,
+  notes        text,
+  status       text NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','done','cancelled')),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.meetings;
+CREATE POLICY "auth_all" ON public.meetings FOR ALL USING (auth.role() = 'authenticated');
+
 -- Expand automation_logs.type CHECK to include auto_invoice and package_renewal_alert
 DO $$
 BEGIN

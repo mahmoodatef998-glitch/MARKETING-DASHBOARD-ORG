@@ -41,7 +41,7 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/team',            label: 'Team',          icon: UserCheck,       roles: ['admin'] },
   { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     roles: null },
   { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       roles: null },
-  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    roles: null },
+  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    roles: ['admin'] },
   { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
   { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
   { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },

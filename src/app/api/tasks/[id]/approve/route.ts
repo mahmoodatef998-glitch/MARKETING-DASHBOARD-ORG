@@ -37,8 +37,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const updates: Record<string, unknown> = {
-    status:     'done',
-    updated_at: new Date().toISOString(),
+    status:             'done',
+    approval_status:    profile?.role === 'admin' ? 'admin_approved' : 'client_approved',
+    client_approved_at: new Date().toISOString(),
+    updated_at:         new Date().toISOString(),
   }
   if (rating)      updates.client_rating      = Number(rating)
   if (rating_note) updates.client_rating_note = String(rating_note)
