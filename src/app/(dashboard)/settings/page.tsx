@@ -238,12 +238,13 @@ export default function SettingsPage() {
   // Load clients once
   useEffect(() => {
     fetch('/api/clients')
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : [])
       .then((data: Client[]) => {
         const list = Array.isArray(data) ? data : []
         setClients(list)
         if (list.length > 0 && !selectedId) setSelectedId(list[0].id)
       })
+      .catch(() => setClients([]))
   }, [])
 
   const loadConnections = useCallback(async (clientId: string) => {
@@ -340,12 +341,19 @@ export default function SettingsPage() {
         <select
           value={selectedId}
           onChange={e => { setSelectedId(e.target.value); setBanner(null) }}
-          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+          disabled={clients.length === 0}
+          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {clients.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
+          {clients.length === 0
+            ? <option value="">— No clients found —</option>
+            : clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+          }
         </select>
+        {clients.length === 0 && (
+          <p className="text-xs text-amber-400/80 flex items-center gap-1.5">
+            ⚠ No clients found. Ask your admin to add clients first.
+          </p>
+        )}
 
         {/* OAuth connect button */}
         {selectedId && (

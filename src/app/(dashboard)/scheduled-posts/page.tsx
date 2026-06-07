@@ -5,7 +5,7 @@ import {
   Calendar, Camera, Globe, Music2, Clock, CheckCircle2, XCircle,
   Loader2, Trash2, ExternalLink, RefreshCw, Sparkles, Send,
   ImageIcon, FileVideo, Layers, ChevronDown, X, AlertCircle,
-  LayoutGrid, PlayCircle,
+  LayoutGrid, PlayCircle, CalendarDays,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,7 @@ interface ReadyTask {
 interface ScheduledPost {
   id: string
   task_id: string | null
+  client_id: string | null
   platform: string
   scheduled_at: string
   caption: string | null
@@ -461,7 +462,154 @@ function PostCard({ post, onCancel }: { post: ScheduledPost; onCancel: (id: stri
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type Tab = 'ready' | 'planned' | 'published'
+type Tab = 'ready' | 'planned' | 'published' | 'calendar'
+
+// ─── Calendar View ────────────────────────────────────────────────────────────
+
+const PLATFORM_COLOR: Record<string, string> = {
+  instagram: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  facebook:  'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  tiktok:    'bg-slate-600/40 text-slate-300 border-slate-500/30',
+}
+
+function CalendarView({ posts }: { posts: ScheduledPost[] }) {
+  const [month,    setMonth]    = useState(() => new Date())
+  const [clients,  setClients]  = useState<{ id: string; name: string }[]>([])
+  const [clientId, setClientId] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/clients')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setClients(data) })
+      .catch(() => {})
+  }, [])
+
+  const year  = month.getFullYear()
+  const mon   = month.getMonth()
+  const label = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  function prevMonth() { setMonth(new Date(year, mon - 1, 1)) }
+  function nextMonth() { setMonth(new Date(year, mon + 1, 1)) }
+
+  // Build a map: 'YYYY-MM-DD' → ScheduledPost[]
+  const filtered = clientId ? posts.filter(p => p.client_id === clientId) : posts
+  const byDay: Record<string, ScheduledPost[]> = {}
+  for (const p of filtered) {
+    if (!p.scheduled_at) continue
+    const key = new Date(p.scheduled_at).toISOString().slice(0, 10)
+    ;(byDay[key] = byDay[key] ?? []).push(p)
+  }
+
+  // Calendar grid: weeks starting Sunday
+  const firstDay = new Date(year, mon, 1).getDay() // 0=Sun
+  const daysInMonth = new Date(year, mon + 1, 0).getDate()
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Month nav */}
+        <div className="flex items-center gap-2 bg-slate-800/60 rounded-xl px-3 py-1.5">
+          <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors">
+            <ChevronDown className="h-4 w-4 rotate-90" />
+          </button>
+          <span className="text-sm font-semibold text-slate-200 min-w-[140px] text-center">{label}</span>
+          <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors">
+            <ChevronDown className="h-4 w-4 -rotate-90" />
+          </button>
+        </div>
+
+        {/* Client filter */}
+        <select
+          value={clientId}
+          onChange={e => setClientId(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+        >
+          <option value="">All Clients</option>
+          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        <span className="text-xs text-slate-500 ml-auto">
+          {filtered.length} post{filtered.length !== 1 ? 's' : ''} scheduled
+          {clientId ? ` for ${clients.find(c => c.id === clientId)?.name ?? '…'}` : ''}
+        </span>
+      </div>
+
+      {/* Grid */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        {/* Day headers */}
+        <div className="grid grid-cols-7 border-b border-slate-800">
+          {DAY_LABELS.map(d => (
+            <div key={d} className="py-2 text-center text-xs font-semibold text-slate-500 tracking-wide">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        {Array.from({ length: cells.length / 7 }, (_, wi) => (
+          <div key={wi} className="grid grid-cols-7">
+            {cells.slice(wi * 7, wi * 7 + 7).map((day, di) => {
+              if (!day) return <div key={di} className="min-h-[80px] border-r border-b border-slate-800/50 bg-slate-950/30" />
+              const key = `${year}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const dayPosts = byDay[key] ?? []
+              const isToday  = key === todayStr
+              const isOpen   = expanded === key
+
+              return (
+                <div
+                  key={di}
+                  className={`min-h-[80px] border-r border-b border-slate-800/50 p-1.5 cursor-pointer transition-colors ${
+                    dayPosts.length > 0 ? 'hover:bg-slate-800/40' : ''
+                  } ${isToday ? 'bg-indigo-950/30' : ''}`}
+                  onClick={() => dayPosts.length > 0 && setExpanded(isOpen ? null : key)}
+                >
+                  <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                    isToday ? 'bg-indigo-600 text-white' : 'text-slate-400'
+                  }`}>
+                    {day}
+                  </div>
+
+                  {/* Post pills (max 2 visible) */}
+                  <div className="space-y-0.5">
+                    {(isOpen ? dayPosts : dayPosts.slice(0, 2)).map((p, i) => (
+                      <div key={i} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border truncate ${
+                        PLATFORM_COLOR[p.platform] ?? 'bg-slate-700 text-slate-300 border-slate-600'
+                      }`}>
+                        <span className="truncate">{p.task?.title ?? p.platform}</span>
+                      </div>
+                    ))}
+                    {!isOpen && dayPosts.length > 2 && (
+                      <div className="text-[10px] text-slate-500 px-1">+{dayPosts.length - 2} more</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-slate-500">
+        {Object.entries(PLATFORM_COLOR).map(([p, cls]) => (
+          <span key={p} className={`px-2 py-0.5 rounded-md border font-medium ${cls}`}>
+            {p.charAt(0).toUpperCase() + p.slice(1)}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function PublishingHubPage() {
   const { toast } = useToast()
@@ -528,10 +676,11 @@ export default function PublishingHubPage() {
   const published = scheduledPosts.filter(p => p.status === 'published')
   const failed    = scheduledPosts.filter(p => p.status === 'failed')
 
-  const TABS: { id: Tab; label: string; count: number }[] = [
+  const TABS: { id: Tab; label: string; count: number; icon?: React.ElementType }[] = [
     { id: 'ready',     label: 'Ready to Publish', count: readyTasks.length },
     { id: 'planned',   label: 'Planned',           count: planned.length },
     { id: 'published', label: 'Published',          count: published.length },
+    { id: 'calendar',  label: 'Calendar',           count: 0, icon: CalendarDays },
   ]
 
   const tabContent = {
@@ -595,26 +744,30 @@ export default function PublishingHubPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-800/60 rounded-xl p-1 w-fit">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              tab === t.id
-                ? 'bg-slate-700 text-slate-100 shadow-sm'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {t.label}
-            {t.count > 0 && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                tab === t.id ? 'bg-indigo-600/40 text-indigo-300' : 'bg-slate-700/80 text-slate-400'
-              }`}>
-                {t.count}
-              </span>
-            )}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                tab === t.id
+                  ? 'bg-slate-700 text-slate-100 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {Icon && <Icon className="h-3.5 w-3.5" />}
+              {t.label}
+              {t.count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  tab === t.id ? 'bg-indigo-600/40 text-indigo-300' : 'bg-slate-700/80 text-slate-400'
+                }`}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Content */}
@@ -622,6 +775,8 @@ export default function PublishingHubPage() {
         <div className="flex items-center justify-center h-48">
           <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
         </div>
+      ) : tab === 'calendar' ? (
+        <CalendarView posts={scheduledPosts} />
       ) : tab === 'ready' ? (
         readyTasks.length === 0 ? (
           <Card>
