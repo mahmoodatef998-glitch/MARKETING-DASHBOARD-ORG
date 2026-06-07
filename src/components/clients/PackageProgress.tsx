@@ -6,6 +6,7 @@ const TYPE_COLOR: Record<string, string> = {
   reel_video: 'bg-purple-500',
   ai_video:   'bg-indigo-500',
   design:     'bg-blue-500',
+  custom:     'bg-amber-500',
 }
 
 export default function PackageProgress({ pkg }: { pkg: ClientPackage }) {

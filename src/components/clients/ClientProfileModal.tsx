@@ -21,6 +21,7 @@ const BASE_TASK_TYPES = [
   { value: 'reel_video', label: 'Reel / Short Video' },
   { value: 'ai_video',   label: 'AI Video' },
   { value: 'design',     label: 'Design' },
+  { value: 'custom',     label: 'Custom' },
 ]
 
 const typeColor: Record<string, string> = {
