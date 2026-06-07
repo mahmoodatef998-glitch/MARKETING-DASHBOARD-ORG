@@ -465,14 +465,17 @@ export default function PublishingHubPage() {
   const [loading,       setLoading]       = useState(true)
   const [scheduleTask,  setScheduleTask]  = useState<ReadyTask | null>(null)
 
-  // Guard: admin-only page
+  // Guard: admin or media_buyer only (publishing is their primary workflow)
   useEffect(() => {
     const client = getSupabaseClient()
     client.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/login'); return }
       client.from('profiles').select('role').eq('id', data.user.id).single()
         .then(({ data: profile }) => {
-          if (profile?.role !== 'admin') router.replace('/team-portal')
+          const allowed = ['admin', 'media_buyer']
+          if (profile?.role && !allowed.includes(profile.role)) {
+            router.replace('/team-portal')
+          }
         })
     })
   }, [router])

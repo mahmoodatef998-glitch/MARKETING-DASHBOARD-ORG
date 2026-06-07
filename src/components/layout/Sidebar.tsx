@@ -44,7 +44,7 @@ const nav = [
   { href: '/invoices',        label: 'Invoices',      icon: FileText,        adminOnly: true  },
   { href: '/billing',         label: 'Billing',       icon: CreditCard,      adminOnly: true  },
   { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   adminOnly: false },
-  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        adminOnly: true  },
+  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        adminOnly: false },
   { href: '/automation',      label: 'Automation',    icon: Zap,             adminOnly: true  },
   { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             adminOnly: false },
   { href: '/media-library',   label: 'Media Library', icon: ImageIcon,       adminOnly: false },
