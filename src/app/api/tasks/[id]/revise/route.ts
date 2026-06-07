@@ -51,19 +51,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const clientName = (task.client as { name?: string } | null)?.name ?? 'Client'
 
   // Notify assigned team member via Slack
-  void sendSlack(
+  try { await sendSlack(
     `🔄 *Revision requested* on "${task.title}" by ${clientName}\n> ${notes.trim().slice(0, 200)}${notes.length > 200 ? '…' : ''}${voice_note_url ? '\n🎤 _Voice note attached_' : ''}`
-  )
+  ) } catch {}
 
   // Log to automation_logs for audit trail
-  void admin.from('automation_logs').insert({
+  try { await admin.from('automation_logs').insert({
     type:            'task_in_review',
     recipient_email: 'team@internal',
     subject:         `Revision requested: ${task.title}`,
     status:          'sent',
     task_id:         id,
     created_at:      new Date().toISOString(),
-  })
+  }) } catch {}
 
   return NextResponse.json(data)
 }

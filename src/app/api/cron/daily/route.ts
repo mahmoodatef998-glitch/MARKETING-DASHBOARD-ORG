@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       results.push({ type, recipient: email, status: 'sent' })
       // Slack mirror for 48h/24h reminders
       if (type === 'task_reminder_48h' || type === 'task_reminder_24h') {
-        void sendSlack(`⏰ *${type === 'task_reminder_48h' ? '48h' : '24h'} reminder* sent to ${name}: task "${opts.details.split('\n')[0].replace('Task: ', '')}"`)
+        try { await sendSlack(`⏰ *${type === 'task_reminder_48h' ? '48h' : '24h'} reminder* sent to ${name}: task "${opts.details.split('\n')[0].replace('Task: ', '')}"`) } catch {}
       }
     } catch (err: any) {
       await supabase.from('automation_logs').insert({

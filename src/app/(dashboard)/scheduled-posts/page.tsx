@@ -392,7 +392,9 @@ function ReadyTaskCard({ task, onSchedule }: { task: ReadyTask; onSchedule: (t: 
                 </a>
               )}
               <Button size="sm" onClick={() => onSchedule(task)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 whitespace-nowrap">
+                disabled={!task.delivery_url}
+                title={!task.delivery_url ? 'Upload media file first' : undefined}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
                 <Send className="h-3.5 w-3.5" />
                 Schedule
               </Button>

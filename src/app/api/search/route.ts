@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
 
   const pattern = `%${q}%`
 
-  let tasksQuery    = supabase.from('tasks').select('id, title, status, priority, due_date, client:clients(name)').ilike('title', pattern).limit(6)
-  let clientsQuery  = supabase.from('clients').select('id, name, email, status').or(`name.ilike.${pattern},email.ilike.${pattern}`).limit(6)
-  let invoicesQuery = supabase.from('invoices').select('id, invoice_number, total, status, client:clients(name)').or(`invoice_number.ilike.${pattern},notes.ilike.${pattern}`).limit(6)
+  let tasksQuery    = supabase.from('tasks').select('id, title, status, priority, due_date, client:clients(name)').ilike('title', pattern).is('deleted_at', null).limit(6)
+  let clientsQuery  = supabase.from('clients').select('id, name, email, status').or(`name.ilike.${pattern},email.ilike.${pattern}`).is('deleted_at', null).limit(6)
+  let invoicesQuery = supabase.from('invoices').select('id, invoice_number, total, status, client:clients(name)').or(`invoice_number.ilike.${pattern},notes.ilike.${pattern}`).is('deleted_at', null).limit(6)
 
   if (isClient) {
     tasksQuery    = tasksQuery.eq('client_id', profile.client_id!)

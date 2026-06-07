@@ -14,7 +14,7 @@ export async function GET() {
     .single()
 
   if (!profile) {
-    // First time — auto-create admin profile
+    // First time — auto-create profile with default role (non-admin)
     const { data: newProfile } = await supabase
       .from('profiles')
       .insert({ id: user.id, role: 'video_maker', display_name: user.email })

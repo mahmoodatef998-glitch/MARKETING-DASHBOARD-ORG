@@ -22,7 +22,8 @@ export async function GET() {
     .from('tasks')
     .select('id, title, task_type, delivery_url, client_id, assigned_to, created_at, client:clients(name), assignee:profiles!assigned_to(display_name, role)')
     .eq('status', 'done')
-    .not('delivery_url', 'is', null)
+    .eq('approval_status', 'admin_approved')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -112,7 +112,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     try { await deleteNotionPage(data.notion_id) } catch {}
   }
 
-  const { error } = await supabase.from('clients').delete().eq('id', id)
+  const { error } = await supabase.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
 
   const { data: { user } } = await supabase.auth.getUser()
