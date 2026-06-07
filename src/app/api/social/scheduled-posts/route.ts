@@ -42,46 +42,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'platform and scheduled_at required' }, { status: 400 })
   }
 
-  // Must have either task_id (existing task with delivery_url) or media_url (direct upload)
-  if (!body.task_id && !body.media_url) {
-    return NextResponse.json({ error: 'Either task_id or media_url is required' }, { status: 400 })
+  if (!body.task_id) {
+    return NextResponse.json({ error: 'task_id is required' }, { status: 400 })
   }
 
   const admin = createAdminClient()
 
-  let clientId: string | null = body.client_id ?? null
-
-  if (body.task_id) {
-    // Verify task has a delivery_url
-    const { data: task } = await admin
-      .from('tasks')
-      .select('delivery_url, client_id')
-      .eq('id', body.task_id)
-      .single()
-    if (!task?.delivery_url) {
-      return NextResponse.json({ error: 'Task has no delivery_url — upload the file first.' }, { status: 422 })
-    }
-    clientId = clientId ?? task.client_id ?? null
+  // Verify task has a delivery_url
+  const { data: task } = await admin
+    .from('tasks')
+    .select('delivery_url, client_id')
+    .eq('id', body.task_id)
+    .is('deleted_at', null)
+    .single()
+  if (!task?.delivery_url) {
+    return NextResponse.json({ error: 'Task has no delivery_url — upload the file first.' }, { status: 422 })
   }
 
+  const clientId: string | null = body.client_id ?? task.client_id ?? null
   const platforms: string[] = Array.isArray(body.platform) ? body.platform : [body.platform]
   const contentType: string = ['post', 'reel', 'story'].includes(body.content_type) ? body.content_type : 'post'
 
   const rows = platforms.map(p => ({
-    task_id:      body.task_id ?? null,
+    task_id:      body.task_id,
     client_id:    clientId,
     platform:     p,
     scheduled_at: body.scheduled_at,
     caption:      body.caption ?? null,
-    media_url:    body.media_url ?? null,
     content_type: contentType,
     status:       'pending',
   }))
 
-  const { data, error } = await admin
-    .from('scheduled_posts')
-    .insert(rows)
-    .select()
+  let { data, error } = await admin.from('scheduled_posts').insert(rows).select()
+
+  // Graceful fallback if content_type column hasn't been migrated yet
+  if (error?.code === '42703') {
+    const rowsCompat = rows.map(({ content_type: _ct, ...r }) => r)
+    const res2 = await admin.from('scheduled_posts').insert(rowsCompat).select()
+    data  = res2.data
+    error = res2.error
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

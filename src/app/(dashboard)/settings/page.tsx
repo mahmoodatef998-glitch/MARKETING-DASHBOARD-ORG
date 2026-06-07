@@ -60,13 +60,14 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
   cfg:        typeof PLATFORMS[number]
   connection: Connection | null
   clientId:   string
-  onSave:     (platform: PlatformKey, data: Record<string, string>) => Promise<void>
-  onDelete:   (id: string) => Promise<void>
+  onSave:     (platform: PlatformKey, data: Record<string, string>) => Promise<string | null>
+  onDelete:   (id: string) => Promise<string | null>
 }) {
   const [open,     setOpen]     = useState(false)
   const [form,     setForm]     = useState<Record<string, string>>({})
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [saveErr,  setSaveErr]  = useState<string | null>(null)
 
   const Icon      = cfg.icon
   const isExpired = connection?.token_expires_at
@@ -77,21 +78,35 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
 
   async function handleSave() {
     setSaving(true)
-    await onSave(cfg.key, form)
-    setForm({})
-    setOpen(false)
+    setSaveErr(null)
+    const err = await onSave(cfg.key, form)
+    if (err) {
+      setSaveErr(err)
+    } else {
+      setForm({})
+      setOpen(false)
+    }
     setSaving(false)
   }
 
   async function handleDelete() {
     if (!connection || !confirm(`Remove ${cfg.label} connection for this client?`)) return
     setDeleting(true)
-    await onDelete(connection.id)
+    const err = await onDelete(connection.id)
+    if (err) setSaveErr(err)
     setDeleting(false)
   }
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      {saveErr && !open && (
+        <div className="px-5 pt-3">
+          <p className="text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <XCircle className="h-3.5 w-3.5 shrink-0" />{saveErr}
+            <button onClick={() => setSaveErr(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-3">
           <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${cfg.color} flex items-center justify-center shrink-0`}>
@@ -149,6 +164,11 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
       {open && (
         <div className="border-t border-slate-800 px-5 py-4 space-y-3 bg-slate-950/40">
           <p className="text-xs text-slate-500">Enter credentials manually (or use the OAuth button above to connect automatically).</p>
+          {saveErr && (
+            <p className="text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <XCircle className="h-3.5 w-3.5 shrink-0" />{saveErr}
+            </p>
+          )}
           {cfg.fields.map(f => (
             <div key={f.key} className="space-y-1.5">
               <label className="text-xs font-medium text-slate-300">{f.label}</label>
@@ -229,13 +249,17 @@ export default function SettingsPage() {
   const loadConnections = useCallback(async (clientId: string) => {
     if (!clientId) return
     setLoading(true)
-    const res = await fetch(`/api/social/connections?client_id=${clientId}`)
-    if (res.ok) setConnections(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/social/connections?client_id=${clientId}`)
+      if (res.ok) setConnections(await res.json())
+      else setConnections([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    if (selectedId) void loadConnections(selectedId)
+    if (selectedId) { loadConnections(selectedId).catch(console.error) }
   }, [selectedId, loadConnections])
 
   function startOAuth() {
@@ -244,22 +268,32 @@ export default function SettingsPage() {
     window.location.href = `/api/social/oauth?client_id=${selectedId}`
   }
 
-  async function handleSave(platform: PlatformKey, data: Record<string, string>) {
-    await fetch('/api/social/connections', {
+  async function handleSave(platform: PlatformKey, data: Record<string, string>): Promise<string | null> {
+    const res = await fetch('/api/social/connections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: selectedId, platform, ...data }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      return (err as { error?: string }).error ?? 'Failed to save connection'
+    }
     await loadConnections(selectedId)
+    return null
   }
 
-  async function handleDelete(id: string) {
-    await fetch('/api/social/connections', {
+  async function handleDelete(id: string): Promise<string | null> {
+    const res = await fetch('/api/social/connections', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      return (err as { error?: string }).error ?? 'Failed to remove connection'
+    }
     await loadConnections(selectedId)
+    return null
   }
 
   const selectedClient = clients.find(c => c.id === selectedId)

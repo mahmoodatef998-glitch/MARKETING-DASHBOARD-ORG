@@ -19,7 +19,7 @@ export async function GET() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role === 'media_buyer') {
     // Media buyers get a minimal client list (id + name only) for social account management
-    const { data, error } = await supabase.from('clients').select('id, name').order('name')
+    const { data, error } = await supabase.from('clients').select('id, name').is('deleted_at', null).order('name')
     if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
     return NextResponse.json(data)
   }

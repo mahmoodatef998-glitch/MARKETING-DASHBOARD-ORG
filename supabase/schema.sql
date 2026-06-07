@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
                CHECK (status IN ('active','pending','inactive')),
   country      text,
   notes        text,
+  deleted_at   timestamptz,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
@@ -60,6 +61,8 @@ CREATE TABLE IF NOT EXISTS public.tasks (
   description           text,
   status                text NOT NULL DEFAULT 'todo'
                         CHECK (status IN ('todo','in_progress','review','done','overdue')),
+  approval_status       text NOT NULL DEFAULT 'none'
+                        CHECK (approval_status IN ('none','pending','client_approved','admin_approved','revision_requested')),
   priority              text NOT NULL DEFAULT 'medium'
                         CHECK (priority IN ('low','medium','high','urgent')),
   task_type             text
@@ -111,6 +114,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
   due_date        date,
   issued_date     timestamptz NOT NULL DEFAULT now(),
   notes           text,
+  deleted_at      timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -236,10 +240,12 @@ CREATE TABLE IF NOT EXISTS public.scheduled_posts (
   platform         text NOT NULL CHECK (platform IN ('instagram','facebook','tiktok')),
   scheduled_at     timestamptz NOT NULL,
   caption          text,
+  content_type     text NOT NULL DEFAULT 'post' CHECK (content_type IN ('post','reel','story')),
   status           text NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending','publishing','published','failed','cancelled')),
   attempts         integer NOT NULL DEFAULT 0,
   platform_post_id text,
+  published_at     timestamptz,
   error            text,
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now()
@@ -333,17 +339,41 @@ DROP POLICY IF EXISTS "Admin only on activity_logs" ON public.activity_logs;
 CREATE POLICY "Admin only on activity_logs" ON public.activity_logs FOR ALL
   USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- social_connections: admin only (contains access tokens)
+-- social_connections: admin only (contains access tokens — API routes use service role to bypass)
 DROP POLICY IF EXISTS "Admin only on social_connections" ON public.social_connections;
 CREATE POLICY "Admin only on social_connections" ON public.social_connections FOR ALL
   USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- scheduled_posts: admin only
+-- scheduled_posts: admin and media_buyer (API routes use service role to bypass RLS)
 DROP POLICY IF EXISTS "Admin only on scheduled_posts" ON public.scheduled_posts;
-CREATE POLICY "Admin only on scheduled_posts" ON public.scheduled_posts FOR ALL
-  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+DROP POLICY IF EXISTS "Admin or media_buyer on scheduled_posts" ON public.scheduled_posts;
+CREATE POLICY "Admin or media_buyer on scheduled_posts" ON public.scheduled_posts FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin','media_buyer')));
 
 -- push_subscriptions: own row only
 DROP POLICY IF EXISTS "Own push_subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Own push_subscriptions" ON public.push_subscriptions FOR ALL
   USING (user_id = auth.uid());
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- MIGRATIONS — run these if upgrading an existing installation
+-- Safe to re-run: uses ADD COLUMN IF NOT EXISTS throughout
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- Add approval workflow to tasks
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'none'
+  CHECK (approval_status IN ('none','pending','client_approved','admin_approved','revision_requested'));
+
+-- Add soft-delete to clients and invoices
+ALTER TABLE public.clients  ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
+-- Add content_type and published_at to scheduled_posts
+ALTER TABLE public.scheduled_posts ADD COLUMN IF NOT EXISTS content_type text NOT NULL DEFAULT 'post'
+  CHECK (content_type IN ('post','reel','story'));
+ALTER TABLE public.scheduled_posts ADD COLUMN IF NOT EXISTS published_at timestamptz;
+
+-- Indexes for new columns
+CREATE INDEX IF NOT EXISTS idx_tasks_approval_status ON public.tasks(approval_status);
+CREATE INDEX IF NOT EXISTS idx_clients_deleted_at    ON public.clients(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_deleted_at   ON public.invoices(deleted_at);
