@@ -152,11 +152,61 @@ export async function PATCH(req: NextRequest) {
 
       if (earningsError) {
         console.error('[approvals PATCH earnings upsert]', earningsError.message)
-        // Non-fatal: approval already recorded, log but don't fail the request
       }
     }
 
-    return NextResponse.json({ success: true })
+    // Check if this approval exhausted any package items for the client
+    const exhaustedPackages: { packageId: string; packageName: string; itemLabel: string; clientId: string; allExhausted: boolean }[] = []
+    if (task.client_id && task.task_type && task.task_type !== 'platform') {
+      try {
+        const { data: packages } = await admin
+          .from('client_packages')
+          .select('*, items:package_items(*)')
+          .eq('client_id', task.client_id)
+          .eq('is_active', true)
+
+        for (const pkg of packages ?? []) {
+          const periodStart = new Date(pkg.start_date).toISOString()
+          const { data: usageCounts } = await admin
+            .from('tasks')
+            .select('task_type')
+            .eq('client_id', task.client_id)
+            .eq('status', 'done')
+            .eq('approval_status', 'admin_approved')
+            .is('deleted_at', null)
+            .gte('updated_at', periodStart)
+            .not('task_type', 'is', null)
+
+          const usageMap: Record<string, number> = {}
+          for (const row of usageCounts ?? []) {
+            if (row.task_type) usageMap[row.task_type] = (usageMap[row.task_type] ?? 0) + 1
+          }
+
+          const matchingItem = (pkg.items ?? []).find((i: { task_type: string }) => i.task_type === task.task_type)
+          if (matchingItem) {
+            const used = usageMap[matchingItem.task_type] ?? 0
+            if (used >= matchingItem.total_quantity && matchingItem.total_quantity > 0) {
+              // Check if ALL non-platform items are exhausted
+              const allExhausted = (pkg.items ?? []).every((i: { task_type: string; total_quantity: number }) => {
+                if (i.task_type === 'platform') return true
+                return (usageMap[i.task_type] ?? 0) >= i.total_quantity && i.total_quantity > 0
+              })
+              exhaustedPackages.push({
+                packageId:   pkg.id,
+                packageName: pkg.name,
+                itemLabel:   matchingItem.label,
+                clientId:    task.client_id,
+                allExhausted,
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[approvals] package exhaustion check failed:', err)
+      }
+    }
+
+    return NextResponse.json({ success: true, exhaustedPackages })
   }
 
   if (action === 'revision_requested') {

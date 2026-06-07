@@ -11,7 +11,13 @@ import {
   Building2,
   ExternalLink,
   Loader2,
+  Package,
+  AlertTriangle,
+  RotateCcw,
+  X,
+  Receipt,
 } from 'lucide-react'
+import type { ClientPackage } from '@/types'
 
 interface ApprovalTask {
   id: string
@@ -26,6 +32,14 @@ interface ApprovalTask {
   revision_notes: string | null
   assignee: { id: string; display_name: string; role: string } | null
   client: { id: string; name: string } | null
+}
+
+interface ExhaustedPackage {
+  packageId: string
+  packageName: string
+  itemLabel: string
+  clientId: string
+  allExhausted: boolean
 }
 
 const APPROVAL_STATUS_CONFIG: Record<
@@ -54,6 +68,14 @@ const APPROVAL_STATUS_CONFIG: Record<
   },
 }
 
+const TASK_TYPE_COLORS: Record<string, string> = {
+  reel_video: 'bg-purple-500',
+  design:     'bg-blue-500',
+  ai_video:   'bg-indigo-500',
+  post:       'bg-emerald-500',
+  custom:     'bg-amber-500',
+}
+
 type FilterType = 'all' | 'pending' | 'client_approved' | 'admin_approved' | 'revision_requested'
 
 const FILTER_LABELS: Record<FilterType, string> = {
@@ -73,15 +95,151 @@ function formatDate(dateStr: string | null): string {
   })
 }
 
+function PackageMiniWidget({ packages }: { packages: ClientPackage[] }) {
+  const active = packages.filter(p => p.is_active && p.items.length > 0)
+  if (active.length === 0) return null
+
+  return (
+    <div className="rounded-lg bg-slate-900/60 border border-slate-700/60 px-3 py-2.5 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+        <Package className="h-3 w-3" />
+        Package Usage
+      </div>
+      {active.map(pkg => {
+        const totalUsed = pkg.items.reduce((s, i) => s + (i.used ?? 0), 0)
+        const totalQty  = pkg.items.reduce((s, i) => s + i.total_quantity, 0)
+        const pct = totalQty > 0 ? Math.min(Math.round((totalUsed / totalQty) * 100), 100) : 0
+        return (
+          <div key={pkg.id} className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-300 font-medium truncate">{pkg.name}</span>
+              <span className={`text-xs font-semibold ${pct >= 100 ? 'text-red-400' : pct >= 80 ? 'text-amber-400' : 'text-indigo-400'}`}>
+                {pct}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pkg.items.map(item => {
+                const used = item.used ?? 0
+                const itemPct = item.total_quantity > 0 ? Math.min(Math.round((used / item.total_quantity) * 100), 100) : 0
+                const barColor = TASK_TYPE_COLORS[item.task_type] ?? 'bg-slate-500'
+                return (
+                  <div key={item.id} className="flex items-center gap-1 text-xs">
+                    <div className={`w-1.5 h-1.5 rounded-full ${barColor}`} />
+                    <span className={itemPct >= 100 ? 'text-red-400 font-semibold' : 'text-slate-400'}>
+                      {item.label}: {used}/{item.total_quantity}
+                    </span>
+                    {itemPct >= 100 && <AlertTriangle className="h-3 w-3 text-red-400" />}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ExhaustionModal({
+  items,
+  onClose,
+  onRenew,
+  onSendInvoice,
+  renewLoading,
+  invoiceLoading,
+}: {
+  items: ExhaustedPackage[]
+  onClose: () => void
+  onRenew: (packageId: string) => void
+  onSendInvoice: (packageId: string, clientId: string) => void
+  renewLoading: string | null
+  invoiceLoading: string | null
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">Package Alert</h2>
+              <p className="text-xs text-slate-400">Package item(s) reached capacity</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {items.map((item, i) => (
+            <div key={i} className="rounded-xl bg-slate-900 border border-slate-700 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-white">{item.packageName}</p>
+                <p className="text-xs text-red-400 mt-0.5">
+                  <span className="font-semibold">{item.itemLabel}</span>
+                  {item.allExhausted ? ' — All items exhausted' : ' — Item exhausted'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => onRenew(item.packageId)}
+                  disabled={!!renewLoading}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50"
+                >
+                  {renewLoading === item.packageId ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Renew Package
+                </button>
+
+                {item.allExhausted && (
+                  <button
+                    onClick={() => onSendInvoice(item.packageId, item.clientId)}
+                    disabled={!!invoiceLoading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+                  >
+                    {invoiceLoading === item.packageId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Receipt className="h-3.5 w-3.5" />
+                    )}
+                    Send Invoice
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ApprovalsPage() {
   const router = useRouter()
-  const [tasks, setTasks] = useState<ApprovalTask[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<FilterType>('all')
-  const [revisionNotes, setRevisionNotes] = useState<Record<string, string>>({})
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string>('')
-  const [guardReady, setGuardReady] = useState(false)
+  const [tasks, setTasks]                       = useState<ApprovalTask[]>([])
+  const [loading, setLoading]                   = useState(true)
+  const [filter, setFilter]                     = useState<FilterType>('all')
+  const [revisionNotes, setRevisionNotes]       = useState<Record<string, string>>({})
+  const [actionLoading, setActionLoading]       = useState<string | null>(null)
+  const [userRole, setUserRole]                 = useState<string>('')
+  const [guardReady, setGuardReady]             = useState(false)
+  const [clientPackages, setClientPackages]     = useState<Record<string, ClientPackage[]>>({})
+  const [exhaustedItems, setExhaustedItems]     = useState<ExhaustedPackage[]>([])
+  const [renewLoading, setRenewLoading]         = useState<string | null>(null)
+  const [invoiceLoading, setInvoiceLoading]     = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
@@ -93,11 +251,26 @@ export default function ApprovalsPage() {
     })
   }, [router])
 
+  const fetchPackagesForClients = useCallback(async (taskList: ApprovalTask[]) => {
+    const clientIds = [...new Set(taskList.map(t => t.client?.id).filter(Boolean))] as string[]
+    if (clientIds.length === 0) return
+
+    const results = await Promise.all(
+      clientIds.map(async (cid) => {
+        const res = await fetch(`/api/packages?clientId=${cid}`)
+        if (!res.ok) return [cid, []] as [string, ClientPackage[]]
+        const data = await res.json()
+        return [cid, Array.isArray(data) ? data : []] as [string, ClientPackage[]]
+      })
+    )
+    setClientPackages(Object.fromEntries(results))
+  }, [])
+
   const fetchTasks = useCallback(async (currentFilter: FilterType) => {
     setLoading(true)
     try {
+      let taskList: ApprovalTask[] = []
       if (currentFilter === 'all') {
-        // Fetch pending+client_approved (default) AND admin_approved AND revision_requested
         const [defaultRes, adminRes, revisionRes] = await Promise.all([
           fetch('/api/approvals'),
           fetch('/api/approvals?approval_status=admin_approved'),
@@ -113,25 +286,26 @@ export default function ApprovalsPage() {
           ...(Array.isArray(adminData) ? adminData : adminData?.tasks ?? []),
           ...(Array.isArray(revisionData) ? revisionData : revisionData?.tasks ?? []),
         ]
-        // Deduplicate by id
         const seen = new Set<string>()
-        setTasks(combined.filter((t) => { if (seen.has(t.id)) return false; seen.add(t.id); return true }))
+        taskList = combined.filter((t) => { if (seen.has(t.id)) return false; seen.add(t.id); return true })
       } else {
         const res = await fetch(`/api/approvals?approval_status=${currentFilter}`)
         if (!res.ok) { setTasks([]); return }
         const data = await res.json()
-        setTasks(Array.isArray(data) ? data : data?.tasks ?? [])
+        taskList = Array.isArray(data) ? data : data?.tasks ?? []
       }
+      setTasks(taskList)
+      await fetchPackagesForClients(taskList)
     } catch {
       setTasks([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchPackagesForClients])
 
   useEffect(() => {
-    fetchTasks(filter)
-  }, [filter, fetchTasks])
+    if (guardReady) fetchTasks(filter)
+  }, [filter, fetchTasks, guardReady])
 
   async function handleAction(taskId: string, action: 'revision_requested' | 'admin_approve') {
     setActionLoading(taskId + action)
@@ -147,10 +321,68 @@ export default function ApprovalsPage() {
       })
       if (res.ok) {
         setRevisionNotes((prev) => { const n = { ...prev }; delete n[taskId]; return n })
+        const result = await res.json()
+        if (action === 'admin_approve' && result.exhaustedPackages?.length > 0) {
+          setExhaustedItems(result.exhaustedPackages)
+        }
         await fetchTasks(filter)
       }
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  async function handleRenew(packageId: string) {
+    setRenewLoading(packageId)
+    try {
+      const res = await fetch('/api/packages/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      })
+      if (res.ok) {
+        setExhaustedItems(prev => prev.filter(i => i.packageId !== packageId))
+        await fetchTasks(filter)
+      }
+    } finally {
+      setRenewLoading(null)
+    }
+  }
+
+  async function handleSendInvoice(packageId: string, clientId: string) {
+    setInvoiceLoading(packageId)
+    try {
+      const pkgRes = await fetch(`/api/packages?clientId=${clientId}`)
+      if (!pkgRes.ok) return
+      const packages: ClientPackage[] = await pkgRes.json()
+      const pkg = packages.find(p => p.id === packageId)
+      if (!pkg) return
+
+      const breakdownNotes = pkg.items
+        .map(i => `${i.label}: ${i.used ?? 0}/${i.total_quantity} used`)
+        .join(', ')
+
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          status: 'sent',
+          notes: `Package renewal: ${pkg.name}. Breakdown — ${breakdownNotes}`,
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          items: [{
+            description: pkg.name,
+            quantity: 1,
+            unit_price: pkg.price,
+          }],
+        }),
+      })
+
+      if (res.ok) {
+        setExhaustedItems(prev => prev.filter(i => i.packageId !== packageId))
+      }
+    } finally {
+      setInvoiceLoading(null)
     }
   }
 
@@ -162,23 +394,31 @@ export default function ApprovalsPage() {
 
   const isAdmin = userRole === 'admin'
 
-  // Stats derived from ALL tasks fetched (when filter is 'all') or from the filtered set
-  const allTasksForStats = tasks
-
   const statCounts = {
-    pending: allTasksForStats.filter((t) => t.approval_status === 'pending').length,
-    client_approved: allTasksForStats.filter((t) => t.approval_status === 'client_approved').length,
-    admin_approved: allTasksForStats.filter((t) => t.approval_status === 'admin_approved').length,
+    pending:        tasks.filter((t) => t.approval_status === 'pending').length,
+    client_approved: tasks.filter((t) => t.approval_status === 'client_approved').length,
+    admin_approved:  tasks.filter((t) => t.approval_status === 'admin_approved').length,
   }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
+      {exhaustedItems.length > 0 && (
+        <ExhaustionModal
+          items={exhaustedItems}
+          onClose={() => setExhaustedItems([])}
+          onRenew={handleRenew}
+          onSendInvoice={handleSendInvoice}
+          renewLoading={renewLoading}
+          invoiceLoading={invoiceLoading}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-white">Approvals</h1>
-          <p className="mt-1 text-sm text-slate-400">Review and approve completed designs</p>
+          <p className="mt-1 text-sm text-slate-400">Review and approve completed work</p>
         </div>
 
         {/* Stats row */}
@@ -244,6 +484,7 @@ export default function ApprovalsPage() {
               const isAdminApproved = task.approval_status === 'admin_approved'
               const isClientApproved = task.approval_status === 'client_approved'
               const isDesign = task.task_type === 'design'
+              const taskClientPackages = task.client?.id ? (clientPackages[task.client.id] ?? []) : []
 
               return (
                 <div
@@ -258,6 +499,11 @@ export default function ApprovalsPage() {
                         {isDesign && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/20">
                             Design · 15 AED
+                          </span>
+                        )}
+                        {task.task_type && task.task_type !== 'design' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-700 text-slate-300 border border-slate-600">
+                            {task.task_type.replace('_', ' ')}
                           </span>
                         )}
                       </div>
@@ -300,6 +546,11 @@ export default function ApprovalsPage() {
                         <span className="truncate">{task.delivery_url}</span>
                       </a>
                     </div>
+                  )}
+
+                  {/* Package progress widget */}
+                  {taskClientPackages.length > 0 && (
+                    <PackageMiniWidget packages={taskClientPackages} />
                   )}
 
                   {/* Client approved notice */}

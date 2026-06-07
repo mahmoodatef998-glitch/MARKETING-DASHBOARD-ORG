@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         .select('task_type')
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .eq('approval_status', 'admin_approved')
         .is('deleted_at', null)
         .gte('updated_at', periodStart)
 

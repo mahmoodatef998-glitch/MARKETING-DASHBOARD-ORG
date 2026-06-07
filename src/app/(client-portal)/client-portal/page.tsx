@@ -299,7 +299,7 @@ interface ApprovalTask {
   approval_status: 'pending' | 'client_approved' | 'admin_approved'
 }
 
-function ReviewTab({ onPendingCount }: { onPendingCount?: (count: number) => void }) {
+function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) => void; pkgs?: ClientPackage[] }) {
   const [tasks,        setTasks]        = useState<ApprovalTask[]>([])
   const [loading,      setLoading]      = useState(true)
   const [revising,     setRevising]     = useState<Record<string, boolean>>({})
@@ -362,8 +362,52 @@ function ReviewTab({ onPendingCount }: { onPendingCount?: (count: number) => voi
     </div>
   )
 
+  // Mini package progress widget for the review tab
+  const activePkgs = (pkgs ?? []).filter(p => p.is_active && p.items.length > 0)
+  const totalItems = activePkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + i.total_quantity, 0), 0)
+  const totalUsed  = activePkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + (i.used ?? 0), 0), 0)
+  const overallPct = totalItems > 0 ? Math.min(Math.round((totalUsed / totalItems) * 100), 100) : 0
+
   return (
     <div className="space-y-4">
+      {/* Package progress summary in review context */}
+      {activePkgs.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-600/10 to-purple-600/8 border border-indigo-500/20 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-indigo-400" />
+              <span className="text-sm font-semibold text-white">Package Progress</span>
+            </div>
+            <span className={`text-xs font-semibold ${overallPct >= 100 ? 'text-red-400' : overallPct >= 80 ? 'text-amber-400' : 'text-indigo-400'}`}>
+              {totalUsed} / {totalItems} used · {overallPct}%
+            </span>
+          </div>
+          <div className="h-2 bg-slate-800 rounded-full overflow-hidden mb-3">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${overallPct >= 100 ? 'bg-red-500' : overallPct >= 80 ? 'bg-amber-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`}
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {activePkgs.flatMap(p => p.items).map(item => {
+              const used = item.used ?? 0
+              const pct = item.total_quantity > 0 ? Math.min(Math.round((used / item.total_quantity) * 100), 100) : 0
+              return (
+                <div key={item.id} className="flex items-center gap-1.5 text-xs">
+                  {pct >= 100
+                    ? <AlertTriangle className="h-3 w-3 text-red-400" />
+                    : <CheckCircle2 className={`h-3 w-3 ${used > 0 ? 'text-emerald-400' : 'text-slate-600'}`} />
+                  }
+                  <span className={pct >= 100 ? 'text-red-400 font-semibold' : 'text-slate-300'}>
+                    {item.label}: {used}/{item.total_quantity}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {tasks.map(task => {
         const isRevising = !!revising[task.id]
         const isActioning = !!actioning[task.id]
@@ -1058,7 +1102,7 @@ export default function ClientPortalPage() {
       )}
 
       {/* Review tab */}
-      {tab === 'review' && <ReviewTab onPendingCount={setPendingReviewCount} />}
+      {tab === 'review' && <ReviewTab onPendingCount={setPendingReviewCount} pkgs={pkgs} />}
 
       {/* Tasks tab */}
       {tab === 'tasks' && (

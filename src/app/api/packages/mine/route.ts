@@ -40,6 +40,7 @@ export async function GET() {
         .select('task_type')
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .eq('approval_status', 'admin_approved')
         .is('deleted_at', null)
         .gte('updated_at', periodStart)
         .not('task_type', 'is', null)
@@ -54,6 +55,7 @@ export async function GET() {
         .select('id', { count: 'exact', head: true })
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .eq('approval_status', 'admin_approved')
         .is('deleted_at', null)
         .gte('updated_at', periodStart)
 
