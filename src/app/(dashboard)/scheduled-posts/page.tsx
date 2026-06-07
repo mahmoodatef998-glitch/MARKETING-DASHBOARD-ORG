@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Calendar, Camera, Globe, Music2, Clock, CheckCircle2, XCircle,
   Loader2, Trash2, ExternalLink, RefreshCw, Sparkles, Send,
@@ -9,6 +10,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
+import { getSupabaseClient } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -456,11 +458,24 @@ type Tab = 'ready' | 'planned' | 'published'
 
 export default function PublishingHubPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [tab,           setTab]           = useState<Tab>('ready')
   const [readyTasks,    setReadyTasks]    = useState<ReadyTask[]>([])
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([])
   const [loading,       setLoading]       = useState(true)
   const [scheduleTask,  setScheduleTask]  = useState<ReadyTask | null>(null)
+
+  // Guard: admin-only page
+  useEffect(() => {
+    const client = getSupabaseClient()
+    client.auth.getUser().then(({ data }) => {
+      if (!data.user) { router.replace('/login'); return }
+      client.from('profiles').select('role').eq('id', data.user.id).single()
+        .then(({ data: profile }) => {
+          if (profile?.role !== 'admin') router.replace('/team-portal')
+        })
+    })
+  }, [router])
 
   const load = useCallback(async () => {
     setLoading(true)

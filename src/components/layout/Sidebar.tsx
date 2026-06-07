@@ -32,24 +32,25 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+// Items marked adminOnly are hidden from non-admin roles
 const nav = [
-  { href: '/dashboard',       label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/reports',         label: 'Reports',      icon: BarChart2 },
-  { href: '/clients',         label: 'Clients',      icon: Users },
-  { href: '/team',            label: 'Team',         icon: UserCheck },
-  { href: '/tasks',           label: 'Tasks',        icon: CheckSquare },
-  { href: '/approvals',       label: 'Approvals',    icon: FileCheck },
-  { href: '/meetings',        label: 'Meetings',     icon: CalendarDays },
-  { href: '/invoices',        label: 'Invoices',     icon: FileText },
-  { href: '/billing',         label: 'Billing',      icon: CreditCard },
-  { href: '/inbox',           label: 'Inbox',        icon: MessageSquare },
-  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar },
-  { href: '/automation',      label: 'Automation',   icon: Zap },
-  { href: '/ai-assistant',    label: 'AI Assistant', icon: Bot },
-  { href: '/media-library',   label: 'Media Library', icon: ImageIcon },
-  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity },
-  { href: '/users',           label: 'Users',        icon: ShieldCheck },
-  { href: '/settings',        label: 'Social Media', icon: Settings },
+  { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, adminOnly: false },
+  { href: '/reports',         label: 'Reports',       icon: BarChart2,       adminOnly: true  },
+  { href: '/clients',         label: 'Clients',       icon: Users,           adminOnly: true  },
+  { href: '/team',            label: 'Team',          icon: UserCheck,       adminOnly: true  },
+  { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     adminOnly: false },
+  { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       adminOnly: false },
+  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    adminOnly: false },
+  { href: '/invoices',        label: 'Invoices',      icon: FileText,        adminOnly: true  },
+  { href: '/billing',         label: 'Billing',       icon: CreditCard,      adminOnly: true  },
+  { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   adminOnly: false },
+  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        adminOnly: true  },
+  { href: '/automation',      label: 'Automation',    icon: Zap,             adminOnly: true  },
+  { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             adminOnly: false },
+  { href: '/media-library',   label: 'Media Library', icon: ImageIcon,       adminOnly: false },
+  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity,        adminOnly: true  },
+  { href: '/users',           label: 'Users',         icon: ShieldCheck,     adminOnly: true  },
+  { href: '/settings',        label: 'Social Media',  icon: Settings,        adminOnly: true  },
 ]
 
 interface SidebarProps {
@@ -60,8 +61,9 @@ interface SidebarProps {
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const router   = useRouter()
-  const [collapsed,   setCollapsed]   = useState(false)
-  const [myDashboard, setMyDashboard] = useState<string | null>(null)
+  const [collapsed,    setCollapsed]    = useState(false)
+  const [myDashboard,  setMyDashboard]  = useState<string | null>(null)
+  const [userRole,     setUserRole]     = useState<string>('admin') // default admin until resolved
 
   useEffect(() => {
     if (DEMO) return
@@ -74,6 +76,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         .eq('id', data.user.id)
         .single()
         .then(({ data: profile }) => {
+          if (profile?.role) setUserRole(profile.role)
           const teamRoles = ['video_maker', 'designer', 'ai_video', 'media_buyer']
           if (profile?.role && teamRoles.includes(profile.role)) {
             setMyDashboard(`/team/${profile.id}`)
@@ -103,6 +106,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         <SidebarContent
           pathname={pathname}
           collapsed={collapsed}
+          userRole={userRole}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
           myDashboard={myDashboard}
@@ -134,6 +138,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         <SidebarContent
           pathname={pathname}
           collapsed={false}
+          userRole={userRole}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
           myDashboard={myDashboard}
@@ -144,14 +149,18 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 }
 
 function SidebarContent({
-  pathname, collapsed, onLogout, onNavClick, myDashboard,
+  pathname, collapsed, userRole, onLogout, onNavClick, myDashboard,
 }: {
   pathname:     string
   collapsed:    boolean
+  userRole:     string
   onLogout:     () => void
   onNavClick:   () => void
   myDashboard?: string | null
 }) {
+  const isAdmin = userRole === 'admin'
+  const visibleNav = nav.filter(item => !item.adminOnly || isAdmin)
+
   return (
     <>
       {/* Logo */}
@@ -187,7 +196,7 @@ function SidebarContent({
           </Link>
         )}
 
-        {nav.map(({ href, label, icon: Icon }) => {
+        {visibleNav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link

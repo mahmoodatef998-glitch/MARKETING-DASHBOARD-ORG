@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const { data } = await supabase
       .from('tasks')
       .select('title, status, priority, task_type, due_date, created_at, assignee:profiles(display_name), client:clients(name)')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
     const rows = (data ?? []).map((t) => {
       const row = t as Record<string, unknown>

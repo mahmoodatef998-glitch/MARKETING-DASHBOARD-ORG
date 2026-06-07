@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         .select('title, task_type, due_date')
         .eq('client_id', plan.client_id)
         .eq('status', 'done')
+        .is('deleted_at', null)
         .gte('updated_at', toDateStr(periodStart))
 
       await generateAndSendInvoice({
@@ -259,6 +260,7 @@ export async function GET(req: NextRequest) {
     .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
     .eq('due_date', date48h)
     .is('reminder_48h_sent_at', null)
+    .is('deleted_at', null)
     .not('status', 'in', '("done","overdue")')
     .not('assigned_to', 'is', null)
 
@@ -284,6 +286,7 @@ export async function GET(req: NextRequest) {
     .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
     .eq('due_date', date24h)
     .is('reminder_24h_sent_at', null)
+    .is('deleted_at', null)
     .not('status', 'in', '("done","overdue")')
     .not('assigned_to', 'is', null)
 
@@ -309,6 +312,7 @@ export async function GET(req: NextRequest) {
     .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
     .eq('due_date', today)
     .is('confirmation_sent_at', null)
+    .is('deleted_at', null)
     .not('status', 'in', '("done","overdue")')
     .not('assigned_to', 'is', null)
 
@@ -342,9 +346,9 @@ export async function GET(req: NextRequest) {
     for (const client of activeClients ?? []) {
       try {
         const [doneTasks, pendingTasks, overdueCount] = await Promise.all([
-          supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'done').gte('updated_at', weekStartStr),
-          supabase.from('tasks').select('title, due_date').eq('client_id', client.id).in('status', ['todo', 'in_progress', 'review']),
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'overdue'),
+          supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'done').is('deleted_at', null).gte('updated_at', weekStartStr),
+          supabase.from('tasks').select('title, due_date').eq('client_id', client.id).in('status', ['todo', 'in_progress', 'review']).is('deleted_at', null),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'overdue').is('deleted_at', null),
         ])
 
         const completedList = (doneTasks.data ?? []).map(t => `• ${t.title}`).join('\n') || 'No tasks completed this week'

@@ -28,22 +28,19 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Compute usage per item (same logic as /api/packages?clientId=X)
+  // Compute usage per item — count all done tasks since the package start_date.
+  // Using start_date (not first-of-month) ensures tasks completed on any day
+  // of the package period are counted correctly.
   const enriched = await Promise.all(
     (packages ?? []).map(async (pkg: any) => {
-      let periodStart: string
-      if (pkg.renewal_type === 'monthly') {
-        const now = new Date()
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-      } else {
-        periodStart = new Date(pkg.start_date).toISOString()
-      }
+      const periodStart = new Date(pkg.start_date).toISOString()
 
       const { data: usageCounts } = await supabase
         .from('tasks')
         .select('task_type')
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .is('deleted_at', null)
         .gte('updated_at', periodStart)
         .not('task_type', 'is', null)
 
@@ -57,6 +54,7 @@ export async function GET() {
         .select('id', { count: 'exact', head: true })
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .is('deleted_at', null)
         .gte('updated_at', periodStart)
 
       const itemsWithUsage = (pkg.items ?? [])

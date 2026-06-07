@@ -29,20 +29,17 @@ export async function GET(req: NextRequest) {
   // Compute usage for each package's items
   const enriched = await Promise.all(
     (packages ?? []).map(async (pkg: any) => {
-      // Determine the period start for usage counting
-      let periodStart: string
-      if (pkg.renewal_type === 'monthly') {
-        const now = new Date()
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-      } else {
-        periodStart = new Date(pkg.start_date).toISOString()
-      }
+      // Count all done tasks since the package start date.
+      // Using start_date (not first-of-month) so tasks completed in any day
+      // of the package period are included correctly.
+      const periodStart = new Date(pkg.start_date).toISOString()
 
       const { data: usageCounts } = await supabase
         .from('tasks')
         .select('task_type')
         .eq('client_id', clientId)
         .eq('status', 'done')
+        .is('deleted_at', null)
         .gte('updated_at', periodStart)
 
       const usageMap: Record<string, number> = {}

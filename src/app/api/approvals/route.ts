@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id, display_name, role), client:clients(id, name, email)')
     .eq('status', 'done')
+    .is('deleted_at', null)
     .order('updated_at', { ascending: false })
 
   if (profile?.role === 'client') {
