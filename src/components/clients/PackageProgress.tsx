@@ -4,10 +4,8 @@ import type { ClientPackage } from '@/types'
 
 const TYPE_COLOR: Record<string, string> = {
   reel_video: 'bg-purple-500',
-  design:     'bg-blue-500',
   ai_video:   'bg-indigo-500',
-  post:       'bg-emerald-500',
-  custom:     'bg-amber-500',
+  design:     'bg-blue-500',
 }
 
 export default function PackageProgress({ pkg }: { pkg: ClientPackage }) {

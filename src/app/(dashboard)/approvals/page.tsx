@@ -70,10 +70,8 @@ const APPROVAL_STATUS_CONFIG: Record<
 
 const TASK_TYPE_COLORS: Record<string, string> = {
   reel_video: 'bg-purple-500',
-  design:     'bg-blue-500',
   ai_video:   'bg-indigo-500',
-  post:       'bg-emerald-500',
-  custom:     'bg-amber-500',
+  design:     'bg-blue-500',
 }
 
 type FilterType = 'all' | 'pending' | 'client_approved' | 'admin_approved' | 'revision_requested'

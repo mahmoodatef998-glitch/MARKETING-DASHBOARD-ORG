@@ -18,11 +18,9 @@ import type { Client, ClientPackage, PackageItem } from '@/types'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BASE_TASK_TYPES = [
-  { value: 'reel_video', label: 'Reels & Short Videos' },
-  { value: 'design',     label: 'Designs' },
-  { value: 'ai_video',   label: 'AI Videos' },
-  { value: 'post',       label: 'Social Media Posts' },
-  { value: 'custom',     label: 'Custom / Other' },
+  { value: 'reel_video', label: 'Reel / Short Video' },
+  { value: 'ai_video',   label: 'AI Video' },
+  { value: 'design',     label: 'Design' },
 ]
 
 const typeColor: Record<string, string> = {
@@ -46,10 +44,9 @@ interface PackageFormData {
 }
 
 const DEFAULT_ITEMS: Partial<PackageItem>[] = [
-  { label: 'Reels & Short Videos', task_type: 'reel_video', total_quantity: 0, sort_order: 0 },
-  { label: 'Designs',              task_type: 'design',     total_quantity: 0, sort_order: 1 },
-  { label: 'AI Videos',            task_type: 'ai_video',   total_quantity: 0, sort_order: 2 },
-  { label: 'Social Media Posts',   task_type: 'post',       total_quantity: 0, sort_order: 3 },
+  { label: 'Reel / Short Video', task_type: 'reel_video', total_quantity: 0, sort_order: 0 },
+  { label: 'AI Video',           task_type: 'ai_video',   total_quantity: 0, sort_order: 1 },
+  { label: 'Design',             task_type: 'design',     total_quantity: 0, sort_order: 2 },
 ]
 
 function PackageForm({
