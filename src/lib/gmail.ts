@@ -34,12 +34,15 @@ function buildRawEmail(opts: {
   body: string
   html?: string
   from?: string
+  skipSignature?: boolean
 }): string {
   const from     = opts.from ?? process.env.GMAIL_SENDER_EMAIL ?? 'noreply@agencyos.app'
-  const bodyText = opts.body + textSignature()
+  const bodyText = opts.body + (opts.skipSignature ? '' : textSignature())
 
   if (opts.html) {
-    const htmlWithSig = opts.html.replace('</body>', `${htmlSignature()}</body>`)
+    const htmlWithSig = opts.skipSignature
+      ? opts.html
+      : opts.html.replace('</body>', `${htmlSignature()}</body>`)
     const boundary    = 'boundary_pixelmkt_' + Date.now()
     const raw = [
       `From: ${BRAND} <${from}>`,
@@ -81,6 +84,7 @@ export async function sendEmail(opts: {
   subject: string
   body: string
   html?: string
+  skipSignature?: boolean
 }): Promise<void> {
   const gmail = getGmailClient()
   await gmail.users.messages.send({

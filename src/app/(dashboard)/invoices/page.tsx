@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast'
 import {
   Plus, Search, Pencil, Trash2, Download, Loader2, X,
   Calendar, CheckCircle2, Clock, CreditCard, TrendingUp,
-  AlertTriangle, BadgeCheck, ChevronRight, FileText,
+  AlertTriangle, BadgeCheck, ChevronRight, FileText, Send,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Invoice, Client, InvoiceItem, Task, BillingPlan } from '@/types'
@@ -62,7 +62,7 @@ function InvoiceDetailsModal({
   onDelete: () => void
 }) {
   const { toast }      = useToast()
-  const [loading, setLoading] = useState<'paid' | 'overdue' | null>(null)
+  const [loading,  setLoading]  = useState<'paid' | 'overdue' | 'send' | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
 
   const client    = inv.client as { name?: string; email?: string } | null
@@ -101,6 +101,19 @@ function InvoiceDetailsModal({
       toast('Marked as overdue', 'success')
     } else {
       toast('Failed to update', 'error')
+    }
+    setLoading(null)
+  }
+
+  async function sendInvoiceEmail() {
+    setLoading('send')
+    const res = await fetch(`/api/invoices/${inv.id}/send`, { method: 'POST' })
+    if (res.ok) {
+      if (inv.status === 'draft') onUpdate({ ...inv, status: 'sent' })
+      toast('Invoice sent successfully ✓', 'success')
+    } else {
+      const data = await res.json().catch(() => ({}))
+      toast(data.error ?? 'Failed to send email', 'error')
     }
     setLoading(null)
   }
@@ -233,6 +246,16 @@ function InvoiceDetailsModal({
               {loading === 'overdue'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Updating…</>
                 : <><AlertTriangle className="h-4 w-4" /> Mark Overdue</>}
+            </Button>
+          )}
+
+          {/* Send Email */}
+          {!isPaid && (
+            <Button onClick={sendInvoiceEmail} disabled={!!loading}
+              className="gap-2 bg-violet-600 hover:bg-violet-500 text-white">
+              {loading === 'send'
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
+                : <><Send className="h-4 w-4" /> Send Email</>}
             </Button>
           )}
 
