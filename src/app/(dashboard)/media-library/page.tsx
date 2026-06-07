@@ -28,7 +28,9 @@ function MediaCard({ item, onDelete }: { item: MediaItem; onDelete: (item: Media
   const [confirm,  setConfirm]  = useState(false)
 
   const isImage = item.resource_type === 'image'
-  const isAudio = item.folder.includes('audio') || ['mp3','wav','ogg','m4a','webm','aac'].includes(item.format)
+  const isAudio = item.resource_type === 'video'
+    ? false
+    : item.folder.includes('audio') || ['mp3','wav','ogg','m4a','aac'].includes(item.format)
   const isVideo = !isImage && !isAudio
 
   async function copyUrl() {

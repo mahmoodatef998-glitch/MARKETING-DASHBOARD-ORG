@@ -8,8 +8,11 @@ import {
   TrendingUp, TrendingDown, DollarSign, CheckSquare, Users,
   Target, Clock, AlertCircle, BarChart2, Trophy, UserCheck,
   Zap, Calendar, CreditCard, ArrowRight, Eye,
+  Send, Film, ImageIcon,
 } from 'lucide-react'
 import type { Task } from '@/types'
+
+// ── Shared types ──────────────────────────────────────────────────────────────
 
 const ROLE_LABELS: Record<string, string> = {
   video_maker: 'Video Maker',
@@ -34,54 +37,337 @@ interface ReportData {
   newClientsOverTime: { label: string; value: number }[]
   topClients: { name: string; revenue: number }[]
   kpis: {
-    totalRevenue: number
-    pendingRevenue: number
-    collectionRate: number
-    taskCompletionRate: number
-    totalClients: number
-    activeClients: number
-    totalTasks: number
-    completedTasks: number
-    monthlyGrowthPct: number
-    avgClientLTV: number
-    avgDaysToPayment: number
-    avgClientRating: number
-    ratedTasksCount: number
-    revisionRate: number
+    totalRevenue: number; pendingRevenue: number; collectionRate: number
+    taskCompletionRate: number; totalClients: number; activeClients: number
+    totalTasks: number; completedTasks: number; monthlyGrowthPct: number
+    avgClientLTV: number; avgDaysToPayment: number; avgClientRating: number
+    ratedTasksCount: number; revisionRate: number
   }
 }
 
-export default function DashboardPage() {
-  const [data,         setData]         = useState<ReportData | null>(null)
-  const [reviewTasks,  setReviewTasks]  = useState<Task[]>([])
-  const [loading,      setLoading]      = useState(true)
+type TaskWithDelivery = Task & { delivery_url?: string; client?: { name: string } }
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/reports').then(r => r.json()),
-      fetch('/api/tasks?status=review').then(r => r.json()),
-    ]).then(([reportData, tasks]) => {
-      setData(reportData)
-      setReviewTasks(Array.isArray(tasks) ? tasks : [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+interface ScheduledPost {
+  id: string
+  status: 'pending' | 'published' | 'failed' | 'cancelled'
+  platform: 'instagram' | 'facebook' | 'tiktok'
+  scheduled_at: string
+  published_at?: string
+  caption?: string
+  task?: { id: string; title: string }
+}
 
-  if (loading) {
+interface MediaBuyerData {
+  posts: ScheduledPost[]
+  readyTasks: TaskWithDelivery[]
+}
+
+// ── Media Buyer Dashboard ─────────────────────────────────────────────────────
+
+const PLATFORM_CFG: Record<string, { label: string; color: string }> = {
+  instagram: { label: 'Instagram', color: 'bg-pink-500/15 text-pink-400' },
+  facebook:  { label: 'Facebook',  color: 'bg-blue-500/15 text-blue-400' },
+  tiktok:    { label: 'TikTok',    color: 'bg-slate-700 text-slate-300' },
+}
+
+function MediaBuyerDashboard({ data }: { data: MediaBuyerData | null }) {
+  if (!data) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl bg-slate-800/50 animate-pulse" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-64 rounded-xl bg-slate-800/50 animate-pulse" />)}
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-slate-400">Failed to load publishing data.</p>
       </div>
     )
   }
 
+  const weekAgo  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const scheduled        = data.posts.filter(p => p.status === 'pending')
+  const publishedThisWeek = data.posts.filter(
+    p => p.status === 'published' && p.published_at && new Date(p.published_at) >= weekAgo
+  )
+  const failed = data.posts.filter(p => p.status === 'failed')
+
+  const statsCards = [
+    {
+      title: 'Ready to Publish',
+      value: data.readyTasks.length,
+      sub: 'tasks with uploaded media',
+      icon: Eye,
+      color: 'text-indigo-400', bg: 'bg-indigo-400/10',
+    },
+    {
+      title: 'Scheduled',
+      value: scheduled.length,
+      sub: 'posts awaiting publish time',
+      icon: Calendar,
+      color: 'text-violet-400', bg: 'bg-violet-400/10',
+    },
+    {
+      title: 'Published (7d)',
+      value: publishedThisWeek.length,
+      sub: 'posts this week',
+      icon: CheckSquare,
+      color: 'text-emerald-400', bg: 'bg-emerald-400/10',
+    },
+    {
+      title: 'Failed',
+      value: failed.length,
+      sub: failed.length > 0 ? 'need attention' : 'all clear',
+      icon: AlertCircle,
+      color: failed.length > 0 ? 'text-red-400' : 'text-slate-400',
+      bg: failed.length > 0 ? 'bg-red-400/10' : 'bg-slate-400/10',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-white">Publishing Overview</h1>
+        <p className="text-sm text-slate-400 mt-0.5">Your social media command center</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {statsCards.map(k => (
+          <Card key={k.title}>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-slate-400">{k.title}</p>
+                  <p className="text-2xl font-bold text-slate-100 mt-1">{k.value}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p>
+                </div>
+                <div className={`p-2.5 rounded-xl ${k.bg}`}>
+                  <k.icon className={`h-5 w-5 ${k.color}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/scheduled-posts"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+        >
+          <Send className="h-4 w-4" /> Publishing Hub
+        </Link>
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold transition-colors"
+        >
+          <Zap className="h-4 w-4 text-indigo-400" /> Social Accounts
+        </Link>
+      </div>
+
+      {/* Failed posts alert */}
+      {failed.length > 0 && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/8 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 rounded-lg bg-red-500/15">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-red-300">
+                {failed.length} post{failed.length > 1 ? 's' : ''} failed to publish
+              </p>
+              <p className="text-xs text-red-400/70">Visit Publishing Hub to reschedule</p>
+            </div>
+          </div>
+          <Link href="/scheduled-posts"
+            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 font-medium transition-colors">
+            Review <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
+
+      {/* Main grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Ready to Publish */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Eye className="h-4 w-4 text-indigo-400" /> Ready to Publish
+              </CardTitle>
+              <Link href="/scheduled-posts"
+                className="text-xs text-slate-500 hover:text-indigo-400 flex items-center gap-1 transition-colors">
+                Open Hub <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.readyTasks.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">
+                No tasks ready yet.<br />
+                <span className="text-xs">Tasks need status &quot;Done&quot; + uploaded media.</span>
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {data.readyTasks.slice(0, 6).map(task => {
+                  const isVideo = /\.(mp4|mov|webm|avi)/i.test(task.delivery_url ?? '')
+                  return (
+                    <div key={task.id}
+                      className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 transition-colors">
+                      <div className="w-10 h-10 rounded-lg bg-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                        {isVideo ? (
+                          <Film className="h-4 w-4 text-slate-400" />
+                        ) : task.delivery_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={task.delivery_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="h-4 w-4 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-200 truncate font-medium">{task.title}</p>
+                        {task.client?.name && (
+                          <p className="text-xs text-slate-500 truncate">{task.client.name}</p>
+                        )}
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shrink-0">
+                        Ready
+                      </span>
+                    </div>
+                  )
+                })}
+                {data.readyTasks.length > 6 && (
+                  <p className="text-xs text-slate-500 text-center pt-1">
+                    +{data.readyTasks.length - 6} more in Publishing Hub
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Scheduled */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Calendar className="h-4 w-4 text-violet-400" /> Upcoming Scheduled
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {scheduled.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">
+                No scheduled posts yet.<br />
+                <span className="text-xs">Head to Publishing Hub to schedule content.</span>
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {scheduled.slice(0, 6).map(post => {
+                  const cfg = PLATFORM_CFG[post.platform] ?? { label: post.platform, color: 'bg-slate-700 text-slate-300' }
+                  const dt  = new Date(post.scheduled_at)
+                  return (
+                    <div key={post.id}
+                      className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/40">
+                      <span className={`text-xs px-2 py-1 rounded-lg font-semibold shrink-0 ${cfg.color}`}>
+                        {cfg.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-200 truncate">
+                          {post.task?.title ?? post.caption?.slice(0, 40) ?? 'Untitled'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {dt.toLocaleDateString()} · {dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+                {scheduled.length > 6 && (
+                  <p className="text-xs text-slate-500 text-center pt-1">
+                    +{scheduled.length - 6} more scheduled
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl bg-slate-800/50 animate-pulse" />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-64 rounded-xl bg-slate-800/50 animate-pulse" />)}
+      </div>
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+export default function DashboardPage() {
+  const [role,        setRole]        = useState<string | null>(null)
+  const [data,        setData]        = useState<ReportData | null>(null)
+  const [mbData,      setMbData]      = useState<MediaBuyerData | null>(null)
+  const [reviewTasks, setReviewTasks] = useState<Task[]>([])
+  const [loading,     setLoading]     = useState(true)
+
+  // Detect role first
+  useEffect(() => {
+    fetch('/api/profile')
+      .then(r => r.ok ? r.json() : { role: 'admin' })
+      .then(p => setRole(p.role ?? 'admin'))
+      .catch(() => setRole('admin'))
+  }, [])
+
+  // Load data once role is known
+  useEffect(() => {
+    if (role === null) return
+
+    if (role === 'admin') {
+      Promise.all([
+        fetch('/api/reports').then(r => r.ok ? r.json() : null),
+        fetch('/api/tasks?status=review').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([reportData, tasks]) => {
+        setData(reportData)
+        setReviewTasks(Array.isArray(tasks) ? tasks : [])
+        setLoading(false)
+      }).catch(() => setLoading(false))
+
+    } else if (role === 'media_buyer') {
+      Promise.all([
+        fetch('/api/social/scheduled-posts').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/tasks').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([posts, tasks]) => {
+        const allTasks = Array.isArray(tasks) ? (tasks as TaskWithDelivery[]) : []
+        setMbData({
+          posts:      Array.isArray(posts) ? posts : [],
+          readyTasks: allTasks.filter(t => t.status === 'done' && t.delivery_url),
+        })
+        setLoading(false)
+      }).catch(() => setLoading(false))
+
+    } else {
+      // Other team roles — nothing to show here; they should be on /team-portal
+      setLoading(false)
+    }
+  }, [role])
+
+  if (loading || role === null) return <LoadingSkeleton />
+
+  if (role === 'media_buyer') return <MediaBuyerDashboard data={mbData} />
+
+  // ── Admin dashboard ─────────────────────────────────────────────────────────
+
   if (!data) {
-    return <div className="flex items-center justify-center h-64"><p className="text-slate-400">Failed to load data.</p></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-slate-400">Failed to load dashboard data.</p>
+      </div>
+    )
   }
 
   const kpiCards = [
@@ -148,7 +434,8 @@ export default function DashboardPage() {
       title: 'Revision Rate',
       value: `${data.kpis.revisionRate}%`,
       sub: 'tasks that had revision requests',
-      icon: AlertCircle, color: data.kpis.revisionRate > 30 ? 'text-red-400' : 'text-slate-400',
+      icon: AlertCircle,
+      color: data.kpis.revisionRate > 30 ? 'text-red-400' : 'text-slate-400',
       bg:   data.kpis.revisionRate > 30 ? 'bg-red-400/10' : 'bg-slate-400/10',
     },
   ]
@@ -158,7 +445,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
 
-      {/* ── Ready for Review alert ───────────────────────────────── */}
+      {/* Ready for Review alert */}
       {reviewTasks.length > 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -196,9 +483,7 @@ export default function DashboardPage() {
               </div>
             ))}
             {reviewTasks.length > 4 && (
-              <p className="text-xs text-amber-400/60 text-center pt-1">
-                +{reviewTasks.length - 4} more
-              </p>
+              <p className="text-xs text-amber-400/60 text-center pt-1">+{reviewTasks.length - 4} more</p>
             )}
           </div>
         </div>
@@ -234,7 +519,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent><BarChartSVG data={data.monthlyRevenue} /></CardContent>
         </Card>
-
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -303,8 +587,8 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-around pt-2">
-              <RateRing pct={data.kpis.collectionRate} color="#4ade80" label="Collection Rate" />
-              <RateRing pct={data.kpis.taskCompletionRate} color="#a78bfa" label="Task Completion" />
+              <RateRing pct={data.kpis.collectionRate}      color="#4ade80" label="Collection Rate"  />
+              <RateRing pct={data.kpis.taskCompletionRate}  color="#a78bfa" label="Task Completion"  />
             </div>
           </CardContent>
         </Card>
@@ -330,7 +614,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Team Performance (top 3) */}
+      {/* Team Performance */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -349,12 +633,13 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-500 text-center py-6">No team tasks assigned yet</p>
           ) : (
             data.teamPerformance.slice(0, 3).map((m, idx) => {
-              const pct = m.total > 0 ? Math.round((m.done / m.total) * 100) : 0
+              const pct      = m.total > 0 ? Math.round((m.done / m.total) * 100) : 0
               const barColor = pct >= 75 ? 'from-emerald-500 to-green-400'
                              : pct >= 40 ? 'from-indigo-500 to-purple-500'
                              : 'from-amber-500 to-orange-500'
               return (
-                <div key={m.id} className="flex items-center gap-4 p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+                <div key={m.id}
+                  className="flex items-center gap-4 p-3 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
                   <div className="relative shrink-0">
                     <div className="w-9 h-9 rounded-full bg-indigo-600/30 flex items-center justify-center text-sm font-bold text-indigo-300 border border-indigo-500/20">
                       {m.name.charAt(0).toUpperCase()}
@@ -376,7 +661,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                        <div className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-700`}
+                          style={{ width: `${pct}%` }} />
                       </div>
                       <span className="text-xs text-slate-400 shrink-0">{m.done}/{m.total}</span>
                     </div>
@@ -389,13 +675,13 @@ export default function DashboardPage() {
             })
           )}
           {data.teamPerformance.length > 3 && (
-            <Link href="/reports" className="flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-indigo-400 transition-colors pt-1">
+            <Link href="/reports"
+              className="flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-indigo-400 transition-colors pt-1">
               View all {data.teamPerformance.length} members <ArrowRight className="h-3 w-3" />
             </Link>
           )}
         </CardContent>
       </Card>
-
     </div>
   )
 }

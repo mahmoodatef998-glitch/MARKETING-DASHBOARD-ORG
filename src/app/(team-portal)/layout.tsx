@@ -22,7 +22,7 @@ export default function TeamPortalLayout({ children }: { children: React.ReactNo
       if (!data.session) { router.replace('/login'); return }
       const res = await fetch('/api/profile')
       const p = await res.json()
-      if (p.role === 'admin') { router.replace('/dashboard'); return }
+      if (p.role === 'admin' || p.role === 'media_buyer') { router.replace('/dashboard'); return }
       if (p.role === 'client') { router.replace('/client-portal'); return }
       setProfile(p)
       setReady(true)
