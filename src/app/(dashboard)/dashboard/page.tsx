@@ -353,7 +353,7 @@ export default function DashboardPage() {
         const allTasks = Array.isArray(tasks) ? (tasks as TaskWithDelivery[]) : []
         setMbData({
           posts:      Array.isArray(posts) ? posts : [],
-          readyTasks: allTasks.filter(t => t.delivery_url),
+          readyTasks: allTasks,
         })
         setLoading(false)
       }).catch(() => setLoading(false))

@@ -373,6 +373,11 @@ function ReadyTaskCard({ task, onSchedule }: { task: ReadyTask; onSchedule: (t: 
                     {TASK_TYPE_LABEL[task.task_type] ?? task.task_type}
                   </span>
                 )}
+                {!task.delivery_url && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> No media
+                  </span>
+                )}
               </div>
               {task.description && (
                 <p className="text-xs text-slate-500 line-clamp-1">{task.description}</p>
@@ -492,11 +497,11 @@ export default function PublishingHubPage() {
         postsRes.ok  ? postsRes.json()  : [],
       ])
 
-      // tasks ready to publish = done + has delivery_url + not already scheduled (active)
+      // tasks ready to publish = admin_approved + not already scheduled (active)
       const scheduledTaskIds = new Set(
         posts.filter(p => p.task_id && p.status !== 'cancelled').map(p => p.task_id!)
       )
-      const ready = tasks.filter(t => t.delivery_url && !scheduledTaskIds.has(t.id))
+      const ready = tasks.filter(t => !scheduledTaskIds.has(t.id))
 
       setReadyTasks(ready)
       setScheduledPosts(posts)
@@ -621,7 +626,7 @@ export default function PublishingHubPage() {
             <CardContent className="py-16 text-center">
               <LayoutGrid className="h-10 w-10 mx-auto mb-3 text-slate-700" />
               <p className="text-slate-400 text-sm font-medium">No tasks ready to publish</p>
-              <p className="text-slate-600 text-xs mt-1">Done tasks with uploaded media will appear here</p>
+              <p className="text-slate-600 text-xs mt-1">Approved tasks will appear here once the admin signs off</p>
             </CardContent>
           </Card>
         ) : (
