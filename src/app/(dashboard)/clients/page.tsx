@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -7,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import ClientForm, { type BillingFormData } from '@/components/clients/ClientForm'
 import ClientProfileModal from '@/components/clients/ClientProfileModal'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard, Download, CreditCard } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard, Download, CreditCard, Loader2 } from 'lucide-react'
 import type { Client } from '@/types'
 
 const CYCLE_LABELS: Record<string, string> = {
@@ -32,12 +33,22 @@ function billingLabel(client: Client): string | null {
 
 export default function ClientsPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [profileClient, setProfileClient] = useState<Client | null>(null)
+  const [guardReady, setGuardReady] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
+      const role = p?.role ?? ''
+      if (role !== 'admin') { router.replace('/dashboard'); return }
+      setGuardReady(true)
+    })
+  }, [router])
 
   async function load() {
     try {
@@ -84,6 +95,12 @@ export default function ClientsPage() {
   function exportCSV() {
     window.open('/api/export?type=clients', '_blank')
   }
+
+  if (!guardReady) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+    </div>
+  )
 
   const filtered = clients.filter(
     (c) =>

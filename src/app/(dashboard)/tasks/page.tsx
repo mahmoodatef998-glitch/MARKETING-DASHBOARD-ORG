@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -275,6 +276,7 @@ const priorityColors: Record<string, string> = {
 
 export default function TasksPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [members, setMembers] = useState<TaskAssignee[]>([])
@@ -285,6 +287,20 @@ export default function TasksPage() {
   const [open,          setOpen]          = useState(false)
   const [editing,       setEditing]       = useState<Task | null>(null)
   const [completedOpen, setCompletedOpen] = useState(false)
+  const [userRole,      setUserRole]      = useState<string>('')
+  const [guardReady,    setGuardReady]    = useState(false)
+
+  useEffect(() => {
+    fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
+      const role = p?.role ?? ''
+      if (role === 'client') { router.replace('/client-portal'); return }
+      if (['video_maker', 'designer', 'ai_video'].includes(role)) { router.replace('/team-portal'); return }
+      setUserRole(role)
+      setGuardReady(true)
+    })
+  }, [router])
+
+  const isAdmin = userRole === 'admin'
 
   const load = useCallback(async () => {
     const [tr, cr, mr] = await Promise.all([
@@ -420,6 +436,12 @@ export default function TasksPage() {
 
   const countByStatus = (s: string) => tasks.filter((t) => t.status === s).length
 
+  if (!guardReady) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       {/* Top bar: search + new button */}
@@ -431,13 +453,15 @@ export default function TasksPage() {
         <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
           <Download className="h-4 w-4" /> Export
         </Button>
-        <Button onClick={() => { setEditing(null); setOpen(true) }}>
-          <Plus className="h-4 w-4" /> New Task
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => { setEditing(null); setOpen(true) }}>
+            <Plus className="h-4 w-4" /> New Task
+          </Button>
+        )}
       </div>
 
-      {/* Bulk action toolbar */}
-      {selected.size > 0 && (
+      {/* Bulk action toolbar — admin only */}
+      {isAdmin && selected.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
           <span className="text-sm font-medium text-indigo-300">{selected.size} selected</span>
           <div className="flex-1" />
@@ -514,9 +538,11 @@ export default function TasksPage() {
           {filtered.length === 0 && filteredDone.length === 0 && (
             <Card><CardContent className="py-16 text-center">
               <p className="text-slate-400 text-sm">No tasks found.</p>
-              <Button className="mt-4" onClick={() => { setEditing(null); setOpen(true) }}>
-                <Plus className="h-4 w-4" /> Create First Task
-              </Button>
+              {isAdmin && (
+                <Button className="mt-4" onClick={() => { setEditing(null); setOpen(true) }}>
+                  <Plus className="h-4 w-4" /> Create First Task
+                </Button>
+              )}
             </CardContent></Card>
           )}
 
@@ -569,14 +595,16 @@ export default function TasksPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(task); setOpen(true) }}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400" onClick={() => handleDelete(task.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(task); setOpen(true) }}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400" onClick={() => handleDelete(task.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -624,14 +652,16 @@ export default function TasksPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(task); setOpen(true) }}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(task.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        {isAdmin && (
+                          <div className="flex gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(task); setOpen(true) }}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(task.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}

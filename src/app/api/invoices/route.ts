@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
 
-  let query = supabase.from('invoices').select('*, client:clients(*)').order('created_at', { ascending: false })
+  let query = supabase.from('invoices').select('*, client:clients(*)').is('deleted_at', null).order('created_at', { ascending: false })
 
   // Clients only see their own invoices
   if (profile?.role === 'client') {

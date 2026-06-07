@@ -16,6 +16,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { data: putProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (putProfile?.role === 'client') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
@@ -79,7 +84,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         subject, status: 'sent', task_id: id, created_at: new Date().toISOString(),
       })
     } catch {}
-    void sendSlack(`🔍 *Task ready for review*: "${data.title}" — client: ${data.client.name}`)
+    try { await sendSlack(`🔍 *Task ready for review*: "${data.title}" — client: ${data.client.name}`) } catch {}
   }
 
   // ── When task is marked done → notify client ───────────────────────────────
@@ -220,6 +225,11 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: delProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (delProfile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data } = await supabase.from('tasks').select('notion_id').eq('id', id).single()
 
