@@ -79,6 +79,11 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!['admin', 'media_buyer'].includes(callerProfile?.role ?? '')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const rawBody = await req.json().catch(() => null)
   const parsed = parseBody(TaskCreateSchema, rawBody)
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
@@ -103,7 +108,7 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   try { const notionId = await createNotionTask(task); await supabase.from('tasks').update({ notion_id: notionId }).eq('id', task.id) } catch {}
   if (task.assigned_to) {
-    void sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`)
+    try { await sendSlack(`📋 *New task assigned*: "${task.title}" (${task.priority} priority${task.due_date ? `, due ${task.due_date}` : ''})`) } catch {}
 
     // Email notification to the assigned team member
     const adminClient = createAdminClient()

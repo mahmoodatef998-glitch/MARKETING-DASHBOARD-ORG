@@ -28,6 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('invoices')
       .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
       .eq('id', id)
+      .is('deleted_at', null)
       .single()
 
     if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })

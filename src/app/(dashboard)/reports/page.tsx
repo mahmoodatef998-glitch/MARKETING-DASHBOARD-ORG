@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DonutChart, BarChartSVG, HorizontalBars, RateRing } from '@/components/charts'
 import { formatCurrency } from '@/lib/utils'
@@ -184,17 +185,28 @@ function TypeBar({ label, value, total, color, icon: Icon }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
+  const router = useRouter()
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [guardReady, setGuardReady] = useState(false)
 
   useEffect(() => {
+    fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
+      const role = p?.role ?? ''
+      if (role !== 'admin') { router.replace('/dashboard'); return }
+      setGuardReady(true)
+    })
+  }, [router])
+
+  useEffect(() => {
+    if (!guardReady) return
     fetch('/api/reports')
       .then((r) => r.json())
       .then((d: ReportData) => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [])
+  }, [guardReady])
 
-  if (loading) {
+  if (!guardReady || loading) {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

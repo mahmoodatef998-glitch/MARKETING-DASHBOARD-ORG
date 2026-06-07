@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -529,6 +530,7 @@ function BillingCard({ client, tasks }: { client: Client; tasks: Task[] }) {
 
 export default function InvoicesPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [invoices,  setInvoices]  = useState<Invoice[]>([])
   const [clients,   setClients]   = useState<Client[]>([])
   const [tasks,     setTasks]     = useState<Task[]>([])
@@ -537,6 +539,15 @@ export default function InvoicesPage() {
   const [formOpen,  setFormOpen]  = useState(false)
   const [editing,   setEditing]   = useState<Invoice | null>(null)
   const [detailInv, setDetailInv] = useState<Invoice | null>(null)
+  const [guardReady, setGuardReady] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
+      const role = p?.role ?? ''
+      if (role !== 'admin') { router.replace('/dashboard'); return }
+      setGuardReady(true)
+    })
+  }, [router])
 
   async function load() {
     try {
@@ -555,7 +566,7 @@ export default function InvoicesPage() {
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { if (guardReady) void load() }, [guardReady])
 
   async function handleSave(
     data: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }
@@ -592,6 +603,12 @@ export default function InvoicesPage() {
     const q = search.toLowerCase()
     return inv.invoice_number.toLowerCase().includes(q) || client?.name?.toLowerCase().includes(q) || !q
   }
+
+  if (!guardReady) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+    </div>
+  )
 
   const activeInvoices = invoices.filter((i) => i.status !== 'paid' && matches(i))
   const doneInvoices   = invoices.filter((i) => i.status === 'paid'  && matches(i))

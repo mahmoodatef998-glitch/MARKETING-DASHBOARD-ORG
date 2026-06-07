@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Clock,
   CheckCircle2,
@@ -73,11 +74,24 @@ function formatDate(dateStr: string | null): string {
 }
 
 export default function ApprovalsPage() {
+  const router = useRouter()
   const [tasks, setTasks] = useState<ApprovalTask[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterType>('all')
   const [revisionNotes, setRevisionNotes] = useState<Record<string, string>>({})
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string>('')
+  const [guardReady, setGuardReady] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
+      const role = p?.role ?? ''
+      if (role === 'client') { router.replace('/client-portal'); return }
+      if (['video_maker', 'designer', 'ai_video'].includes(role)) { router.replace('/team-portal'); return }
+      setUserRole(role)
+      setGuardReady(true)
+    })
+  }, [router])
 
   const fetchTasks = useCallback(async (currentFilter: FilterType) => {
     setLoading(true)
@@ -86,8 +100,8 @@ export default function ApprovalsPage() {
         // Fetch pending+client_approved (default) AND admin_approved AND revision_requested
         const [defaultRes, adminRes, revisionRes] = await Promise.all([
           fetch('/api/approvals'),
-          fetch('/api/approvals?status=admin_approved'),
-          fetch('/api/approvals?status=revision_requested'),
+          fetch('/api/approvals?approval_status=admin_approved'),
+          fetch('/api/approvals?approval_status=revision_requested'),
         ])
         const [defaultData, adminData, revisionData] = await Promise.all([
           defaultRes.ok ? defaultRes.json() : [],
@@ -103,7 +117,7 @@ export default function ApprovalsPage() {
         const seen = new Set<string>()
         setTasks(combined.filter((t) => { if (seen.has(t.id)) return false; seen.add(t.id); return true }))
       } else {
-        const res = await fetch(`/api/approvals?status=${currentFilter}`)
+        const res = await fetch(`/api/approvals?approval_status=${currentFilter}`)
         if (!res.ok) { setTasks([]); return }
         const data = await res.json()
         setTasks(Array.isArray(data) ? data : data?.tasks ?? [])
@@ -139,6 +153,14 @@ export default function ApprovalsPage() {
       setActionLoading(null)
     }
   }
+
+  if (!guardReady) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+    </div>
+  )
+
+  const isAdmin = userRole === 'admin'
 
   // Stats derived from ALL tasks fetched (when filter is 'all') or from the filtered set
   const allTasksForStats = tasks
@@ -295,8 +317,8 @@ export default function ApprovalsPage() {
                     </div>
                   )}
 
-                  {/* Action row */}
-                  {!isAdminApproved && (
+                  {/* Action row — admin only */}
+                  {isAdmin && !isAdminApproved && (
                     <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-700">
                       <input
                         type="text"
@@ -319,7 +341,6 @@ export default function ApprovalsPage() {
                         )}
                         Revision
                       </button>
-                      {/* Admin can approve directly — no need to wait for client */}
                       <button
                         onClick={() => handleAction(task.id, 'admin_approve')}
                         disabled={actionLoading === task.id + 'admin_approve'}
