@@ -43,7 +43,7 @@ const nav = [
   { href: '/invoices',        label: 'Invoices',     icon: FileText },
   { href: '/billing',         label: 'Billing',      icon: CreditCard },
   { href: '/inbox',           label: 'Inbox',        icon: MessageSquare },
-  { href: '/scheduled-posts', label: 'Scheduled',    icon: Calendar },
+  { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar },
   { href: '/automation',      label: 'Automation',   icon: Zap },
   { href: '/ai-assistant',    label: 'AI Assistant', icon: Bot },
   { href: '/media-library',   label: 'Media Library', icon: ImageIcon },
