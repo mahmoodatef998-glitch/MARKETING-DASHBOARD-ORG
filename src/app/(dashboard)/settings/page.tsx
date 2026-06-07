@@ -181,6 +181,7 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
 export default function SettingsPage() {
   const searchParams   = useSearchParams()
   const router         = useRouter()
+  const [guardReady,   setGuardReady]  = useState(false)  // blocks render until role confirmed
   const [clients,      setClients]     = useState<Client[]>([])
   const [selectedId,   setSelectedId]  = useState<string>('')
   const [connections,  setConnections] = useState<Connection[]>([])
@@ -197,6 +198,8 @@ export default function SettingsPage() {
         .then(({ data: profile }) => {
           if (profile?.role && !['admin', 'media_buyer'].includes(profile.role)) {
             router.replace('/dashboard')
+          } else {
+            setGuardReady(true)
           }
         })
     })
@@ -261,6 +264,15 @@ export default function SettingsPage() {
 
   const selectedClient = clients.find(c => c.id === selectedId)
   const fbAppConfigured = true // always show — server will validate
+
+  // Block render until role is confirmed — prevents flash of content for unauthorized roles
+  if (!guardReady) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

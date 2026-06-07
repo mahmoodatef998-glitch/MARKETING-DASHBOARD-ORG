@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DonutChart, BarChartSVG, HorizontalBars, RateRing } from '@/components/charts'
 import { formatCurrency } from '@/lib/utils'
@@ -309,19 +310,26 @@ function LoadingSkeleton() {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [role,        setRole]        = useState<string | null>(null)
   const [data,        setData]        = useState<ReportData | null>(null)
   const [mbData,      setMbData]      = useState<MediaBuyerData | null>(null)
   const [reviewTasks, setReviewTasks] = useState<Task[]>([])
   const [loading,     setLoading]     = useState(true)
 
-  // Detect role first
+  // Detect role first — redirect team-only roles back to their portal
   useEffect(() => {
     fetch('/api/profile')
-      .then(r => r.ok ? r.json() : { role: 'admin' })
-      .then(p => setRole(p.role ?? 'admin'))
+      .then(r => r.ok ? r.json() : null)
+      .then(p => {
+        if (!p) { setRole('admin'); return }
+        const teamOnlyRoles = ['video_maker', 'designer', 'ai_video']
+        if (teamOnlyRoles.includes(p.role)) { router.replace('/team-portal'); return }
+        if (p.role === 'client') { router.replace('/client-portal'); return }
+        setRole(p.role ?? 'admin')
+      })
       .catch(() => setRole('admin'))
-  }, [])
+  }, [router])
 
   // Load data once role is known
   useEffect(() => {

@@ -64,7 +64,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const router   = useRouter()
   const [collapsed,    setCollapsed]    = useState(false)
   const [myDashboard,  setMyDashboard]  = useState<string | null>(null)
-  const [userRole,     setUserRole]     = useState<string>('admin') // default admin until resolved
+  // Start with '' — shows only universal items until role is confirmed, preventing
+  // a flash of admin nav items for non-admin users during the async profile fetch.
+  const [userRole,     setUserRole]     = useState<string>('')
 
   useEffect(() => {
     if (DEMO) return
@@ -78,7 +80,8 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         .single()
         .then(({ data: profile }) => {
           if (profile?.role) setUserRole(profile.role)
-          const teamRoles = ['video_maker', 'designer', 'ai_video', 'media_buyer']
+          // media_buyer belongs in the admin dashboard now — no separate /team page link
+          const teamRoles = ['video_maker', 'designer', 'ai_video']
           if (profile?.role && teamRoles.includes(profile.role)) {
             setMyDashboard(`/team/${profile.id}`)
           }
