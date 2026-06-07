@@ -4,16 +4,16 @@
   /* ── Theme tokens ─────────────────────────────────────────── */
   :root, [data-theme="dark"] {
     --radius: 0.5rem;
-    --bg-page:   #000000;
-    --bg-panel:  #0a0a0a;
-    --bg-card:   #111111;
-    --bg-input:  rgba(17,17,17,.8);
-    --border:    #222222;
+    --bg-page:   #03030a;
+    --bg-panel:  #07070f;
+    --bg-card:   #0e0e18;
+    --bg-input:  rgba(14,14,24,.8);
+    --border:    #1a1a2e;
     --text-1:    #f1f5f9;
     --text-2:    #94a3b8;
     --text-3:    #475569;
-    --scrollbar: #333333;
-    --scrollbar-hover: #555555;
+    --scrollbar: #1e1e35;
+    --scrollbar-hover: #2d2d50;
   }
 
   [data-theme="light"] {
@@ -38,11 +38,14 @@
     color: var(--text-1);
     font-feature-settings: "rlig" 1, "calt" 1;
     transition: background-color 0.2s, color 0.2s;
+    /* Subtle radial gradient giving depth to the dark background */
+    background-image: radial-gradient(ellipse at 50% 0%, rgba(79,70,229,0.04) 0%, transparent 60%);
+    background-attachment: fixed;
   }
 
-  /* Dark mode surface overrides — true black */
-  :root .bg-slate-950, [data-theme="dark"] .bg-slate-950 { background-color: #000000 !important; }
-  :root .bg-slate-900, [data-theme="dark"] .bg-slate-900 { background-color: #0a0a0a !important; }
+  /* Dark mode surface overrides — deep space dark */
+  :root .bg-slate-950, [data-theme="dark"] .bg-slate-950 { background-color: #03030a !important; }
+  :root .bg-slate-900, [data-theme="dark"] .bg-slate-900 { background-color: #07070f !important; }
   :root .bg-slate-800\/50,
   :root .bg-slate-800\/40,
   :root .bg-slate-800\/60,
@@ -50,13 +53,13 @@
   [data-theme="dark"] .bg-slate-800\/50,
   [data-theme="dark"] .bg-slate-800\/40,
   [data-theme="dark"] .bg-slate-800\/60,
-  [data-theme="dark"] .bg-slate-800 { background-color: #111111 !important; }
+  [data-theme="dark"] .bg-slate-800 { background-color: #0e0e18 !important; }
   :root .border-slate-800,
   :root .border-slate-700,
   [data-theme="dark"] .border-slate-800,
-  [data-theme="dark"] .border-slate-700 { border-color: #222222 !important; }
-  :root header,  [data-theme="dark"] header  { background-color: rgba(0,0,0,.85) !important; border-color: #222222 !important; }
-  :root nav,     [data-theme="dark"] nav     { background-color: #0a0a0a !important; border-color: #222222 !important; }
+  [data-theme="dark"] .border-slate-700 { border-color: #1a1a2e !important; }
+  :root header,  [data-theme="dark"] header  { background-color: rgba(3,3,10,.88) !important; border-color: #1a1a2e !important; }
+  :root nav,     [data-theme="dark"] nav     { background-color: #07070f !important; border-color: #1a1a2e !important; }
 
   /* Light mode surface overrides */
   [data-theme="light"] .bg-slate-950 { background-color: var(--bg-page) !important; }
