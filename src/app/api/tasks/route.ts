@@ -37,7 +37,9 @@ export async function GET(req: NextRequest) {
     .single()
 
   const { searchParams } = new URL(req.url)
-  let query = supabase
+  // Use admin client to bypass RLS — auth + role checks are enforced above
+  const adminDb = createAdminClient()
+  let query = adminDb
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
     .is('deleted_at', null)
