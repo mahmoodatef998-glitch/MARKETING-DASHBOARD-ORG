@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
-  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed'
+  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed' | 'pending_approval'
   title: string
   message: string
   severity: 'error' | 'warning' | 'info'
@@ -21,35 +21,49 @@ export async function GET() {
 
   const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
   const isClient = profile?.role === 'client'
+  const isAdmin  = profile?.role === 'admin'
 
-  let tasksQuery = supabase
+  const admin = createAdminClient()
+
+  let tasksQuery = admin
     .from('tasks')
     .select('id, title, status, due_date')
     .in('status', ['overdue', 'todo', 'in_progress'])
     .is('deleted_at', null)
-  let invoicesQuery = supabase
+  let invoicesQuery = admin
     .from('invoices')
     .select('id, invoice_number, status, total')
     .eq('status', 'overdue')
+    .is('deleted_at', null)
 
   if (isClient) {
     if (!profile.client_id) return NextResponse.json([])
-    tasksQuery   = tasksQuery.eq('client_id', profile.client_id)
+    tasksQuery    = tasksQuery.eq('client_id', profile.client_id)
     invoicesQuery = invoicesQuery.eq('client_id', profile.client_id)
   }
 
-  const [tasksRes, invoicesRes, logsRes] = await Promise.all([
+  const [tasksRes, invoicesRes, logsRes, pendingApprovalsRes] = await Promise.all([
     tasksQuery,
     invoicesQuery,
     isClient
       ? Promise.resolve({ data: [] })
-      : supabase
+      : admin
           .from('automation_logs')
           .select('id, type, subject, status, created_at')
           .eq('status', 'failed')
           .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
           .limit(3),
+    isAdmin
+      ? admin
+          .from('tasks')
+          .select('id, title, client:clients(name)')
+          .eq('approval_status', 'client_approved')
+          .eq('status', 'done')
+          .is('deleted_at', null)
+          .order('updated_at', { ascending: false })
+          .limit(10)
+      : Promise.resolve({ data: [] }),
   ])
 
   const notifications: Notification[] = []
@@ -135,6 +149,31 @@ export async function GET() {
       message:  log.subject,
       severity: 'warning',
       link:     '/automation',
+    })
+  }
+
+  // ── Pending admin approvals (admin only) ──────────────────────────────────
+  const pendingApprovals = (pendingApprovalsRes.data ?? []) as { id: string; title: string; client?: { name?: string } | null }[]
+  if (pendingApprovals.length === 1) {
+    const t = pendingApprovals[0]
+    notifications.push({
+      id:       `approval-pending-${t.id}`,
+      type:     'pending_approval',
+      title:    'Awaiting Your Approval',
+      message:  t.client?.name ? `${t.title} — ${t.client.name}` : t.title,
+      severity: 'info',
+      link:     '/approvals',
+    })
+  } else if (pendingApprovals.length > 1) {
+    const preview = pendingApprovals.slice(0, 2).map(t => t.title).join(', ')
+    notifications.push({
+      id:       'approvals-pending-group',
+      type:     'pending_approval',
+      title:    `${pendingApprovals.length} Tasks Awaiting Approval`,
+      message:  pendingApprovals.length > 2 ? `${preview} +${pendingApprovals.length - 2} more` : preview,
+      severity: 'info',
+      link:     '/approvals',
+      count:    pendingApprovals.length,
     })
   }
 

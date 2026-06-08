@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu } from 'lucide-react'
+import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu, FileCheck } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
 import { useTheme } from '@/lib/theme'
 import { getSupabaseClient } from '@/lib/supabase'
@@ -23,6 +23,10 @@ const titles: Record<string, string> = {
   '/inbox':         'Inbox',
   '/scheduled-posts': 'Scheduled Posts',
   '/settings':      'Social Media',
+}
+
+const typeIcon: Partial<Record<string, React.ReactElement>> = {
+  pending_approval: <FileCheck className="h-3.5 w-3.5 text-indigo-400 shrink-0 mt-0.5" />,
 }
 
 const severityIcon = {
@@ -159,7 +163,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                       key={n.id}
                       className="flex items-start gap-3 px-4 py-3 hover:bg-slate-800/60 transition-colors group"
                     >
-                      {severityIcon[n.severity]}
+                      {typeIcon[n.type] ?? severityIcon[n.severity]}
                       <div
                         className="flex-1 min-w-0 cursor-pointer"
                         onClick={() => {
