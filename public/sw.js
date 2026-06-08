@@ -25,7 +25,8 @@ self.addEventListener('fetch', (e) => {
       if (cached) return cached
       return fetch(e.request).then((res) => {
         if (res.ok) {
-          caches.open(CACHE).then((c) => c.put(e.request, res.clone()))
+          const clone = res.clone()  // clone before body is consumed by the browser
+          caches.open(CACHE).then((c) => c.put(e.request, clone))
         }
         return res
       }).catch(() => new Response('Offline', { status: 503 }))
