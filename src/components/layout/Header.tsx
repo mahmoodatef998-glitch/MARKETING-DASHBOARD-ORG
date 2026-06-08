@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu, FileCheck, BellOff } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
@@ -75,7 +75,6 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const [dismissed,      setDismissed]      = useState<Set<string>>(new Set())
   const [userName,       setUserName]       = useState<string>('')
   const [pushEnabled,    setPushEnabled]    = useState<boolean | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
 
   // Load current user name once
   useEffect(() => {
@@ -107,17 +106,6 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     if (sub) setPushEnabled(true)
   }
 
-  // Close panel when clicking outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    if (open) document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
-
   function dismiss(id: string) {
     setDismissed((prev) => new Set([...prev, id]))
   }
@@ -145,7 +133,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         <h1 className="text-lg md:text-xl font-semibold text-slate-100">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-3" ref={panelRef}>
+      <div className="flex items-center gap-2 md:gap-3">
         {/* Theme toggle */}
         <button
           onClick={toggle}
@@ -179,10 +167,18 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
               </span>
             )}
           </button>
+        </div>
 
-          {/* Dropdown panel */}
-          {open && (
-            <div className="absolute right-0 top-12 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[200] overflow-hidden">
+        {/* Notification panel — fixed overlay, always on top */}
+        {open && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-[199]"
+              onClick={() => setOpen(false)}
+            />
+            {/* Panel */}
+            <div className="fixed top-16 right-2 sm:right-4 w-[calc(100vw-1rem)] sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[200] overflow-hidden">
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
                 <span className="text-sm font-semibold text-slate-100">
@@ -213,7 +209,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
               </div>
 
               {/* Items */}
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-800">
+              <div className="max-h-[70vh] overflow-y-auto divide-y divide-slate-800">
                 {visible.length === 0 ? (
                   <div className="py-10 text-center">
                     <Bell className="h-8 w-8 text-slate-700 mx-auto mb-2" />
@@ -248,8 +244,8 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 )}
               </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         {/* Avatar */}
         <div className="flex items-center gap-2">
