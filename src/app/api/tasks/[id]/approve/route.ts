@@ -24,6 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from('tasks')
     .select('id, client_id, status')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
 
   if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })

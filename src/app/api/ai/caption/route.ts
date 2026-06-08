@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       .from('tasks')
       .select('title, task_type, description, client:clients(name)')
       .eq('id', taskId)
+      .is('deleted_at', null)
       .single()
     if (task) {
       taskTitle   = task.title

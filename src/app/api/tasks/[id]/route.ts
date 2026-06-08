@@ -61,6 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .from('tasks')
     .select('status, client_id, title, description, priority, due_date, assigned_to')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
 
   // Auto-queue for admin approval when any task is marked done
