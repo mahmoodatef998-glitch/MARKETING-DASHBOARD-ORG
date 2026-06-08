@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
 
 // POST /api/tasks/[id]/approve — client approves a task (moves to done + saves rating)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -53,5 +54,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Send push notification to all admins when client approves (not admin self-approve)
+  if (profile?.role !== 'admin' && updates.approval_status === 'client_approved') {
+    try {
+      const admin = createAdminClient()
+      const { data: subs } = await admin
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth')
+        .in('user_id',
+          (await admin.from('profiles').select('id').eq('role', 'admin')).data?.map(p => p.id) ?? []
+        )
+
+      const taskTitle = (data as { title?: string })?.title ?? 'A task'
+      await Promise.allSettled(
+        (subs ?? []).map(s =>
+          sendPushNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } } as PushSubscription,
+            {
+              title: '✅ Task Awaiting Your Approval',
+              body:  taskTitle,
+              url:   '/approvals',
+              icon:  '/icon-192.png',
+            }
+          )
+        )
+      )
+    } catch (err) {
+      console.error('[push] failed to send approval notification:', err)
+    }
+  }
+
   return NextResponse.json(data)
 }

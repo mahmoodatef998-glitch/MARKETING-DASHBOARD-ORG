@@ -1,10 +1,40 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu, FileCheck } from 'lucide-react'
+import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu, FileCheck, BellOff } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
 import { useTheme } from '@/lib/theme'
 import { getSupabaseClient } from '@/lib/supabase'
+
+function urlBase64ToUint8Array(base64: string) {
+  const padding = '='.repeat((4 - base64.length % 4) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(b64)
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+}
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+  const reg = await navigator.serviceWorker.ready
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted') return
+
+  const { publicKey } = await fetch('/api/push/vapid-key').then(r => r.json())
+  if (!publicKey) return
+
+  const existing = await reg.pushManager.getSubscription()
+  const sub = existing ?? await reg.pushManager.subscribe({
+    userVisibleOnly:      true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  })
+
+  await fetch('/api/push/subscribe', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(sub.toJSON()),
+  })
+  return sub
+}
 
 const titles: Record<string, string> = {
   '/dashboard':     'Dashboard',
@@ -40,10 +70,11 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const title = titles[pathname] ?? 'Agency OS'
 
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [open,      setOpen]      = useState(false)
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [userName,  setUserName]  = useState<string>('')
+  const [notifications,  setNotifications]  = useState<Notification[]>([])
+  const [open,           setOpen]           = useState(false)
+  const [dismissed,      setDismissed]      = useState<Set<string>>(new Set())
+  const [userName,       setUserName]       = useState<string>('')
+  const [pushEnabled,    setPushEnabled]    = useState<boolean | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Load current user name once
@@ -64,6 +95,17 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       .then((data) => { if (Array.isArray(data)) setNotifications(data) })
       .catch(() => {})
   }, [pathname])
+
+  // Check current push permission state
+  useEffect(() => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return
+    setPushEnabled(Notification.permission === 'granted')
+  }, [])
+
+  async function handleEnablePush() {
+    const sub = await subscribeToPush()
+    if (sub) setPushEnabled(true)
+  }
 
   // Close panel when clicking outside
   useEffect(() => {
@@ -139,15 +181,33 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                     </span>
                   )}
                 </span>
-                {unread > 0 && (
-                  <button
-                    onClick={dismissAll}
-                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    Clear all
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {pushEnabled === false && (
+                    <button
+                      onClick={handleEnablePush}
+                      className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-200 transition-colors"
+                      title="Enable device notifications"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      Enable alerts
+                    </button>
+                  )}
+                  {pushEnabled === true && (
+                    <span className="flex items-center gap-1 text-xs text-green-500/70">
+                      <Bell className="h-3 w-3" />
+                      Alerts on
+                    </span>
+                  )}
+                  {unread > 0 && (
+                    <button
+                      onClick={dismissAll}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" />
+                      Clear all
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Items */}
