@@ -27,14 +27,21 @@ export async function GET(req: NextRequest) {
   if (profile?.role === 'client') {
     if (!profile.client_id) return NextResponse.json([])
     query = query.eq('client_id', profile.client_id)
-    // Clients always see pending + client_approved (no admin_approved)
     if (approvalStatusParam && approvalStatusParam !== 'admin_approved') {
       query = query.eq('approval_status', approvalStatusParam)
     } else {
       query = query.in('approval_status', ['pending', 'client_approved'])
     }
+  } else if (['video_maker', 'designer', 'ai_video'].includes(profile?.role ?? '')) {
+    // Team members only see their own submitted tasks
+    query = query.eq('assigned_to', user.id)
+    if (approvalStatusParam) {
+      query = query.eq('approval_status', approvalStatusParam)
+    } else {
+      query = query.in('approval_status', ['pending', 'client_approved'])
+    }
   } else {
-    // Admin
+    // admin + media_buyer: full view
     if (approvalStatusParam) {
       query = query.eq('approval_status', approvalStatusParam)
     } else {

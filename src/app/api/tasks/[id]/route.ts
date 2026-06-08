@@ -24,6 +24,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+  // Team members can only update tasks assigned to them
+  if (['video_maker', 'designer', 'ai_video'].includes(putProfile?.role ?? '')) {
+    const adminCheck = createAdminClient()
+    const { data: taskCheck } = await adminCheck
+      .from('tasks')
+      .select('assigned_to')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single()
+    if (!taskCheck || taskCheck.assigned_to !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const parsed = parseBody(TaskUpdateSchema, raw)
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
 

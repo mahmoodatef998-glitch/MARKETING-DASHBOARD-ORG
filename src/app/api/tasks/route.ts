@@ -49,7 +49,13 @@ export async function GET(req: NextRequest) {
   if (profile?.role === 'client') {
     if (!profile.client_id) return NextResponse.json([])
     query = query.eq('client_id', profile.client_id)
+  } else if (['video_maker', 'designer', 'ai_video'].includes(profile?.role ?? '')) {
+    // Team members only see tasks assigned to them — no override via query params
+    query = query.eq('assigned_to', user.id)
+    const status = searchParams.get('status')
+    if (status) query = query.eq('status', status)
   } else {
+    // admin + media_buyer: full visibility with optional filters
     const status = searchParams.get('status')
     const clientId = searchParams.get('client_id')
     const assignedTo = searchParams.get('assigned_to')
