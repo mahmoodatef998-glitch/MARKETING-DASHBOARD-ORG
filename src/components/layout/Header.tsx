@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bell, AlertCircle, Clock, Zap, X, CheckCheck, Sun, Moon, Menu, FileCheck, BellOff } from 'lucide-react'
 import type { Notification } from '@/app/api/notifications/route'
@@ -169,8 +170,8 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           </button>
         </div>
 
-        {/* Notification panel — fixed overlay, always on top */}
-        {open && (
+        {/* Notification panel — rendered via portal directly in document.body to escape overflow:hidden */}
+        {open && typeof document !== 'undefined' && createPortal(
           <>
             {/* Backdrop */}
             <div
@@ -244,7 +245,8 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 )}
               </div>
             </div>
-          </>
+          </>,
+          document.body
         )}
 
         {/* Avatar */}
