@@ -1,17 +1,14 @@
-const CACHE = 'agency-os-v1'
-const PRECACHE = ['/', '/dashboard', '/tasks', '/clients', '/invoices']
+const CACHE = 'agency-os-v3'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting())
-  )
+  e.waitUntil(self.skipWaiting())
 })
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   )
 })
 
@@ -19,21 +16,19 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return
   if (!e.request.url.startsWith('http')) return
   if (e.request.url.includes('/api/')) return
+  // Skip HTML navigation requests — let the browser/server handle auth redirects directly
+  if (e.request.mode === 'navigate') return
 
+  // Cache-first for static assets (JS, CSS, images, fonts)
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        // Only cache successful responses (skip 401, 403, 500, etc.)
-        if (res.ok || res.type === 'opaque') {
-          const clone = res.clone()
-          caches.open(CACHE).then((c) => c.put(e.request, clone))
+    caches.match(e.request).then((cached) => {
+      if (cached) return cached
+      return fetch(e.request).then((res) => {
+        if (res.ok) {
+          caches.open(CACHE).then((c) => c.put(e.request, res.clone()))
         }
         return res
-      })
-      .catch(() =>
-        caches.match(e.request).then((cached) =>
-          cached ?? new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
-        )
-      )
+      }).catch(() => new Response('Offline', { status: 503 }))
+    })
   )
 })
