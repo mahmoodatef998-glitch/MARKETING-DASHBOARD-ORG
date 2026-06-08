@@ -17,17 +17,23 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return
-  // Skip non-http(s) schemes (chrome-extension://, etc.)
   if (!e.request.url.startsWith('http')) return
   if (e.request.url.includes('/api/')) return
 
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        const clone = res.clone()
-        caches.open(CACHE).then((c) => c.put(e.request, clone))
+        // Only cache successful responses (skip 401, 403, 500, etc.)
+        if (res.ok || res.type === 'opaque') {
+          const clone = res.clone()
+          caches.open(CACHE).then((c) => c.put(e.request, clone))
+        }
         return res
       })
-      .catch(() => caches.match(e.request))
+      .catch(() =>
+        caches.match(e.request).then((cached) =>
+          cached ?? new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
+        )
+      )
   )
 })
