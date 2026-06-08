@@ -30,6 +30,7 @@ import {
   X,
   PieChart,
   Megaphone,
+  LayoutList,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -46,6 +47,7 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
   { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
   { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },
+  { href: '/content-plans',   label: 'Content Plans', icon: LayoutList,      roles: ['admin', 'media_buyer'] },
   { href: '/campaigns',       label: 'Campaigns',     icon: Megaphone,       roles: ['admin', 'media_buyer'] },
   { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        roles: ['admin', 'media_buyer'] },
   { href: '/automation',      label: 'Automation',    icon: Zap,             roles: ['admin'] },

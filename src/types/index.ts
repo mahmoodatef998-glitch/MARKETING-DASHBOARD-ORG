@@ -130,6 +130,7 @@ export interface Task {
   client_approved_at?: string
   admin_approved_at?: string
   approved_by?: string
+  plan_item_id?: string
   created_at: string
   updated_at: string
 }
