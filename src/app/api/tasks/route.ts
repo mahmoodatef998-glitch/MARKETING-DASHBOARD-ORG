@@ -10,6 +10,7 @@ import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { createAdminClient } from '@/lib/supabase-server'
 import { rateLimit } from '@/lib/rate-limit'
+import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
 import type { Task } from '@/types'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -101,8 +102,9 @@ export async function POST(req: NextRequest) {
     due_date:            (b.due_date            as string | undefined) ?? undefined,
     assigned_to:         (b.assigned_to         as string | undefined) ?? undefined,
     client_id:           (b.client_id           as string | undefined) ?? undefined,
-    delivery_url:        (b.delivery_url        as string | undefined) ?? undefined,
-    reference_image_url: (b.reference_image_url as string | undefined) ?? undefined,
+    delivery_url:          (b.delivery_url          as string | undefined) ?? undefined,
+    reference_image_url:   (b.reference_image_url   as string | undefined) ?? undefined,
+    scheduled_publish_at:  (b.scheduled_publish_at  as string | undefined) ?? undefined,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }
@@ -166,5 +168,61 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
   }
+  // ── If scheduled_publish_at set at creation → notify media_buyers ────────────
+  if (task.scheduled_publish_at) {
+    const notifyAdmin = createAdminClient()
+    try {
+      const { data: mediaBuyers } = await notifyAdmin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'media_buyer')
+
+      const mediaBuyerIds = (mediaBuyers ?? []).map((p: { id: string }) => p.id)
+
+      if (mediaBuyerIds.length > 0) {
+        const clientName = task.client_id
+          ? (await notifyAdmin.from('clients').select('name').eq('id', task.client_id).single()).data?.name ?? 'Unknown Client'
+          : 'Unknown Client'
+
+        const publishDateStr = new Date(task.scheduled_publish_at).toLocaleString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+
+        const msgContent = `📅 Publish Date Scheduled\nTask: ${task.title}\nClient: ${clientName}\nScheduled for: ${publishDateStr}`
+
+        await Promise.allSettled(
+          mediaBuyerIds.map((mbId: string) =>
+            notifyAdmin.from('messages').insert({
+              sender_id:   user.id,
+              receiver_id: mbId,
+              content:     msgContent,
+            })
+          )
+        )
+
+        const { data: subs } = await notifyAdmin
+          .from('push_subscriptions')
+          .select('endpoint, p256dh, auth')
+          .in('user_id', mediaBuyerIds)
+
+        await Promise.allSettled(
+          (subs ?? []).map((s: { endpoint: string; p256dh: string; auth: string }) =>
+            sendPushNotification(
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } } as PushSubscription,
+              {
+                title: '📅 Publish Date Scheduled',
+                body:  `${task.title} — ${clientName}\n${publishDateStr}`,
+                url:   '/tasks',
+                icon:  '/icon-192.png',
+              }
+            )
+          )
+        )
+      }
+    } catch (err) {
+      console.error('[tasks] publish date notification failed:', err)
+    }
+  }
+
   return NextResponse.json(task, { status: 201 })
 }

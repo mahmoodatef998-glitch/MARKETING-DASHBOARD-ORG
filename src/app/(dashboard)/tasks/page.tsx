@@ -126,16 +126,19 @@ function TaskForm({
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
-    title:               initial?.title               ?? '',
-    description:         initial?.description         ?? '',
-    status:              initial?.status              ?? 'todo',
-    priority:            initial?.priority            ?? 'medium',
-    task_type:           initial?.task_type           ?? '',
-    due_date:            initial?.due_date            ?? '',
-    assigned_to:         initial?.assigned_to         ?? '',
-    client_id:           initial?.client_id           ?? '',
-    delivery_url:        initial?.delivery_url        ?? '',
-    reference_image_url: initial?.reference_image_url ?? '',
+    title:                initial?.title                ?? '',
+    description:          initial?.description          ?? '',
+    status:               initial?.status               ?? 'todo',
+    priority:             initial?.priority             ?? 'medium',
+    task_type:            initial?.task_type            ?? '',
+    due_date:             initial?.due_date             ?? '',
+    assigned_to:          initial?.assigned_to          ?? '',
+    client_id:            initial?.client_id            ?? '',
+    delivery_url:         initial?.delivery_url         ?? '',
+    reference_image_url:  initial?.reference_image_url  ?? '',
+    scheduled_publish_at: initial?.scheduled_publish_at
+      ? initial.scheduled_publish_at.slice(0, 16) // strip seconds for datetime-local
+      : '',
   })
   const [loading, setLoading] = useState(false)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
@@ -212,9 +215,22 @@ function TaskForm({
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2">
-        <Label>Due Date</Label>
-        <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Due Date</Label>
+          <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
+        </div>
+        <div className="space-y-2">
+          <Label className="flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 text-slate-400" /> Publish Date
+          </Label>
+          <Input
+            type="datetime-local"
+            value={form.scheduled_publish_at}
+            onChange={(e) => set('scheduled_publish_at', e.target.value)}
+            className="text-slate-300"
+          />
+        </div>
       </div>
 
       {/* Reference image */}

@@ -8,6 +8,7 @@ import { dbError } from '@/lib/utils'
 import { sendSlack } from '@/lib/slack'
 import { parseBody, TaskUpdateSchema } from '@/lib/validation'
 import { logActivity } from '@/lib/activity-log'
+import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -24,6 +25,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+  // Team members can only update tasks assigned to them
+  if (['video_maker', 'designer', 'ai_video'].includes(putProfile?.role ?? '')) {
+    const adminCheck = createAdminClient()
+    const { data: taskCheck } = await adminCheck
+      .from('tasks')
+      .select('assigned_to')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single()
+    if (!taskCheck || taskCheck.assigned_to !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const parsed = parseBody(TaskUpdateSchema, raw)
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
 
@@ -37,16 +52,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     due_date:            body.due_date            || null,
     assigned_to:         body.assigned_to         || null,
     client_id:           body.client_id           || null,
-    delivery_url:        body.delivery_url        || null,
-    reference_image_url: body.reference_image_url || null,
-    updated_at:          new Date().toISOString(),
+    delivery_url:          body.delivery_url          || null,
+    reference_image_url:   body.reference_image_url   || null,
+    scheduled_publish_at:  body.scheduled_publish_at  || null,
+    updated_at:            new Date().toISOString(),
   }
 
-  // Fetch old status before update so we know if it changed to 'done'
+  // Fetch old state before update
   const { data: oldTask } = await supabase
     .from('tasks')
-    .select('status, client_id, title, description, priority, due_date, assigned_to')
+    .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at')
     .eq('id', id)
+    .is('deleted_at', null)
     .single()
 
   // Auto-queue for admin approval when any task is marked done
@@ -195,6 +212,66 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           created_at:      new Date().toISOString(),
         })
       } catch {}
+    }
+  }
+
+  // ── When scheduled_publish_at is set/changed → notify all media_buyers ──────
+  const publishDateChanged =
+    body.scheduled_publish_at !== undefined &&
+    body.scheduled_publish_at !== (oldTask?.scheduled_publish_at ?? null) &&
+    !!body.scheduled_publish_at
+
+  if (publishDateChanged) {
+    const notifyAdmin = createAdminClient()
+    try {
+      const { data: mediaBuyers } = await notifyAdmin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'media_buyer')
+
+      const mediaBuyerIds = (mediaBuyers ?? []).map((p: { id: string }) => p.id)
+
+      if (mediaBuyerIds.length > 0) {
+        const clientName = (data as { client?: { name?: string } | null })?.client?.name ?? 'Unknown Client'
+        const taskName   = (data as { title?: string })?.title ?? 'Unknown Task'
+        const publishDateStr = new Date(body.scheduled_publish_at as string).toLocaleString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+
+        // Inbox message to each media_buyer
+        const msgContent = `📅 Publish Date Scheduled\nTask: ${taskName}\nClient: ${clientName}\nScheduled for: ${publishDateStr}`
+        await Promise.allSettled(
+          mediaBuyerIds.map((mbId: string) =>
+            notifyAdmin.from('messages').insert({
+              sender_id:   user.id,
+              receiver_id: mbId,
+              content:     msgContent,
+            })
+          )
+        )
+
+        // Push notification to media_buyers
+        const { data: subs } = await notifyAdmin
+          .from('push_subscriptions')
+          .select('endpoint, p256dh, auth')
+          .in('user_id', mediaBuyerIds)
+
+        await Promise.allSettled(
+          (subs ?? []).map((s: { endpoint: string; p256dh: string; auth: string }) =>
+            sendPushNotification(
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } } as PushSubscription,
+              {
+                title: '📅 Publish Date Scheduled',
+                body:  `${taskName} — ${clientName}\n${publishDateStr}`,
+                url:   '/tasks',
+                icon:  '/icon-192.png',
+              }
+            )
+          )
+        )
+      }
+    } catch (err) {
+      console.error('[tasks] publish date notification failed:', err)
     }
   }
 
