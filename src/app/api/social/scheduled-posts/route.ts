@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
 
   let { data, error } = await admin.from('scheduled_posts').insert(rows).select()
 
-  // Graceful fallback if content_type column hasn't been migrated yet
+  // Graceful fallback if content_type or campaign_id columns haven't been migrated yet
   if (error?.code === '42703') {
-    const rowsCompat = rows.map(({ content_type: _ct, ...r }) => r)
+    const rowsCompat = rows.map(({ content_type: _ct, campaign_id: _cid, ...r }) => r)
     const res2 = await admin.from('scheduled_posts').insert(rowsCompat).select()
     data  = res2.data
     error = res2.error
