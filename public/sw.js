@@ -17,6 +17,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return
+  // Skip non-http(s) schemes (chrome-extension://, etc.)
+  if (!e.request.url.startsWith('http')) return
   if (e.request.url.includes('/api/')) return
 
   e.respondWith(

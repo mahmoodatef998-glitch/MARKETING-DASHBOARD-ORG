@@ -201,13 +201,14 @@ function PlatformCard({ cfg, connection, clientId, onSave, onDelete }: {
 export default function SettingsPage() {
   const searchParams   = useSearchParams()
   const router         = useRouter()
-  const [guardReady,   setGuardReady]  = useState(false)  // blocks render until role confirmed
+  const [guardReady,   setGuardReady]  = useState(false)
   const [clients,      setClients]     = useState<Client[]>([])
   const [selectedId,   setSelectedId]  = useState<string>('')
   const [connections,  setConnections] = useState<Connection[]>([])
   const [loading,      setLoading]     = useState(true)
   const [oauthLoading, setOauthLoading] = useState(false)
   const [banner,       setBanner]      = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [fbReady,      setFbReady]     = useState<boolean | null>(null)
 
   // Role guard — only admin and media_buyer may access this page
   useEffect(() => {
@@ -234,6 +235,14 @@ export default function SettingsPage() {
     if (ok)  setBanner({ type: 'success', msg: 'Facebook & Instagram connected successfully!' })
     if (cid) setSelectedId(cid)
   }, [searchParams])
+
+  // Check OAuth config
+  useEffect(() => {
+    fetch('/api/social/config')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setFbReady(d?.fbConfigured ?? false))
+      .catch(() => setFbReady(false))
+  }, [])
 
   // Load clients once
   useEffect(() => {
@@ -357,15 +366,28 @@ export default function SettingsPage() {
 
         {/* OAuth connect button */}
         {selectedId && (
-          <button
-            onClick={startOAuth}
-            disabled={oauthLoading}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-900/30"
-          >
-            {oauthLoading
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Redirecting…</>
-              : <><Link2 className="h-4 w-4" /> Connect Facebook & Instagram for {selectedClient?.name ?? '…'}</>}
-          </button>
+          fbReady === false ? (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3 space-y-1">
+              <p className="text-sm font-semibold text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Facebook OAuth not configured
+              </p>
+              <p className="text-xs text-amber-400/80">
+                Set <code className="bg-slate-800 px-1 rounded">FB_APP_ID</code> and{' '}
+                <code className="bg-slate-800 px-1 rounded">FB_APP_SECRET</code> in your Vercel environment variables,
+                then redeploy. Until then, use the <strong>Manual</strong> button below to enter tokens directly.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={startOAuth}
+              disabled={oauthLoading || fbReady === null}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-900/30"
+            >
+              {oauthLoading
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Redirecting…</>
+                : <><Link2 className="h-4 w-4" /> Connect Facebook & Instagram for {selectedClient?.name ?? '…'}</>}
+            </button>
+          )
         )}
         <p className="text-xs text-slate-500 text-center">
           One click connects both Facebook Pages and Instagram Business accounts automatically via OAuth.
