@@ -420,6 +420,22 @@ export default function ApprovalsPage() {
           <p className="mt-1 text-sm text-slate-400">Review and approve completed work</p>
         </div>
 
+        {/* Media buyer read-only notice */}
+        {!isAdmin && (
+          <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/8 px-4 py-3 flex items-start gap-3">
+            <div className="p-1.5 rounded-lg bg-indigo-500/15 shrink-0 mt-0.5">
+              <Clock className="h-4 w-4 text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-indigo-300">Read-only view</p>
+              <p className="text-xs text-indigo-400/80 mt-0.5">
+                Tasks with "Client Approved" status are waiting for admin sign-off.
+                Once the admin approves, they'll appear in your Publishing Hub automatically.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl bg-slate-800 border border-slate-700 p-5">

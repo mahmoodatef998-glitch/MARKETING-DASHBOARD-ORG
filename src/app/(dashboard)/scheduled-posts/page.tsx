@@ -783,7 +783,7 @@ export default function PublishingHubPage() {
             <CardContent className="py-16 text-center">
               <LayoutGrid className="h-10 w-10 mx-auto mb-3 text-slate-700" />
               <p className="text-slate-400 text-sm font-medium">No tasks ready to publish</p>
-              <p className="text-slate-600 text-xs mt-1">Approved tasks will appear here once the admin signs off</p>
+              <p className="text-slate-600 text-xs mt-1">Check <span className="text-indigo-400 cursor-pointer" onClick={() => window.location.href='/approvals'}>Approvals</span> — tasks need admin sign-off before appearing here</p>
             </CardContent>
           </Card>
         ) : (
