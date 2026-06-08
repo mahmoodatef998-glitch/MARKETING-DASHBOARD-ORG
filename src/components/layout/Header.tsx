@@ -154,6 +154,18 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
+
+        {/* Enable push notifications button — shown in header when not yet enabled */}
+        {pushEnabled === false && (
+          <button
+            onClick={handleEnablePush}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 border border-indigo-500/30 transition-colors"
+            title="Enable device push notifications"
+          >
+            <BellOff className="h-3.5 w-3.5" />
+            Enable Alerts
+          </button>
+        )}
         {/* Bell */}
         <div className="relative">
           <button
@@ -170,7 +182,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {/* Dropdown panel */}
           {open && (
-            <div className="absolute right-0 top-12 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+            <div className="absolute right-0 top-12 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[200] overflow-hidden">
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
                 <span className="text-sm font-semibold text-slate-100">
@@ -182,16 +194,6 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                   )}
                 </span>
                 <div className="flex items-center gap-2">
-                  {pushEnabled === false && (
-                    <button
-                      onClick={handleEnablePush}
-                      className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-200 transition-colors"
-                      title="Enable device notifications"
-                    >
-                      <Bell className="h-3.5 w-3.5" />
-                      Enable alerts
-                    </button>
-                  )}
                   {pushEnabled === true && (
                     <span className="flex items-center gap-1 text-xs text-green-500/70">
                       <Bell className="h-3 w-3" />
