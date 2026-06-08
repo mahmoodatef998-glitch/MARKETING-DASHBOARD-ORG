@@ -408,3 +408,31 @@ BEGIN
       'auto_invoice','package_renewal_alert'
     ));
 END $$;
+
+-- ── Campaigns ─────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.campaigns (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id   uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  description text,
+  goal        text CHECK (goal IN ('awareness','engagement','leads','sales','retention','custom')),
+  platforms   text[] NOT NULL DEFAULT '{}',
+  start_date  date NOT NULL,
+  end_date    date NOT NULL,
+  budget      numeric(12,2),
+  currency    text NOT NULL DEFAULT 'USD',
+  status      text NOT NULL DEFAULT 'draft'
+              CHECK (status IN ('draft','active','paused','completed')),
+  created_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.campaigns;
+CREATE POLICY "auth_all" ON public.campaigns FOR ALL USING (auth.role() = 'authenticated');
+
+ALTER TABLE public.scheduled_posts ADD COLUMN IF NOT EXISTS campaign_id uuid REFERENCES public.campaigns(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_campaigns_client    ON public.campaigns(client_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status    ON public.campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_posts_campaign      ON public.scheduled_posts(campaign_id);
+

@@ -113,8 +113,18 @@ function ScheduleModal({
   const [caption,           setCaption]           = useState('')
   const [scheduledDate,     setScheduledDate]     = useState('')
   const [scheduledTime,     setScheduledTime]     = useState('09:00')
+  const [campaignId,        setCampaignId]        = useState('')
+  const [campaigns,         setCampaigns]         = useState<{ id: string; name: string }[]>([])
   const [generating,        setGenerating]        = useState(false)
   const [submitting,        setSubmitting]        = useState(false)
+
+  useEffect(() => {
+    if (!task.client?.id) return
+    fetch(`/api/campaigns?client_id=${task.client.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setCampaigns(Array.isArray(d) ? d.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })) : []))
+      .catch(() => {})
+  }, [task.client?.id])
 
   function togglePlatform(id: string) {
     setSelectedPlatforms(prev =>
@@ -161,6 +171,7 @@ function ScheduleModal({
           caption:      caption || null,
           scheduled_at,
           client_id:    task.client?.id ?? null,
+          campaign_id:  campaignId || null,
         }),
       })
       if (!res.ok) {
@@ -298,6 +309,21 @@ function ScheduleModal({
             />
             <p className="text-xs text-slate-600 mt-1">{caption.length} characters</p>
           </div>
+
+          {/* Campaign (optional) */}
+          {campaigns.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">Link to Campaign (optional)</label>
+              <select
+                value={campaignId}
+                onChange={e => setCampaignId(e.target.value)}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="">— No campaign —</option>
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Schedule date + time */}
           <div>

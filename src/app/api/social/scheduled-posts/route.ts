@@ -63,9 +63,12 @@ export async function POST(req: NextRequest) {
   const platforms: string[] = Array.isArray(body.platform) ? body.platform : [body.platform]
   const contentType: string = ['post', 'reel', 'story'].includes(body.content_type) ? body.content_type : 'post'
 
+  const campaignId: string | null = body.campaign_id ?? null
+
   const rows = platforms.map(p => ({
     task_id:      body.task_id,
     client_id:    clientId,
+    campaign_id:  campaignId,
     platform:     p,
     scheduled_at: body.scheduled_at,
     caption:      body.caption ?? null,
