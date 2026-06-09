@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         const memberName = profile?.display_name ?? memberEmail
 
         const { data: client } = task.client_id
-          ? await adminClient.from('clients').select('name').eq('id', task.client_id).single()
+          ? await adminClient.from('clients').select('name').eq('id', task.client_id).is('deleted_at', null).single()
           : { data: null }
 
         const details = [
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
 
       if (mediaBuyerIds.length > 0) {
         const clientName = task.client_id
-          ? (await notifyAdmin.from('clients').select('name').eq('id', task.client_id).single()).data?.name ?? 'Unknown Client'
+          ? (await notifyAdmin.from('clients').select('name').eq('id', task.client_id).is('deleted_at', null).single()).data?.name ?? 'Unknown Client'
           : 'Unknown Client'
 
         const publishDateStr = new Date(task.scheduled_publish_at).toLocaleString('en-US', {

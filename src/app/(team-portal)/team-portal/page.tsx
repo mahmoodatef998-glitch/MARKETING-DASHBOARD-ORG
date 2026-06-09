@@ -168,6 +168,7 @@ function MarkDoneModal({
 }) {
   const [deliveryUrl,       setDeliveryUrl]       = useState(task.delivery_url ?? '')
   const [uploading,         setUploading]         = useState(false)
+  const [uploadError,       setUploadError]       = useState<string | null>(null)
   const [saving,            setSaving]            = useState(false)
   const [scheduleOn,        setScheduleOn]        = useState(false)
   const [platforms,         setPlatforms]         = useState<string[]>([])
@@ -196,13 +197,17 @@ function MarkDoneModal({
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     try {
       const presignRes = await fetch('/api/upload/presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.name, contentType: file.type }),
       })
-      if (!presignRes.ok) throw new Error('Presign failed')
+      if (!presignRes.ok) {
+        const err = await presignRes.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Failed to initiate upload')
+      }
       const data = await presignRes.json()
       const formData = new FormData()
       formData.append('file', file)
@@ -212,12 +217,19 @@ function MarkDoneModal({
       formData.append('public_id', data.publicId)
       if (data.eager) formData.append('eager', data.eager)
       const upRes = await fetch(data.uploadUrl, { method: 'POST', body: formData })
+      if (!upRes.ok) {
+        const errBody = await upRes.json().catch(() => ({}))
+        throw new Error(errBody?.error?.message ?? 'Upload failed')
+      }
       const uploaded = await upRes.json()
-      setDeliveryUrl(uploaded.secure_url ?? data.publicUrl)
+      if (!uploaded.secure_url) throw new Error('Upload failed — no URL returned')
+      setDeliveryUrl(uploaded.secure_url)
     } catch (err) {
       console.error('Upload error', err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
     }
   }
 
@@ -295,6 +307,11 @@ function MarkDoneModal({
                 : <><ImagePlus className="h-4 w-4" /> Upload file</>}
             </button>
             <input ref={inputRef} type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+            {uploadError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 shrink-0" /> {uploadError}
+              </p>
+            )}
             {deliveryUrl?.startsWith('http') && (
               <a href={deliveryUrl} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
