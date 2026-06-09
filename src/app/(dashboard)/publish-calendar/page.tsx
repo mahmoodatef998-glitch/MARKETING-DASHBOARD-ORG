@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -27,12 +27,6 @@ interface PublishEvent {
       month:  string
       client: { id: string; name: string }
     }
-    task: {
-      id:              string
-      status:          string
-      approval_status: string
-      delivery_url:    string | null
-    } | null
   }
 }
 
@@ -170,12 +164,6 @@ function EventDetail({ event, onClose, onMarkPublished }: {
               {event.status}
             </span>
           </div>
-          {event.item.task && (
-            <div className="flex justify-between">
-              <span className="text-slate-500">Task</span>
-              <span className="text-slate-400">{event.item.task.status} / {event.item.task.approval_status}</span>
-            </div>
-          )}
           {event.error_message && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5 text-xs text-red-400">
               {event.error_message}
@@ -185,12 +173,6 @@ function EventDetail({ event, onClose, onMarkPublished }: {
 
         {/* Actions */}
         <div className="flex gap-2 pt-1">
-          {event.item.task?.delivery_url && (
-            <a href={event.item.task.delivery_url} target="_blank" rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-slate-700 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-colors">
-              <ExternalLink className="h-3.5 w-3.5" /> View File
-            </a>
-          )}
           {event.status === 'ready' && (
             <button onClick={handleMarkPublished} disabled={busy}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-semibold transition-colors disabled:opacity-50">
@@ -212,6 +194,7 @@ export default function PublishCalendarPage() {
   const [events,        setEvents]        = useState<PublishEvent[]>([])
   const [clients,       setClients]       = useState<Client[]>([])
   const [loading,       setLoading]       = useState(true)
+  const [loadError,     setLoadError]     = useState<string | null>(null)
   const [year,          setYear]          = useState(now.getFullYear())
   const [month,         setMonth]         = useState(now.getMonth())
   const [viewMode,      setViewMode]      = useState<'month' | 'week'>('month')
@@ -234,14 +217,26 @@ export default function PublishCalendarPage() {
 
   const loadEvents = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     const ym = monthYMStr(year, month)
     const params = new URLSearchParams({ month: ym })
     if (filterClient !== 'all') params.set('client_id', filterClient)
     if (filterPlat   !== 'all') params.set('platform',  filterPlat)
     if (filterStatus !== 'all') params.set('status',    filterStatus)
     if (filterType   !== 'all') params.set('content_type', filterType)
-    const res = await fetch(`/api/publish-events?${params}`)
-    if (res.ok) setEvents(await res.json())
+    try {
+      const res = await fetch(`/api/publish-events?${params}`)
+      const json = await res.json()
+      if (!res.ok) {
+        setLoadError(json.error ?? `Error ${res.status}`)
+        setEvents([])
+      } else {
+        setEvents(json)
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load events')
+      setEvents([])
+    }
     setLoading(false)
   }, [year, month, filterClient, filterPlat, filterStatus, filterType])
 
@@ -412,6 +407,12 @@ export default function PublishCalendarPage() {
         </div>
       )}
 
+      {loadError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <span className="font-semibold">Error loading events: </span>{loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
@@ -513,10 +514,10 @@ export default function PublishCalendarPage() {
           )}
 
           {/* Empty state */}
-          {events.length === 0 && (
+          {events.length === 0 && !loadError && (
             <div className="text-center py-16 text-slate-600">
-              <p className="text-lg">No publish events this month</p>
-              <p className="text-sm mt-1">Add content items to your plans to see them here</p>
+              <p className="text-lg">No publish events in {new Date(year, month).toLocaleString('en-US', { month: 'long', year: 'numeric' })}</p>
+              <p className="text-sm mt-1">Use the arrows above to navigate to the month your plan is scheduled for</p>
             </div>
           )}
         </>

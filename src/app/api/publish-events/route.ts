@@ -51,8 +51,7 @@ export async function GET(req: NextRequest) {
           title,
           month,
           client:clients(id, name)
-        ),
-        task:tasks(id, title, status, approval_status, delivery_url)
+        )
       )
     `)
     .order('scheduled_at', { ascending: true })
