@@ -455,7 +455,7 @@ describe('POST /api/content-plans/[id]/items', () => {
     expect(body.task.id).toBe('task-id-123')
   })
 
-  it('201 creates design item with SLA=2 days', async () => {
+  it('201 creates design item with SLA=1 day', async () => {
     const { POST } = await import('./[id]/items/route')
     queueAdminAuth()
     queueSuccessfulItemCreation({ contentType: 'design' })
@@ -463,7 +463,7 @@ describe('POST /api/content-plans/[id]/items', () => {
     expect(res.status).toBe(201)
   })
 
-  it('201 creates ai_video item with SLA=4 days', async () => {
+  it('201 creates ai_video item with SLA=3 days', async () => {
     const { POST } = await import('./[id]/items/route')
     queueAdminAuth()
     queueSuccessfulItemCreation({ contentType: 'ai_video' })

@@ -5,9 +5,9 @@ import { generateId } from '@/lib/utils'
 
 // SLA days per content type
 const SLA: Record<string, number> = {
-  design:   2,
+  design:   1,
   reel:     3,
-  ai_video: 4,
+  ai_video: 3,
 }
 
 // task_type mapping from plan content_type

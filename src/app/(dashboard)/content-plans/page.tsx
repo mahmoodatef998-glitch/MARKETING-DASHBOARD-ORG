@@ -60,8 +60,8 @@ interface ContentPlan {
 
 const CONTENT_TYPES = [
   { value: 'reel',     label: 'Reel / Short Video', icon: Video,      color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20', sla: 3 },
-  { value: 'design',   label: 'Static Design',      icon: Paintbrush, color: 'text-pink-400',   bg: 'bg-pink-500/10 border-pink-500/20',     sla: 2 },
-  { value: 'ai_video', label: 'AI Video',            icon: Sparkles,   color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20',      sla: 4 },
+  { value: 'design',   label: 'Static Design',      icon: Paintbrush, color: 'text-pink-400',   bg: 'bg-pink-500/10 border-pink-500/20',     sla: 1 },
+  { value: 'ai_video', label: 'AI Video',            icon: Sparkles,   color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20',      sla: 3 },
 ] as const
 
 const PLATFORMS = [
