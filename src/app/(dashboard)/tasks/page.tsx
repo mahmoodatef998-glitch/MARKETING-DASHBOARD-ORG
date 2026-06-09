@@ -824,7 +824,7 @@ export default function TasksPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Task' : 'New Task'}</DialogTitle>
           </DialogHeader>

@@ -244,7 +244,7 @@ export default function ClientsPage() {
 
       {/* Edit/Create Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Client' : 'New Client'}</DialogTitle>
           </DialogHeader>

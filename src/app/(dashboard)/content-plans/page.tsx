@@ -137,7 +137,7 @@ function NewPlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
+      <DialogContent className="bg-slate-900 border-slate-700 max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-slate-100">New Monthly Plan</DialogTitle>
         </DialogHeader>
@@ -223,7 +223,7 @@ function AddItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
+      <DialogContent className="bg-slate-900 border-slate-700 max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-slate-100">
             Add Content Item — {plan.client?.name}

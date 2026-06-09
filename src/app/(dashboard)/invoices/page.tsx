@@ -121,7 +121,7 @@ function InvoiceDetailsModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         {/* ── Header ── */}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
@@ -756,7 +756,7 @@ export default function InvoicesPage() {
 
       {/* Create / Edit Form */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Invoice' : 'New Invoice'}</DialogTitle>
           </DialogHeader>

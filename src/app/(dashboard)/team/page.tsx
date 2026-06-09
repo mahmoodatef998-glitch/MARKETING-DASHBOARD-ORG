@@ -473,7 +473,7 @@ export default function TeamPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Member' : 'Add Team Member'}</DialogTitle>
           </DialogHeader>

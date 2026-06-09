@@ -316,7 +316,7 @@ export default function BillingPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Billing Plan' : 'New Billing Plan'}</DialogTitle>
           </DialogHeader>
