@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select('*, assignee:profiles!assigned_to(id,display_name,role), client:clients(id,name,email)')
     .is('deleted_at', null)
-    .order('created_at', { ascending: false })
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
 
   // Clients only see their own tasks — enforced server-side regardless of query params
   if (profile?.role === 'client') {
