@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import SchedulePublishPanel from '@/components/tasks/SchedulePublishPanel'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2, Filter } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Client, TaskAssignee } from '@/types'
@@ -297,9 +297,14 @@ export default function TasksPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [members, setMembers] = useState<TaskAssignee[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [search,          setSearch]          = useState('')
+  const [filterStatus,    setFilterStatus]    = useState('all')
+  const [filterAssignee,  setFilterAssignee]  = useState('all')
+  const [filterClient,    setFilterClient]    = useState('all')
+  const [filterDue,       setFilterDue]       = useState('any')
+  const [filterDateFrom,  setFilterDateFrom]  = useState('')
+  const [filterDateTo,    setFilterDateTo]    = useState('')
+  const [selected,        setSelected]        = useState<Set<string>>(new Set())
   const [open,          setOpen]          = useState(false)
   const [editing,       setEditing]       = useState<Task | null>(null)
   const [completedOpen, setCompletedOpen] = useState(false)
@@ -436,19 +441,66 @@ export default function TasksPage() {
     load()
   }
 
+  function matchesDueFilter(dueDate: string | undefined | null): boolean {
+    if (filterDue === 'any') {
+      if (!filterDateFrom && !filterDateTo) return true
+      if (!dueDate) return false
+      const d = new Date(dueDate)
+      if (filterDateFrom && d < new Date(filterDateFrom)) return false
+      if (filterDateTo   && d > new Date(filterDateTo))   return false
+      return true
+    }
+    const now   = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const due   = dueDate ? new Date(dueDate) : null
+    if (filterDue === 'overdue')    return !!due && due < today
+    if (filterDue === 'today')      return !!due && due.toDateString() === today.toDateString()
+    if (filterDue === 'this_week') {
+      if (!due) return false
+      const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7)
+      return due >= today && due <= weekEnd
+    }
+    if (filterDue === 'this_month') {
+      if (!due) return false
+      return due.getMonth() === now.getMonth() && due.getFullYear() === now.getFullYear()
+    }
+    return true
+  }
+
+  function matchesCommonFilters(t: Task): boolean {
+    if (!t.title.toLowerCase().includes(search.toLowerCase())) return false
+    if (filterAssignee !== 'all' && t.assigned_to !== filterAssignee) return false
+    if (filterClient   !== 'all' && t.client_id   !== filterClient)   return false
+    if (!matchesDueFilter(t.due_date)) return false
+    return true
+  }
+
   const filtered = tasks
     .filter((t) => {
       if (t.status === 'done') return false
-      const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
-      const matchStatus = filterStatus === 'all' || t.status === filterStatus
-      return matchSearch && matchStatus
+      if (!matchesCommonFilters(t)) return false
+      return filterStatus === 'all' || t.status === filterStatus
     })
     .sort(sortByDue)
 
-  // Done tasks: always separated, only filtered by search
+  // Done tasks: always separated
   const filteredDone = tasks
-    .filter((t) => t.status === 'done' && t.title.toLowerCase().includes(search.toLowerCase()))
+    .filter((t) => t.status === 'done' && matchesCommonFilters(t))
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+  const activeFilterCount = [
+    filterAssignee !== 'all',
+    filterClient   !== 'all',
+    filterDue      !== 'any' || !!filterDateFrom || !!filterDateTo,
+  ].filter(Boolean).length
+
+  function clearFilters() {
+    setFilterAssignee('all')
+    setFilterClient('all')
+    setFilterDue('any')
+    setFilterDateFrom('')
+    setFilterDateTo('')
+  }
 
   const countByStatus = (s: string) => tasks.filter((t) => t.status === s).length
 
@@ -509,6 +561,89 @@ export default function TasksPage() {
           </button>
         </div>
       )}
+
+      {/* Filter row: Assignee | Client | Due date */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+
+        {/* Assignee */}
+        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+          <SelectTrigger className="h-8 w-40 text-xs border-slate-700 bg-slate-900">
+            <SelectValue placeholder="All members" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All members</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Client */}
+        <Select value={filterClient} onValueChange={setFilterClient}>
+          <SelectTrigger className="h-8 w-36 text-xs border-slate-700 bg-slate-900">
+            <SelectValue placeholder="All clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All clients</SelectItem>
+            {clients.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Due date presets */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {([
+            { v: 'any',        label: 'Any date' },
+            { v: 'overdue',    label: 'Overdue' },
+            { v: 'today',      label: 'Today' },
+            { v: 'this_week',  label: 'This week' },
+            { v: 'this_month', label: 'This month' },
+          ] as const).map(({ v, label }) => (
+            <button
+              key={v}
+              onClick={() => { setFilterDue(v); setFilterDateFrom(''); setFilterDateTo('') }}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all
+                ${filterDue === v
+                  ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                  : 'border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-500'
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom date range (shown in 'any' mode when dates set, or always for range input) */}
+        {filterDue === 'any' && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="h-8 w-32 text-xs border-slate-700 bg-slate-900 text-slate-300"
+            />
+            <span>–</span>
+            <Input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="h-8 w-32 text-xs border-slate-700 bg-slate-900 text-slate-300"
+            />
+          </div>
+        )}
+
+        {/* Clear filters */}
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all"
+          >
+            <X className="h-3 w-3" /> Clear ({activeFilterCount})
+          </button>
+        )}
+      </div>
 
       {/* Status filter chips (active tasks only — done has its own section) */}
       <div className="flex gap-2 flex-wrap items-center">
