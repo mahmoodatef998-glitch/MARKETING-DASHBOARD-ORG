@@ -266,5 +266,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq('id', item.id)
     .single()
 
-  return NextResponse.json(fullItem, { status: 201 })
+  return NextResponse.json(
+    fullItem ?? { ...item, task_id: taskId, task: null, publish_events: [] },
+    { status: 201 }
+  )
 }
