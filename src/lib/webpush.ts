@@ -1,10 +1,10 @@
 import webpush from 'web-push'
 
 export interface PushPayload {
-  title:  string
-  body:   string
-  url?:   string
-  icon?:  string
+  title: string
+  body:  string
+  url?:  string
+  icon?: string
 }
 
 export interface PushSubscription {

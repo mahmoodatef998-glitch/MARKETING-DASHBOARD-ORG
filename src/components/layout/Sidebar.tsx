@@ -30,8 +30,9 @@ import {
   X,
   PieChart,
   Megaphone,
+  LayoutList,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // roles: null = visible to all authenticated dashboard users
 //        string[] = visible only to users whose role is in the list
@@ -46,7 +47,8 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
   { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
   { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },
-  { href: '/campaigns',        label: 'Campaigns',     icon: Megaphone,       roles: ['admin', 'media_buyer'] },
+  { href: '/content-plans',   label: 'Content Plans', icon: LayoutList,      roles: ['admin', 'media_buyer'] },
+  { href: '/campaigns',       label: 'Campaigns',     icon: Megaphone,       roles: ['admin', 'media_buyer'] },
   { href: '/scheduled-posts', label: 'Publishing',    icon: Calendar,        roles: ['admin', 'media_buyer'] },
   { href: '/automation',      label: 'Automation',    icon: Zap,             roles: ['admin'] },
   { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             roles: null },
@@ -55,6 +57,11 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/users',           label: 'Users',         icon: ShieldCheck,     roles: ['admin'] },
   { href: '/settings',        label: 'Social Media',  icon: Settings,        roles: ['admin', 'media_buyer'] },
 ]
+
+interface Badges {
+  pendingApprovals: number
+  upcomingMeetings: number
+}
 
 interface SidebarProps {
   mobileOpen?:    boolean
@@ -69,6 +76,8 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   // Start with '' — shows only universal items until role is confirmed, preventing
   // a flash of admin nav items for non-admin users during the async profile fetch.
   const [userRole,     setUserRole]     = useState<string>('')
+  const [badges,       setBadges]       = useState<Badges>({ pendingApprovals: 0, upcomingMeetings: 0 })
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     if (DEMO) return
@@ -89,6 +98,24 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           }
         })
     })
+  }, [])
+
+  // Poll badge counts every 60 s
+  useEffect(() => {
+    if (DEMO) return
+
+    async function fetchBadges() {
+      try {
+        const res = await fetch('/api/badges')
+        if (res.ok) setBadges(await res.json())
+      } catch {}
+    }
+
+    fetchBadges()
+    intervalRef.current = setInterval(fetchBadges, 60_000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [])
 
   async function handleLogout() {
@@ -113,6 +140,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           pathname={pathname}
           collapsed={collapsed}
           userRole={userRole}
+          badges={badges}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
           myDashboard={myDashboard}
@@ -145,6 +173,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           pathname={pathname}
           collapsed={false}
           userRole={userRole}
+          badges={badges}
           onLogout={handleLogout}
           onNavClick={handleNavClick}
           myDashboard={myDashboard}
@@ -155,16 +184,22 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 }
 
 function SidebarContent({
-  pathname, collapsed, userRole, onLogout, onNavClick, myDashboard,
+  pathname, collapsed, userRole, badges, onLogout, onNavClick, myDashboard,
 }: {
   pathname:     string
   collapsed:    boolean
   userRole:     string
+  badges:       Badges
   onLogout:     () => void
   onNavClick:   () => void
   myDashboard?: string | null
 }) {
   const visibleNav = nav.filter(item => !item.roles || item.roles.includes(userRole))
+
+  const badgeMap: Record<string, number> = {
+    '/approvals': badges.pendingApprovals,
+    '/meetings':  badges.upcomingMeetings,
+  }
 
   return (
     <>
@@ -203,6 +238,7 @@ function SidebarContent({
 
         {visibleNav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          const badgeCount = badgeMap[href] ?? 0
           return (
             <Link
               key={href}
@@ -216,9 +252,21 @@ function SidebarContent({
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               )}
             >
-              <Icon className={cn('h-4 w-4 shrink-0', active && 'text-indigo-400')} />
+              <div className="relative shrink-0">
+                <Icon className={cn('h-4 w-4', active && 'text-indigo-400')} />
+                {collapsed && badgeCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
+              </div>
               {!collapsed && <span>{label}</span>}
-              {active && !collapsed && (
+              {!collapsed && badgeCount > 0 && (
+                <span className="ml-auto min-w-[18px] h-4.5 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center leading-none">
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
+              {active && !collapsed && badgeCount === 0 && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
               )}
             </Link>
