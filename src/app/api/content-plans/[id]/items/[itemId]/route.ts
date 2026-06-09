@@ -100,14 +100,6 @@ export async function DELETE(
 
   if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
-  // Only allow deleting pending_production items
-  if (item.status !== 'pending_production') {
-    return NextResponse.json(
-      { error: 'Cannot delete an item already in production' },
-      { status: 409 }
-    )
-  }
-
   // Soft-delete the linked task
   if (item.task_id) {
     await admin

@@ -422,15 +422,13 @@ function ItemRow({ item, onDelete }: { item: ContentPlanItem; onDelete: () => vo
         <span className="text-xs text-slate-600 shrink-0">No task</span>
       )}
 
-      {/* Delete — only pending_production */}
-      {item.status === 'pending_production' && (
-        <button
-          onClick={e => { e.stopPropagation(); onDelete() }}
-          className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      )}
+      {/* Delete */}
+      <button
+        onClick={e => { e.stopPropagation(); onDelete() }}
+        className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }
