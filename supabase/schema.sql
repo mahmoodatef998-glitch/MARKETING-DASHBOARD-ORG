@@ -436,3 +436,115 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_client    ON public.campaigns(client_id
 CREATE INDEX IF NOT EXISTS idx_campaigns_status    ON public.campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_posts_campaign      ON public.scheduled_posts(campaign_id);
 
+-- ══════════════════════════════════════════════════════════════════════════════
+-- CONTENT PLANNING SYSTEM — additive migration
+-- Safe to re-run: uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS throughout
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── Tasks: approval tracking columns (referenced in approvals route) ──────────
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS client_approved_at timestamptz;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS admin_approved_at  timestamptz;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS approved_by        uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+-- plan_item_id added later after content_plan_items is created (see below)
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS plan_item_id uuid;
+
+-- ── Earnings (designer pay-per-approval) ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.earnings (
+  id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  task_id    uuid NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  amount     numeric(12,2) NOT NULL DEFAULT 0,
+  currency   text NOT NULL DEFAULT 'AED',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT earnings_task_id_unique UNIQUE(task_id)
+);
+ALTER TABLE public.earnings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.earnings;
+CREATE POLICY "auth_all" ON public.earnings FOR ALL USING (auth.role() = 'authenticated');
+
+-- ── Content Plans ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.content_plans (
+  id         uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id  uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  month      date NOT NULL,
+  title      text NOT NULL,
+  status     text NOT NULL DEFAULT 'draft'
+             CHECK (status IN ('draft','active','completed','archived')),
+  notes      text,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT content_plans_client_month_unique UNIQUE(client_id, month)
+);
+ALTER TABLE public.content_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.content_plans;
+CREATE POLICY "auth_all" ON public.content_plans FOR ALL USING (auth.role() = 'authenticated');
+
+-- ── Content Plan Items ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.content_plan_items (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_id           uuid NOT NULL REFERENCES public.content_plans(id) ON DELETE CASCADE,
+  task_id           uuid REFERENCES public.tasks(id) ON DELETE SET NULL,
+  client_id         uuid REFERENCES public.clients(id) ON DELETE SET NULL,
+  content_type      text NOT NULL CHECK (content_type IN ('reel','design','ai_video')),
+  title             text NOT NULL,
+  assigned_to       uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  publish_date      timestamptz,
+  first_publish_at  timestamptz,
+  internal_due_date timestamptz,
+  sla_days          integer NOT NULL DEFAULT 3,
+  sequence_number   integer NOT NULL DEFAULT 1,
+  platforms         text[] NOT NULL DEFAULT '{}',
+  notes             text,
+  status            text NOT NULL DEFAULT 'pending_production'
+                    CHECK (status IN ('pending_production','client_approved','revision_requested','done')),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT content_plan_items_plan_type_seq_unique UNIQUE(plan_id, content_type, sequence_number)
+);
+ALTER TABLE public.content_plan_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.content_plan_items;
+CREATE POLICY "auth_all" ON public.content_plan_items FOR ALL USING (auth.role() = 'authenticated');
+
+-- Add FK from tasks.plan_item_id → content_plan_items (deferred until table exists)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'tasks_plan_item_id_fkey'
+      AND table_name = 'tasks'
+  ) THEN
+    ALTER TABLE public.tasks
+      ADD CONSTRAINT tasks_plan_item_id_fkey
+      FOREIGN KEY (plan_item_id) REFERENCES public.content_plan_items(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- ── Publish Events ────────────────────────────────────────────────────────────
+-- Source of truth for per-platform scheduling.
+-- status flow: blocked → ready → published | failed | cancelled
+CREATE TABLE IF NOT EXISTS public.publish_events (
+  id               uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  item_id          uuid NOT NULL REFERENCES public.content_plan_items(id) ON DELETE CASCADE,
+  platform         text NOT NULL CHECK (platform IN ('instagram','facebook','tiktok')),
+  scheduled_at     timestamptz NOT NULL,
+  status           text NOT NULL DEFAULT 'blocked'
+                   CHECK (status IN ('blocked','ready','published','failed','cancelled')),
+  published_at     timestamptz,
+  platform_post_id text,
+  error_message    text,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.publish_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.publish_events;
+CREATE POLICY "auth_all" ON public.publish_events FOR ALL USING (auth.role() = 'authenticated');
+
+-- ── Indexes for new tables ────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_content_plans_client      ON public.content_plans(client_id);
+CREATE INDEX IF NOT EXISTS idx_content_plans_month       ON public.content_plans(month);
+CREATE INDEX IF NOT EXISTS idx_content_plan_items_plan   ON public.content_plan_items(plan_id);
+CREATE INDEX IF NOT EXISTS idx_content_plan_items_task   ON public.content_plan_items(task_id);
+CREATE INDEX IF NOT EXISTS idx_publish_events_item       ON public.publish_events(item_id);
+CREATE INDEX IF NOT EXISTS idx_publish_events_scheduled  ON public.publish_events(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_publish_events_status     ON public.publish_events(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_plan_item           ON public.tasks(plan_item_id);
+

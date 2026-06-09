@@ -163,6 +163,25 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // Unlock publish_events: blocked → ready for the linked content plan item
+    try {
+      const { data: taskRow } = await admin
+        .from('tasks')
+        .select('plan_item_id')
+        .eq('id', task_id)
+        .single()
+
+      if (taskRow?.plan_item_id) {
+        await admin
+          .from('publish_events')
+          .update({ status: 'ready' })
+          .eq('item_id', taskRow.plan_item_id)
+          .eq('status', 'blocked')
+      }
+    } catch (err) {
+      console.error('[approvals] publish_events unblock failed:', err)
+    }
+
     // Check if this approval exhausted any package items for the client
     const exhaustedPackages: { packageId: string; packageName: string; itemLabel: string; clientId: string; allExhausted: boolean }[] = []
     if (task.client_id && task.task_type && task.task_type !== 'platform') {

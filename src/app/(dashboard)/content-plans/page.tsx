@@ -19,6 +19,13 @@ import type { Client } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+interface PublishEvent {
+  id:           string
+  platform:     string
+  scheduled_at: string
+  status:       string
+}
+
 interface ContentPlanItem {
   id:                string
   plan_id:           string
@@ -26,6 +33,7 @@ interface ContentPlanItem {
   content_type:      'reel' | 'design' | 'ai_video'
   title:             string
   publish_date:      string
+  first_publish_at:  string | null
   internal_due_date: string
   sla_days:          number
   sequence_number:   number
@@ -33,6 +41,7 @@ interface ContentPlanItem {
   notes:             string | null
   status:            string
   task_id:           string | null
+  publish_events?:   PublishEvent[]
   task?: {
     id:          string
     title:       string
@@ -175,45 +184,87 @@ function NewPlanDialog({
 
 // ─── Add Item Dialog ──────────────────────────────────────────────────────────
 
+const PLATFORM_STYLES: Record<string, { color: string; border: string; bg: string; dot: string }> = {
+  instagram: { color: 'text-pink-400',   border: 'border-pink-500/60',   bg: 'bg-pink-500/10',   dot: 'bg-pink-400' },
+  facebook:  { color: 'text-blue-400',   border: 'border-blue-500/60',   bg: 'bg-blue-500/10',   dot: 'bg-blue-400' },
+  tiktok:    { color: 'text-slate-300',  border: 'border-slate-500/60',  bg: 'bg-slate-700/40',  dot: 'bg-slate-300' },
+}
+
 function AddItemDialog({
-  open, onClose, plan, onAdded,
+  open, onClose, plan, onAdded, teamMembers,
 }: {
   open: boolean
   onClose: () => void
   plan: ContentPlan
   onAdded: (item: ContentPlanItem) => void
+  teamMembers: { id: string; display_name?: string }[]
 }) {
   const { toast } = useToast()
-  const [contentType, setContentType] = useState<string>('')
-  const [publishDate, setPublishDate] = useState('')
-  const [platforms,   setPlatforms]   = useState<string[]>([])
-  const [notes,       setNotes]       = useState('')
-  const [loading,     setLoading]     = useState(false)
+  const [contentType,  setContentType]  = useState<string>('')
+  const [selectedPlats, setSelectedPlats] = useState<string[]>([])
+  const [platTimes,    setPlatTimes]    = useState<Record<string, string>>({})
+  const [assignedTo,   setAssignedTo]   = useState('')
+  const [notes,        setNotes]        = useState('')
+  const [loading,      setLoading]      = useState(false)
 
   const selectedType = CONTENT_TYPES.find(t => t.value === contentType)
 
   function togglePlatform(p: string) {
-    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+    setSelectedPlats(prev => {
+      const next = prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+      // Remove time if platform deselected
+      if (!next.includes(p)) {
+        setPlatTimes(t => { const n = { ...t }; delete n[p]; return n })
+      }
+      return next
+    })
+  }
+
+  function setTime(platform: string, value: string) {
+    setPlatTimes(prev => ({ ...prev, [platform]: value }))
+  }
+
+  // Earliest scheduled time drives SLA calc
+  const times = Object.values(platTimes).filter(Boolean)
+  const firstPublish = times.length > 0
+    ? new Date(Math.min(...times.map(t => new Date(t).getTime())))
+    : null
+
+  function reset() {
+    setContentType(''); setSelectedPlats([]); setPlatTimes({})
+    setAssignedTo(''); setNotes('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!contentType) { toast('Select content type', 'error'); return }
-    if (!publishDate) { toast('Set publish date', 'error'); return }
+    if (!contentType)          { toast('Select content type', 'error'); return }
+    if (selectedPlats.length === 0) { toast('Select at least one platform', 'error'); return }
+    const missing = selectedPlats.filter(p => !platTimes[p])
+    if (missing.length > 0)    { toast(`Set publish time for: ${missing.join(', ')}`, 'error'); return }
+
+    const platformSchedules = selectedPlats.map(p => ({
+      platform:     p,
+      scheduled_at: new Date(platTimes[p]).toISOString(),
+    }))
 
     setLoading(true)
     try {
       const res = await fetch(`/api/content-plans/${plan.id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content_type: contentType, publish_date: publishDate, platforms, notes }),
+        body: JSON.stringify({
+          content_type:       contentType,
+          platform_schedules: platformSchedules,
+          assigned_to:        assignedTo || undefined,
+          notes,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      toast(`Task auto-created: ${data.title}`, 'success')
+      toast(`Task created: ${data.title}`, 'success')
       onAdded(data)
       onClose()
-      setContentType(''); setPublishDate(''); setPlatforms([]); setNotes('')
+      reset()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed', 'error')
     } finally {
@@ -222,30 +273,27 @@ function AddItemDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 max-w-md" aria-describedby={undefined}>
+    <Dialog open={open} onOpenChange={() => { onClose(); reset() }}>
+      <DialogContent className="bg-slate-900 border-slate-700 max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-slate-100">
             Add Content Item — {plan.client?.name}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
+
           {/* Content Type */}
           <div className="space-y-2">
             <Label>Content Type *</Label>
             <div className="grid grid-cols-3 gap-2">
               {CONTENT_TYPES.map(t => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setContentType(t.value)}
+                <button key={t.value} type="button" onClick={() => setContentType(t.value)}
                   className={cn(
                     'flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-medium transition-all',
                     contentType === t.value
                       ? `${t.bg} ${t.color} border-current`
                       : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300'
-                  )}
-                >
+                  )}>
                   <t.icon className="h-5 w-5" />
                   <span className="text-center leading-tight">{t.label}</span>
                   <span className="text-[10px] opacity-70">SLA {t.sla}d</span>
@@ -254,60 +302,88 @@ function AddItemDialog({
             </div>
           </div>
 
-          {/* Publish Date */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-slate-400" /> Publish Date & Time *
-            </Label>
-            <Input
-              type="datetime-local"
-              value={publishDate}
-              onChange={e => setPublishDate(e.target.value)}
-              className="text-slate-300"
-              required
-            />
-            {selectedType && publishDate && (
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Due Date (team): {formatDate(
-                  new Date(new Date(publishDate).getTime() - selectedType.sla * 86400000).toISOString()
-                )}
-              </p>
+          {/* Platform selection + per-platform times */}
+          <div className="space-y-3">
+            <Label>Platforms & Publish Times *</Label>
+            <div className="space-y-2">
+              {PLATFORMS.map(p => {
+                const active = selectedPlats.includes(p.id)
+                const style  = PLATFORM_STYLES[p.id]
+                return (
+                  <div key={p.id} className={cn(
+                    'rounded-xl border transition-all overflow-hidden',
+                    active ? `${style.bg} ${style.border}` : 'border-slate-700/60 bg-slate-800/30'
+                  )}>
+                    {/* Platform toggle row */}
+                    <button type="button" onClick={() => togglePlatform(p.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5">
+                      <div className={cn(
+                        'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                        active ? `${style.border} ${style.bg}` : 'border-slate-600'
+                      )}>
+                        {active && <div className={cn('w-2 h-2 rounded-sm', style.dot)} />}
+                      </div>
+                      <p.icon className={cn('h-3.5 w-3.5 shrink-0', active ? style.color : 'text-slate-500')} />
+                      <span className={cn('text-sm font-medium', active ? style.color : 'text-slate-500')}>
+                        {p.label}
+                      </span>
+                    </button>
+
+                    {/* DateTime input — only when selected */}
+                    {active && (
+                      <div className="px-3 pb-3">
+                        <Input
+                          type="datetime-local"
+                          value={platTimes[p.id] ?? ''}
+                          onChange={e => setTime(p.id, e.target.value)}
+                          className="text-slate-300 bg-slate-900/60 border-slate-700 text-sm h-8"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Due date preview */}
+            {selectedType && firstPublish && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 px-1">
+                <Clock className="h-3 w-3 shrink-0" />
+                <span>Team due date:</span>
+                <span className="text-amber-400 font-medium">
+                  {formatDate(new Date(firstPublish.getTime() - selectedType.sla * 86400000).toISOString())}
+                </span>
+                <span className="opacity-60">({selectedType.sla}d before earliest publish)</span>
+              </div>
             )}
           </div>
 
-          {/* Platforms */}
-          <div className="space-y-2">
-            <Label>Platforms</Label>
-            <div className="flex gap-2">
-              {PLATFORMS.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => togglePlatform(p.id)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
-                    platforms.includes(p.id)
-                      ? 'border-indigo-500 bg-indigo-500/20 text-indigo-400'
-                      : 'border-slate-700 text-slate-500 hover:border-slate-600'
-                  )}
-                >
-                  <p.icon className={cn('h-3.5 w-3.5', platforms.includes(p.id) && p.color)} />
-                  {p.label}
-                </button>
-              ))}
+          {/* Assigned To */}
+          {teamMembers.length > 0 && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-slate-400" /> Assign To
+              </Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger><SelectValue placeholder="Unassigned (assign later)" /></SelectTrigger>
+                <SelectContent>
+                  {teamMembers.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>Notes</Label>
+            <Label>Brief / Notes</Label>
             <Textarea value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Brief for the team…" rows={2} />
+              placeholder="Creative brief for the team…" rows={2} />
           </div>
 
           <div className="flex justify-end gap-3 pt-1">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={() => { onClose(); reset() }}>Cancel</Button>
             <Button type="submit" disabled={loading}>
               {loading
                 ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</>
@@ -440,6 +516,7 @@ export default function ContentPlansPage() {
   const router = useRouter()
   const [plans,        setPlans]        = useState<ContentPlan[]>([])
   const [clients,      setClients]      = useState<Client[]>([])
+  const [teamMembers,  setTeamMembers]  = useState<{ id: string; display_name?: string }[]>([])
   const [loading,      setLoading]      = useState(true)
   const [selectedPlan, setSelectedPlan] = useState<ContentPlan | null>(null)
   const [newPlanOpen,  setNewPlanOpen]  = useState(false)
@@ -457,12 +534,24 @@ export default function ContentPlansPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [plansRes, clientsRes] = await Promise.all([
+    const [plansRes, clientsRes, profilesRes] = await Promise.all([
       fetch('/api/content-plans'),
       fetch('/api/clients'),
+      fetch('/api/team'),
     ])
-    if (plansRes.ok)   setPlans(await plansRes.json())
-    if (clientsRes.ok) setClients(await clientsRes.json())
+    if (plansRes.ok)    setPlans(await plansRes.json())
+    if (clientsRes.ok)  setClients(await clientsRes.json())
+    if (profilesRes.ok) {
+      const team = await profilesRes.json()
+      // team API returns team_members; map to { id (auth uuid), display_name }
+      const members = (Array.isArray(team) ? team : team.data ?? [])
+        .filter((m: Record<string, unknown>) => m.profile_id || m.id)
+        .map((m: Record<string, unknown>) => ({
+          id:           String(m.profile_id ?? m.id),
+          display_name: String(m.display_name ?? m.name ?? ''),
+        }))
+      setTeamMembers(members)
+    }
     setLoading(false)
   }, [])
 
@@ -631,6 +720,7 @@ export default function ContentPlansPage() {
           onClose={() => setAddItemOpen(false)}
           plan={selectedPlan}
           onAdded={handleItemAdded}
+          teamMembers={teamMembers}
         />
       )}
     </div>
