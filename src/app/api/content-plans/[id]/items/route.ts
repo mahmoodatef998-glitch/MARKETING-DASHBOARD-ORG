@@ -125,19 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
-  // SLA validation: publish time must be at least SLA days from now
-  const sladays    = SLA[contentType]
-  const minAllowed = new Date()
-  minAllowed.setDate(minAllowed.getDate() + sladays)
-  if (firstPublishAt < minAllowed) {
-    return NextResponse.json(
-      {
-        error: `Publish date does not satisfy minimum production SLA. ${contentType} requires at least ${sladays} day(s) of lead time. Earliest allowed: ${minAllowed.toLocaleDateString('en-US', { dateStyle: 'medium' })}.`,
-      },
-      { status: 422 }
-    )
-  }
-
+  const sladays = SLA[contentType]
   const dueDate = new Date(firstPublishAt)
   dueDate.setDate(dueDate.getDate() - sladays)
 

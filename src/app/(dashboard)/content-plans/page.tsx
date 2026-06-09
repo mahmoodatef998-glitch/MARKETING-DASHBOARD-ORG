@@ -274,13 +274,14 @@ function AddItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => { onClose(); reset() }}>
-      <DialogContent className="bg-slate-900 border-slate-700 max-w-lg" aria-describedby={undefined}>
-        <DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 max-w-lg max-h-[90vh] flex flex-col p-0 gap-0" aria-describedby={undefined}>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-800 shrink-0">
           <DialogTitle className="text-slate-100">
             Add Content Item — {plan.client?.name}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
 
           {/* Content Type */}
           <div className="space-y-2">
@@ -336,7 +337,7 @@ function AddItemDialog({
                           type="datetime-local"
                           value={platTimes[p.id] ?? ''}
                           onChange={e => setTime(p.id, e.target.value)}
-                          className="text-slate-300 bg-slate-900/60 border-slate-700 text-sm h-8"
+                          className="text-slate-900 bg-white border-slate-300 text-sm h-8 [color-scheme:light]"
                         />
                       </div>
                     )}
@@ -382,7 +383,7 @@ function AddItemDialog({
               placeholder="Creative brief for the team…" rows={2} />
           </div>
 
-          <div className="flex justify-end gap-3 pt-1">
+          <div className="flex justify-end gap-3 pt-1 pb-2">
             <Button type="button" variant="ghost" onClick={() => { onClose(); reset() }}>Cancel</Button>
             <Button type="submit" disabled={loading}>
               {loading
@@ -391,6 +392,7 @@ function AddItemDialog({
             </Button>
           </div>
         </form>
+        </div>
       </DialogContent>
     </Dialog>
   )
