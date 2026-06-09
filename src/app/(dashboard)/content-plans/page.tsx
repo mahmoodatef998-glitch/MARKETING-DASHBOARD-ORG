@@ -53,7 +53,7 @@ interface ContentPlan {
   notes:      string | null
   created_at: string
   client:     { id: string; name: string } | null
-  items:      ContentPlanItem[]
+  items:      ContentPlanItem[] | undefined
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ function PlanCard({
 }) {
   const byType = CONTENT_TYPES.map(t => ({
     ...t,
-    items: plan.items.filter(i => i.content_type === t.value),
+    items: (plan.items ?? []).filter(i => i.content_type === t.value),
   }))
 
   return (
@@ -473,7 +473,7 @@ export default function ContentPlansPage() {
   function handleItemAdded(item: ContentPlanItem) {
     setPlans(prev => prev.map(p => {
       if (p.id !== selectedPlan?.id) return p
-      const updated = { ...p, items: [...p.items, item] }
+      const updated = { ...p, items: [...(p.items ?? []), item] }
       setSelectedPlan(updated)
       return updated
     }))
@@ -488,7 +488,7 @@ export default function ContentPlansPage() {
     }
     setPlans(prev => prev.map(p => {
       if (p.id !== planId) return p
-      const updated = { ...p, items: p.items.filter(i => i.id !== itemId) }
+      const updated = { ...p, items: (p.items ?? []).filter(i => i.id !== itemId) }
       setSelectedPlan(updated)
       return updated
     }))
@@ -571,7 +571,7 @@ export default function ContentPlansPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-100">{selectedPlan.title}</h2>
-                    <p className="text-sm text-slate-500">{selectedPlan.items.length} items</p>
+                    <p className="text-sm text-slate-500">{(selectedPlan.items ?? []).length} items</p>
                   </div>
                   <Button size="sm" onClick={() => setAddItemOpen(true)}>
                     <Plus className="h-4 w-4 mr-1.5" /> Add Content
@@ -580,7 +580,7 @@ export default function ContentPlansPage() {
 
                 {/* Items by type */}
                 {CONTENT_TYPES.map(t => {
-                  const items = selectedPlan.items.filter(i => i.content_type === t.value)
+                  const items = (selectedPlan.items ?? []).filter(i => i.content_type === t.value)
                   return (
                     <div key={t.value}>
                       <div className={cn('flex items-center gap-2 px-3 py-2 rounded-t-lg border-b', t.bg)}>

@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
       items:content_plan_items(
         id, content_type, title, publish_date, internal_due_date,
         sla_days, sequence_number, platforms, status, task_id, notes,
-        task:tasks(id, title, status, assigned_to,
-          assignee:profiles!assigned_to(id, display_name))
+        task:tasks(id, title, status, priority, assigned_to, due_date)
       )
     `)
     .order('month', { ascending: false })
@@ -93,5 +92,5 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json(data, { status: 201 })
+  return NextResponse.json({ ...data, items: [] }, { status: 201 })
 }
