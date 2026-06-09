@@ -32,8 +32,7 @@ export async function GET(req: NextRequest) {
       client:clients(id, name),
       items:content_plan_items(
         id, content_type, title, publish_date, internal_due_date,
-        sla_days, sequence_number, platforms, status, task_id, notes,
-        task:tasks(id, title, status, priority, assigned_to, due_date)
+        sla_days, sequence_number, platforms, status, task_id, notes
       )
     `)
     .order('month', { ascending: false })

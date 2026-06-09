@@ -414,6 +414,10 @@ function ItemRow({ item, onDelete }: { item: ContentPlanItem; onDelete: () => vo
             {item.task.status.replace('_', ' ')}
           </span>
         </div>
+      ) : item.task_id ? (
+        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', TASK_STATUS_STYLE[item.status] ?? 'bg-slate-700 text-slate-400')}>
+          {item.status.replace(/_/g, ' ')}
+        </span>
       ) : (
         <span className="text-xs text-slate-600 shrink-0">No task</span>
       )}
