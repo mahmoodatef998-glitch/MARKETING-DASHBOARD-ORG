@@ -100,11 +100,12 @@ export async function DELETE(
 
   if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
-  // Soft-delete the linked task
+  // Break circular FK first: null out plan_item_id on the task, then soft-delete it.
+  // (tasks.plan_item_id → content_plan_items.id would block the DELETE below otherwise)
   if (item.task_id) {
     await admin
       .from('tasks')
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ plan_item_id: null, deleted_at: new Date().toISOString() })
       .eq('id', item.task_id)
   }
 

@@ -641,11 +641,11 @@ describe('DELETE /api/content-plans/[id]/items/[itemId]', () => {
     expect(res.status).toBe(404)
   })
 
-  it('200 deletes item and soft-deletes linked task', async () => {
+  it('200 deletes item and soft-deletes linked task (nulls plan_item_id first to break circular FK)', async () => {
     const { DELETE } = await import('./[id]/items/[itemId]/route')
     queueAdminAuth()
     adminQueue.push({ data: { task_id: 'task-1', status: 'pending_production' }, error: null }) // fetch item
-    adminQueue.push({ data: null, error: null }) // soft-delete task
+    adminQueue.push({ data: null, error: null }) // update task: plan_item_id=null + deleted_at
     adminQueue.push({ data: null, error: null }) // delete item
     const res = await DELETE(makeReq('DELETE', 'http://x'), await makeItemIdParams('p1', 'item-1'))
     expect(res.status).toBe(200)
