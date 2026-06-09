@@ -2,9 +2,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   CheckSquare, Clock, AlertTriangle, Loader2, FileText,
-  ExternalLink, CheckCircle2, RefreshCw, Star, CalendarDays,
+  ExternalLink, CheckCircle2, Star, CalendarDays,
   Package, TrendingUp, RotateCcw, Zap, CreditCard, ChevronDown, ChevronUp,
-  Receipt, Calendar, DollarSign, Repeat2, Mic, X, Eye,
+  Receipt, Calendar, DollarSign, Repeat2, Eye,
 } from 'lucide-react'
 import PackageProgress from '@/components/clients/PackageProgress'
 import TaskDetailModal from '@/components/tasks/TaskDetailModal'
@@ -13,93 +13,31 @@ import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Invoice, ClientPackage } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  todo:        { label: 'To Do',              color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-  in_progress: { label: 'In Progress',        color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  review:      { label: 'Awaiting Approval',  color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  done:        { label: 'Done',               color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-  overdue:     { label: 'Overdue',            color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  todo:        { label: 'To Do',       color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  review:      { label: 'In Review',   color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  done:        { label: 'Done',        color: 'bg-green-500/10 text-green-400 border-green-500/20' },
+  overdue:     { label: 'Overdue',     color: 'bg-red-500/10 text-red-400 border-red-500/20' },
 }
 
-const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
-  draft:   { label: 'Draft',   color: 'bg-slate-500/10 text-slate-400' },
-  sent:    { label: 'Sent',    color: 'bg-blue-500/10 text-blue-400' },
-  paid:    { label: 'Paid',    color: 'bg-green-500/10 text-green-400' },
-  overdue: { label: 'Overdue', color: 'bg-red-500/10 text-red-400' },
-}
-
-// ─── Approval Card ────────────────────────────────────────────────────────────
-function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) {
-  const [reviseOpen,     setReviseOpen]     = useState(false)
-  const [ratingOpen,     setRatingOpen]     = useState(false)
-  const [notes,          setNotes]          = useState('')
-  const [rating,         setRating]         = useState(0)
-  const [ratingNote,     setRatingNote]     = useState('')
-  const [loading,        setLoading]        = useState<'approve' | 'revise' | null>(null)
-  const [voiceUrl,       setVoiceUrl]       = useState('')
-  const [voiceUploading, setVoiceUploading] = useState(false)
-
-  async function uploadVoice(file: File) {
-    setVoiceUploading(true)
-    try {
-      const res = await fetch('/api/upload/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, contentType: file.type }),
-      })
-      const data = await res.json()
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('api_key', data.apiKey)
-      formData.append('timestamp', String(data.timestamp))
-      formData.append('signature', data.signature)
-      formData.append('public_id', data.publicId)
-      formData.append('folder', data.folder)
-      await fetch(data.uploadUrl, { method: 'POST', body: formData })
-      setVoiceUrl(data.publicUrl)
-    } catch {}
-    setVoiceUploading(false)
-  }
-
-  async function approve() {
-    setLoading('approve')
-    await fetch(`/api/tasks/${task.id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating: rating || null, rating_note: ratingNote }),
-    })
-    onAction()
-    setLoading(null)
-  }
-
-  async function revise() {
-    if (!notes.trim()) return
-    setLoading('revise')
-    await fetch(`/api/tasks/${task.id}/revise`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes, voice_note_url: voiceUrl || undefined }),
-    })
-    onAction()
-    setLoading(null)
-  }
-
+// ─── Review Card (view-only) ──────────────────────────────────────────────────
+function ReviewCard({ task }: { task: Task }) {
   return (
     <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl overflow-hidden">
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold">⏳ Awaiting Your Approval</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold">⏳ In Review</span>
             {task.task_type && <span className="text-xs text-slate-500 capitalize">{task.task_type.replace('_', ' ')}</span>}
           </div>
           <h3 className="font-semibold text-white text-sm">{task.title}</h3>
           {task.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{task.description}</p>}
         </div>
       </div>
-
       {task.delivery_url && (
-        <div className="mx-4 mb-3 flex items-center gap-3 bg-slate-800/60 rounded-lg p-3">
+        <div className="mx-4 mb-4 flex items-center gap-3 bg-slate-800/60 rounded-lg p-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-400 font-medium mb-0.5">Delivery ready for review</p>
+            <p className="text-xs text-slate-400 font-medium mb-0.5">Delivery ready</p>
             <p className="text-xs text-slate-500 truncate">{task.delivery_url}</p>
           </div>
           <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
@@ -108,113 +46,15 @@ function ApprovalCard({ task, onAction }: { task: Task; onAction: () => void }) 
           </a>
         </div>
       )}
-
-      {ratingOpen && (
-        <div className="mx-4 mb-3 p-3 bg-slate-800/60 rounded-xl space-y-2">
-          <p className="text-xs font-medium text-slate-300">Rate this delivery (optional)</p>
-          <div className="flex gap-1">
-            {[1,2,3,4,5].map(s => (
-              <button key={s} onClick={() => setRating(r => r === s ? 0 : s)}
-                className={`text-xl transition-transform hover:scale-110 ${s <= rating ? 'text-yellow-400' : 'text-slate-600'}`}>★</button>
-            ))}
-          </div>
-          {rating > 0 && (
-            <textarea value={ratingNote} onChange={e => setRatingNote(e.target.value)}
-              placeholder="Any comments? (optional)" rows={2}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-indigo-500 resize-none" />
-          )}
-          <div className="flex gap-2">
-            <button onClick={approve} disabled={!!loading}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
-              {loading === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {rating > 0 ? 'Approve & Submit Rating' : 'Approve without rating'}
-            </button>
-            <button onClick={() => setRatingOpen(false)} className="px-3 text-xs text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {!reviseOpen && !ratingOpen ? (
-        <div className="flex gap-2 px-4 pb-4">
-          <button onClick={() => setRatingOpen(true)} disabled={!!loading}
-            className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
-            {loading === 'approve' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Approve & Done
-          </button>
-          <button onClick={() => setReviseOpen(true)} disabled={!!loading}
-            className="flex-1 flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-slate-200 text-sm font-semibold py-2.5 rounded-xl transition-colors">
-            <RefreshCw className="h-4 w-4" /> Request Revision
-          </button>
-        </div>
-      ) : (
-        <div className="px-4 pb-4 space-y-2">
-          <textarea autoFocus value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="Describe what needs to be changed…" rows={3}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-
-          {/* Voice note attachment */}
-          {voiceUrl ? (
-            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
-              <Mic className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-              <audio src={voiceUrl} controls className="flex-1 h-8 min-w-0" />
-              <button onClick={() => setVoiceUrl('')}
-                className="text-slate-500 hover:text-red-400 transition-colors shrink-0">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <label className={`flex items-center gap-1.5 text-xs cursor-pointer transition-colors ${
-              voiceUploading ? 'text-indigo-400 pointer-events-none' : 'text-slate-500 hover:text-slate-300'
-            }`}>
-              {voiceUploading
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
-                : <><Mic className="h-3.5 w-3.5" /> Attach a voice note (optional)</>}
-              <input type="file" accept="audio/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadVoice(f) }}
-                disabled={voiceUploading} />
-            </label>
-          )}
-
-          <div className="flex gap-2">
-            <button onClick={revise} disabled={!notes.trim() || !!loading || voiceUploading}
-              className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-xl transition-colors">
-              {loading === 'revise' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Send Revision Request
-            </button>
-            <button onClick={() => { setReviseOpen(false); setNotes(''); setVoiceUrl('') }}
-              className="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-xl transition-colors">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-// ─── Completed Card ───────────────────────────────────────────────────────────
-function CompletedCard({ task, onAction }: { task: Task; onAction: () => void }) {
-  const [rating,     setRating]     = useState(task.client_rating ?? 0)
-  const [ratingNote, setRatingNote] = useState(task.client_rating_note ?? '')
-  const [open,       setOpen]       = useState(false)
-  const [loading,    setLoading]    = useState(false)
-  const [submitted,  setSubmitted]  = useState(!!task.client_rating)
-
-  async function submitRating() {
-    setLoading(true)
-    await fetch(`/api/tasks/${task.id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating: rating || null, rating_note: ratingNote }),
-    })
-    setSubmitted(true)
-    setOpen(false)
-    setLoading(false)
-    onAction()
-  }
-
+// ─── Done Card (view-only) ────────────────────────────────────────────────────
+function DoneCard({ task }: { task: Task }) {
+  const rating = task.client_rating ?? 0
   return (
-    <div className={`rounded-xl overflow-hidden border ${submitted ? 'border-green-500/20 bg-green-500/5' : 'border-slate-700/60 bg-slate-900'}`}>
+    <div className="rounded-xl overflow-hidden border border-green-500/20 bg-green-500/5">
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -226,15 +66,16 @@ function CompletedCard({ task, onAction }: { task: Task; onAction: () => void })
           <h3 className="font-semibold text-white text-sm">{task.title}</h3>
           {task.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{task.description}</p>}
         </div>
-        <div className="flex gap-0.5 shrink-0">
-          {[1,2,3,4,5].map(s => (
-            <Star key={s} className={`h-3.5 w-3.5 ${s <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`} />
-          ))}
-        </div>
+        {rating > 0 && (
+          <div className="flex gap-0.5 shrink-0">
+            {[1,2,3,4,5].map(s => (
+              <Star key={s} className={`h-3.5 w-3.5 ${s <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`} />
+            ))}
+          </div>
+        )}
       </div>
-
       {task.delivery_url && (
-        <div className="mx-4 mb-3 flex items-center gap-3 bg-slate-800/60 rounded-lg p-3">
+        <div className="mx-4 mb-4 flex items-center gap-3 bg-slate-800/60 rounded-lg p-3">
           <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-400 font-medium mb-0.5">Delivered file</p>
             <p className="text-xs text-slate-500 truncate">{task.delivery_url}</p>
@@ -245,52 +86,11 @@ function CompletedCard({ task, onAction }: { task: Task; onAction: () => void })
           </a>
         </div>
       )}
-
-      {submitted && task.client_rating_note && (
-        <p className="mx-4 mb-3 text-xs text-slate-400 italic">&quot;{task.client_rating_note}&quot;</p>
-      )}
-
-      {open && !submitted && (
-        <div className="mx-4 mb-3 p-3 bg-slate-800/60 rounded-xl space-y-2">
-          <p className="text-xs font-medium text-slate-300">Rate this delivery</p>
-          <div className="flex gap-1">
-            {[1,2,3,4,5].map(s => (
-              <button key={s} onClick={() => setRating(r => r === s ? 0 : s)}
-                className={`text-xl transition-transform hover:scale-110 ${s <= rating ? 'text-yellow-400' : 'text-slate-600'}`}>★</button>
-            ))}
-          </div>
-          <textarea value={ratingNote} onChange={e => setRatingNote(e.target.value)}
-            placeholder="Leave a comment (optional)" rows={2}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-indigo-500 resize-none" />
-          <div className="flex gap-2">
-            <button onClick={submitRating} disabled={loading}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {rating > 0 ? 'Submit Approval' : 'Approve without rating'}
-            </button>
-            <button onClick={() => setOpen(false)} className="px-3 text-xs text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      <div className="px-4 pb-4">
-        {submitted ? (
-          <div className="flex items-center gap-2 text-xs text-green-400">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {rating > 0 ? `You rated this ${rating}/5` : 'Approved'}
-          </div>
-        ) : !open ? (
-          <button onClick={() => setOpen(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Approve & Rate
-          </button>
-        ) : null}
-      </div>
     </div>
   )
 }
 
-// ─── Review Tab ───────────────────────────────────────────────────────────────
+// ─── Review Tab (view-only) ───────────────────────────────────────────────────
 interface ApprovalTask {
   id: string
   title: string
@@ -299,12 +99,9 @@ interface ApprovalTask {
   approval_status: 'pending' | 'client_approved' | 'admin_approved'
 }
 
-function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) => void; pkgs?: ClientPackage[] }) {
-  const [tasks,        setTasks]        = useState<ApprovalTask[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [revising,     setRevising]     = useState<Record<string, boolean>>({})
-  const [revisionNote, setRevisionNote] = useState<Record<string, string>>({})
-  const [actioning,    setActioning]    = useState<Record<string, boolean>>({})
+function ReviewTab({ pkgs }: { pkgs?: ClientPackage[] }) {
+  const [tasks,   setTasks]   = useState<ApprovalTask[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -312,41 +109,13 @@ function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) 
       const res = await fetch('/api/approvals')
       if (res.ok) {
         const data = await res.json()
-        const list: ApprovalTask[] = Array.isArray(data) ? data : (data.data ?? [])
-        setTasks(list)
-        onPendingCount?.(list.filter(t => t.approval_status === 'pending').length)
+        setTasks(Array.isArray(data) ? data : (data.data ?? []))
       }
     } catch {}
     setLoading(false)
-  }, [onPendingCount])
+  }, [])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
-
-  async function handleApprove(taskId: string) {
-    setActioning(prev => ({ ...prev, [taskId]: true }))
-    await fetch('/api/approvals', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, action: 'client_approve' }),
-    })
-    setActioning(prev => ({ ...prev, [taskId]: false }))
-    fetchTasks()
-  }
-
-  async function handleRevision(taskId: string) {
-    const note = revisionNote[taskId] ?? ''
-    if (!note.trim()) return
-    setActioning(prev => ({ ...prev, [taskId]: true }))
-    await fetch('/api/approvals', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, action: 'revision_requested', note }),
-    })
-    setActioning(prev => ({ ...prev, [taskId]: false }))
-    setRevising(prev => ({ ...prev, [taskId]: false }))
-    setRevisionNote(prev => ({ ...prev, [taskId]: '' }))
-    fetchTasks()
-  }
 
   if (loading) return (
     <div className="flex items-center justify-center py-16">
@@ -357,12 +126,11 @@ function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) 
   if (tasks.length === 0) return (
     <div className="text-center py-16 text-slate-500">
       <Eye className="h-10 w-10 mx-auto mb-3 opacity-20" />
-      <p className="font-medium text-slate-400">No designs pending approval</p>
-      <p className="text-sm mt-1">Completed deliverables will appear here for your review.</p>
+      <p className="font-medium text-slate-400">No deliverables pending review</p>
+      <p className="text-sm mt-1">Completed deliverables will appear here for your reference.</p>
     </div>
   )
 
-  // Mini package progress widget for the review tab
   const activePkgs = (pkgs ?? []).filter(p => p.is_active && p.items.length > 0)
   const totalItems = activePkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + i.total_quantity, 0), 0)
   const totalUsed  = activePkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + (i.used ?? 0), 0), 0)
@@ -370,7 +138,6 @@ function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) 
 
   return (
     <div className="space-y-4">
-      {/* Package progress summary in review context */}
       {activePkgs.length > 0 && (
         <div className="bg-gradient-to-br from-indigo-600/10 to-purple-600/8 border border-indigo-500/20 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
@@ -408,113 +175,49 @@ function ReviewTab({ onPendingCount, pkgs }: { onPendingCount?: (count: number) 
         </div>
       )}
 
-      {tasks.map(task => {
-        const isRevising = !!revising[task.id]
-        const isActioning = !!actioning[task.id]
-
-        return (
-          <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 p-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h3 className="font-semibold text-white text-sm">{task.title}</h3>
-                  {task.task_type && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 capitalize">
-                      {task.task_type.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                </div>
-                {/* Approval status badge */}
-                {task.approval_status === 'pending' && (
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium">
-                    ⏳ Awaiting your approval
-                  </span>
-                )}
-                {task.approval_status === 'client_approved' && (
-                  <div className="space-y-0.5">
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 font-medium">
-                      <CheckCircle2 className="h-3 w-3" /> Approved by you ✓
-                    </span>
-                    <p className="text-xs text-slate-500 mt-1">Awaiting admin final approval</p>
-                  </div>
-                )}
-                {task.approval_status === 'admin_approved' && (
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-medium">
-                    <CheckCircle2 className="h-3 w-3" /> Fully Approved ✓
+      {tasks.map(task => (
+        <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div className="flex items-start justify-between gap-3 p-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <h3 className="font-semibold text-white text-sm">{task.title}</h3>
+                {task.task_type && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 capitalize">
+                    {task.task_type.replace(/_/g, ' ')}
                   </span>
                 )}
               </div>
+              {task.approval_status === 'pending' && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium">
+                  ⏳ In review
+                </span>
+              )}
+              {task.approval_status === 'client_approved' && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20 font-medium">
+                  <CheckCircle2 className="h-3 w-3" /> Under final review
+                </span>
+              )}
+              {task.approval_status === 'admin_approved' && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-medium">
+                  <CheckCircle2 className="h-3 w-3" /> Approved ✓
+                </span>
+              )}
             </div>
-
-            {/* Delivery URL */}
-            {task.delivery_url && (
-              <div className="mx-4 mb-3">
-                <a
-                  href={task.delivery_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" /> View Delivery
-                </a>
-              </div>
-            )}
-
-            {/* Action buttons — only for pending */}
-            {task.approval_status === 'pending' && (
-              <div className="px-4 pb-4 space-y-2">
-                {!isRevising ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApprove(task.id)}
-                      disabled={isActioning}
-                      className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
-                    >
-                      {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => setRevising(prev => ({ ...prev, [task.id]: true }))}
-                      disabled={isActioning}
-                      className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
-                    >
-                      <RefreshCw className="h-4 w-4" /> Request Revision
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <textarea
-                      autoFocus
-                      value={revisionNote[task.id] ?? ''}
-                      onChange={e => setRevisionNote(prev => ({ ...prev, [task.id]: e.target.value }))}
-                      placeholder="Describe what needs to be changed…"
-                      rows={3}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleRevision(task.id)}
-                        disabled={!(revisionNote[task.id] ?? '').trim() || isActioning}
-                        className="flex-1 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-xl transition-colors"
-                      >
-                        {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                        Send Revision Request
-                      </button>
-                      <button
-                        onClick={() => { setRevising(prev => ({ ...prev, [task.id]: false })); setRevisionNote(prev => ({ ...prev, [task.id]: '' })) }}
-                        className="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-xl transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-        )
-      })}
+          {task.delivery_url && (
+            <div className="mx-4 mb-4">
+              <a
+                href={task.delivery_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" /> View Delivery
+              </a>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -535,7 +238,6 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
     )
   }
 
-  // Overall summary across all packages
   const totalItems  = pkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + i.total_quantity, 0), 0)
   const totalUsed   = pkgs.reduce((s, p) => {
     const itemsUsed = p.items.reduce((si, i) => si + (i.used ?? 0), 0)
@@ -544,12 +246,11 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
   const overallPct  = totalItems > 0 ? Math.round((totalUsed / totalItems) * 100) : 0
   const totalRem    = Math.max(totalItems - totalUsed, 0)
 
-  const now         = new Date()
-  const monthName   = now.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+  const now      = new Date()
+  const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' })
 
   return (
     <div className="space-y-6">
-      {/* Overall summary card */}
       {pkgs.length > 0 && (
         <div className="bg-gradient-to-br from-indigo-600/15 to-purple-600/10 border border-indigo-500/20 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -560,7 +261,6 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
             )}
           </div>
 
-          {/* KPI row */}
           <div className="grid grid-cols-4 gap-3 mb-4">
             {[
               { label: 'Total',     value: totalItems > 0 ? totalItems : '—', color: 'text-slate-200' },
@@ -575,7 +275,6 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
             ))}
           </div>
 
-          {/* Progress bar */}
           {totalItems > 0 && (
             <div className="space-y-1.5">
               <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
@@ -591,7 +290,6 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
             </div>
           )}
 
-          {/* Task completion line */}
           {totalTasks > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-700/40 flex items-center justify-between text-xs text-slate-400">
               <span className="flex items-center gap-1.5">
@@ -606,10 +304,8 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
         </div>
       )}
 
-      {/* Per-package breakdown */}
       {pkgs.map((p, idx) => (
         <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-          {/* Package type + period badge */}
           <div className="flex items-center justify-between px-5 pt-4 pb-0">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-slate-400" />
@@ -629,7 +325,6 @@ function PackageTab({ pkgs, doneTasks, totalTasks }: {
               )}
             </div>
           </div>
-
           <div className="p-5">
             <PackageProgress pkg={p} />
           </div>
@@ -672,7 +367,6 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
 
   return (
     <div className={`rounded-xl border transition-colors ${open ? 'border-slate-700 bg-slate-800/60' : 'border-slate-800 bg-slate-900'}`}>
-      {/* Header row */}
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
@@ -701,7 +395,6 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
         </div>
       </button>
 
-      {/* Expanded items */}
       {open && (
         <div className="border-t border-slate-700/60 px-4 pb-4 pt-3 space-y-2">
           {inv.notes && (
@@ -756,7 +449,6 @@ function InvoicesTab({
     ? Math.max(0, Math.ceil((new Date(billingPlan.next_invoice_date).getTime() - now.getTime()) / 86_400_000))
     : null
 
-  // Collect all deliverables done this period across all packages
   const deliverableLines: { label: string; used: number; total: number }[] = []
   for (const pkg of pkgs) {
     for (const item of pkg.items) {
@@ -770,7 +462,6 @@ function InvoicesTab({
         }
       }
     }
-    // fallback: if no items configured but total_done > 0
     if (pkg.items.length === 0 && (pkg.total_done ?? 0) > 0) {
       deliverableLines.push({ label: 'Tasks completed', used: pkg.total_done ?? 0, total: 0 })
     }
@@ -785,8 +476,6 @@ function InvoicesTab({
 
   return (
     <div className="space-y-5">
-
-      {/* ── Billing Plan Card ──────────────────────────────────────────────── */}
       {billingPlan ? (
         <div className="bg-gradient-to-br from-slate-900 to-slate-800/60 border border-slate-700/60 rounded-2xl p-5 space-y-4">
           <div className="flex items-center gap-2">
@@ -797,7 +486,6 @@ function InvoicesTab({
             </span>
           </div>
 
-          {/* Plan KPIs */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
@@ -831,7 +519,6 @@ function InvoicesTab({
             </div>
           </div>
 
-          {/* Total paid summary */}
           {paidInvoices.length > 0 && (
             <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-700/40">
               <span className="flex items-center gap-1.5">
@@ -851,7 +538,6 @@ function InvoicesTab({
         </div>
       )}
 
-      {/* ── Next Invoice Preview ───────────────────────────────────────────── */}
       {billingPlan && billingPlan.cycle_type !== 'manual' && billingPlan.next_invoice_date && (
         <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -870,7 +556,6 @@ function InvoicesTab({
             </span>
           </div>
 
-          {/* Amount */}
           <div className="flex items-end justify-between">
             <div>
               <p className="text-3xl font-extrabold text-white">
@@ -883,7 +568,6 @@ function InvoicesTab({
             )}
           </div>
 
-          {/* Deliverables summary for this period */}
           {deliverableLines.length > 0 && (
             <div className="border-t border-indigo-500/15 pt-4 space-y-3">
               <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -924,7 +608,6 @@ function InvoicesTab({
         </div>
       )}
 
-      {/* ── Pending / Overdue alert ────────────────────────────────────────── */}
       {pendingInvoices.length > 0 && (
         <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 rounded-xl px-4 py-3">
           <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
@@ -939,7 +622,6 @@ function InvoicesTab({
         </div>
       )}
 
-      {/* ── Invoice history ────────────────────────────────────────────────── */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           Invoice History ({invoices.length})
@@ -966,10 +648,9 @@ export default function ClientPortalPage() {
   const [pkgs,        setPkgs]        = useState<ClientPackage[]>([])
   const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
   const [loading,     setLoading]     = useState(true)
-  const [tab,                setTab]                = useState<'package' | 'review' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
-  const [pendingReviewCount, setPendingReviewCount] = useState(0)
-  const [detailTask,         setDetailTask]         = useState<Task | null>(null)
-  const [clientId,           setClientId]           = useState<string | null>(null)
+  const [tab,         setTab]         = useState<'package' | 'review' | 'tasks' | 'completed' | 'calendar' | 'invoices'>('package')
+  const [detailTask,  setDetailTask]  = useState<Task | null>(null)
+  const [clientId,    setClientId]    = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [tasksRes, invoicesRes, pkgRes, billRes] = await Promise.all([
@@ -1017,17 +698,14 @@ export default function ClientPortalPage() {
   const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'review')
   const doneTasks   = tasks.filter(t => t.status === 'done')
 
-
-
   return (
     <div className="space-y-5">
       {/* Welcome */}
       <div className="bg-gradient-to-r from-indigo-600/20 to-purple-600/10 border border-indigo-500/20 rounded-xl p-5 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white mb-0.5">Welcome to your portal 👋</h2>
-          <p className="text-slate-400 text-sm">Review deliverables, track your package, and manage invoices.</p>
+          <p className="text-slate-400 text-sm">Track your deliverables, package usage, and invoices.</p>
         </div>
-        {/* Quick stats */}
         <div className="hidden sm:flex items-center gap-3 shrink-0">
           {pkgs.length > 0 && (() => {
             const totalItems = pkgs.reduce((s, p) => s + p.items.reduce((si, i) => si + i.total_quantity, 0), 0)
@@ -1046,13 +724,13 @@ export default function ClientPortalPage() {
           {reviewTasks.length > 0 && (
             <div className="text-center">
               <div className="text-2xl font-extrabold text-amber-400">{reviewTasks.length}</div>
-              <div className="text-[11px] text-slate-500">Need review</div>
+              <div className="text-[11px] text-slate-500">In review</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Awaiting approval — always visible regardless of tab */}
+      {/* In-review notice — always visible */}
       {reviewTasks.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -1061,11 +739,11 @@ export default function ClientPortalPage() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
             </span>
             <h3 className="text-sm font-semibold text-amber-400">
-              {reviewTasks.length} item{reviewTasks.length > 1 ? 's' : ''} awaiting your approval
+              {reviewTasks.length} item{reviewTasks.length > 1 ? 's' : ''} currently in review
             </h3>
           </div>
           {reviewTasks.map(task => (
-            <ApprovalCard key={task.id} task={task} onAction={load} />
+            <ReviewCard key={task.id} task={task} />
           ))}
         </div>
       )}
@@ -1073,12 +751,12 @@ export default function ClientPortalPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-800 overflow-x-auto">
         {([
-          { key: 'package',   label: 'My Package', icon: Package,      badge: pkgs.length,        badgeColor: 'bg-indigo-500/20 text-indigo-400', badgeDot: false },
-          { key: 'review',    label: 'Review',     icon: Eye,          badge: pendingReviewCount, badgeColor: 'bg-red-500/20 text-red-400',        badgeDot: false },
-          { key: 'tasks',     label: 'Tasks',      icon: CheckSquare,  badge: activeTasks.length + reviewTasks.length, badgeColor: 'bg-slate-700 text-slate-300', badgeDot: false },
-          { key: 'completed', label: 'Completed',  icon: CheckCircle2, badge: doneTasks.length,   badgeColor: 'bg-green-500/20 text-green-400',    badgeDot: false },
-          { key: 'calendar',  label: 'Calendar',   icon: CalendarDays, badge: 0,                  badgeColor: '',                                  badgeDot: false },
-          { key: 'invoices',  label: 'Invoices',   icon: FileText,     badge: 0,                  badgeColor: '',                                  badgeDot: false },
+          { key: 'package',   label: 'My Package', icon: Package,      badge: pkgs.length,        badgeColor: 'bg-indigo-500/20 text-indigo-400' },
+          { key: 'review',    label: 'Review',     icon: Eye,          badge: reviewTasks.length, badgeColor: 'bg-amber-500/20 text-amber-400' },
+          { key: 'tasks',     label: 'Tasks',      icon: CheckSquare,  badge: activeTasks.length + reviewTasks.length, badgeColor: 'bg-slate-700 text-slate-300' },
+          { key: 'completed', label: 'Completed',  icon: CheckCircle2, badge: doneTasks.length,   badgeColor: 'bg-green-500/20 text-green-400' },
+          { key: 'calendar',  label: 'Calendar',   icon: CalendarDays, badge: 0,                  badgeColor: '' },
+          { key: 'invoices',  label: 'Invoices',   icon: FileText,     badge: 0,                  badgeColor: '' },
         ] as const).map(({ key, label, icon: Icon, badge, badgeColor }) => (
           <button
             key={key}
@@ -1096,15 +774,12 @@ export default function ClientPortalPage() {
         ))}
       </div>
 
-      {/* Package tab */}
       {tab === 'package' && (
         <PackageTab pkgs={pkgs} doneTasks={doneTasks.length} totalTasks={tasks.length} />
       )}
 
-      {/* Review tab */}
-      {tab === 'review' && <ReviewTab onPendingCount={setPendingReviewCount} pkgs={pkgs} />}
+      {tab === 'review' && <ReviewTab pkgs={pkgs} />}
 
-      {/* Tasks tab */}
       {tab === 'tasks' && (
         <div className="space-y-4">
           {activeTasks.length === 0 && reviewTasks.length === 0 && (
@@ -1146,7 +821,6 @@ export default function ClientPortalPage() {
         </div>
       )}
 
-      {/* Completed tab */}
       {tab === 'completed' && (
         <div className="space-y-3">
           {doneTasks.length === 0 ? (
@@ -1156,20 +830,15 @@ export default function ClientPortalPage() {
             </div>
           ) : (
             <>
-              <p className="text-xs text-slate-500">
-                {doneTasks.filter(t => !t.client_rating).length > 0
-                  ? `${doneTasks.filter(t => !t.client_rating).length} task${doneTasks.filter(t => !t.client_rating).length > 1 ? 's' : ''} awaiting your approval`
-                  : `All ${doneTasks.length} completed tasks have been approved`}
-              </p>
+              <p className="text-xs text-slate-500">{doneTasks.length} completed task{doneTasks.length > 1 ? 's' : ''}</p>
               {doneTasks.map(task => (
-                <CompletedCard key={task.id} task={task} onAction={load} />
+                <DoneCard key={task.id} task={task} />
               ))}
             </>
           )}
         </div>
       )}
 
-      {/* Calendar tab */}
       {tab === 'calendar' && (
         <div className="space-y-2">
           <p className="text-xs text-slate-500">Your project plan — all scheduled tasks. Tap any day to see details.</p>
@@ -1184,7 +853,6 @@ export default function ClientPortalPage() {
         </div>
       )}
 
-      {/* Invoices tab */}
       {tab === 'invoices' && (
         <InvoicesTab billingPlan={billingPlan} pkgs={pkgs} invoices={invoices} />
       )}
