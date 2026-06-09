@@ -31,6 +31,7 @@ export async function GET() {
     .from('invoices')
     .select('id, invoice_number, status, total')
     .eq('status', 'overdue')
+    .is('deleted_at', null)
 
   if (isClient) {
     if (!profile.client_id) return NextResponse.json([])

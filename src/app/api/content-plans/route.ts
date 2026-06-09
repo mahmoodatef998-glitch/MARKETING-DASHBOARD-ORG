@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
     .from('clients')
     .select('name')
     .eq('id', body.client_id)
+    .is('deleted_at', null)
     .single()
 
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })

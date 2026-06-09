@@ -79,6 +79,7 @@ export async function PATCH(req: NextRequest) {
     .from('tasks')
     .select('id, client_id, task_type, assigned_to, approval_status')
     .eq('id', task_id)
+    .is('deleted_at', null)
     .single()
 
   if (taskError || !task) {
