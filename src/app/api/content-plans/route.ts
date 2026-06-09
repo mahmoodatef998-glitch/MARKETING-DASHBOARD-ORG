@@ -30,10 +30,9 @@ export async function GET(req: NextRequest) {
     .select(`
       *,
       client:clients(id, name),
-      creator:profiles!created_by(id, display_name),
       items:content_plan_items(
         id, content_type, title, publish_date, internal_due_date,
-        sequence_number, platforms, status, task_id, notes,
+        sla_days, sequence_number, platforms, status, task_id, notes,
         task:tasks(id, title, status, assigned_to,
           assignee:profiles!assigned_to(id, display_name))
       )

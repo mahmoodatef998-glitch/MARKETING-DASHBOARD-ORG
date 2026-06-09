@@ -442,7 +442,7 @@ export default function ContentPlansPage() {
   const [selectedPlan, setSelectedPlan] = useState<ContentPlan | null>(null)
   const [newPlanOpen,  setNewPlanOpen]  = useState(false)
   const [addItemOpen,  setAddItemOpen]  = useState(false)
-  const [filterClient, setFilterClient] = useState('')
+  const [filterClient, setFilterClient] = useState('all')
 
   // Role guard
   useEffect(() => {
@@ -467,7 +467,7 @@ export default function ContentPlansPage() {
   useEffect(() => { void load() }, [load])
 
   const visiblePlans = plans.filter(p =>
-    !filterClient || p.client_id === filterClient
+    filterClient === 'all' || p.client_id === filterClient
   )
 
   function handleItemAdded(item: ContentPlanItem) {
@@ -534,7 +534,7 @@ export default function ContentPlansPage() {
             <SelectValue placeholder="All clients" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All clients</SelectItem>
+            <SelectItem value="all">All clients</SelectItem>
             {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
