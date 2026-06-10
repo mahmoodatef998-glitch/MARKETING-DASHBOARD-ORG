@@ -324,9 +324,9 @@ function InvoiceForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Client *</Label>
-          <Select value={form.client_id} onValueChange={(v) => setField('client_id', v)}>
+          <Select value={form.client_id || undefined} onValueChange={(v) => setField('client_id', v)}>
             <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-            <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            <SelectContent>{clients.filter(c => c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-2">

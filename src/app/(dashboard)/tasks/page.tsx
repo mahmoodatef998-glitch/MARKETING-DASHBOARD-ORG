@@ -194,20 +194,20 @@ function TaskForm({
         </div>
         <div className="space-y-2">
           <Label>Client</Label>
-          <Select value={form.client_id} onValueChange={(v) => set('client_id', v)}>
+          <Select value={form.client_id || undefined} onValueChange={(v) => set('client_id', v)}>
             <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
             <SelectContent>
-              {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {clients.filter(c => c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
       <div className="space-y-2">
         <Label>Assignee</Label>
-        <Select value={form.assigned_to} onValueChange={(v) => set('assigned_to', v)}>
+        <Select value={form.assigned_to || undefined} onValueChange={(v) => set('assigned_to', v)}>
           <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
           <SelectContent>
-            {members.map((m) => (
+            {members.filter(m => m.id).map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.display_name ?? m.id}
               </SelectItem>
@@ -548,7 +548,7 @@ export default function TasksPage() {
               <SelectValue placeholder="Reassign to…" />
             </SelectTrigger>
             <SelectContent>
-              {members.map((m) => (
+              {members.filter(m => m.id).map((m) => (
                 <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
               ))}
             </SelectContent>
@@ -573,7 +573,7 @@ export default function TasksPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All members</SelectItem>
-            {members.map((m) => (
+            {members.filter(m => m.id).map((m) => (
               <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
             ))}
           </SelectContent>
@@ -586,7 +586,7 @@ export default function TasksPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All clients</SelectItem>
-            {clients.map((c) => (
+            {clients.filter(c => c.id).map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
           </SelectContent>

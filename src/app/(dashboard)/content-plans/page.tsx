@@ -153,10 +153,10 @@ function NewPlanDialog({
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-2">
             <Label>Client *</Label>
-            <Select value={clientId} onValueChange={setClientId}>
+            <Select value={clientId || undefined} onValueChange={setClientId}>
               <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
               <SelectContent>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {clients.filter(c => c.id).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -365,10 +365,10 @@ function AddItemDialog({
               <Label className="flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5 text-slate-400" /> Assign To
               </Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <Select value={assignedTo || undefined} onValueChange={setAssignedTo}>
                 <SelectTrigger><SelectValue placeholder="Unassigned (assign later)" /></SelectTrigger>
                 <SelectContent>
-                  {teamMembers.map(m => (
+                  {teamMembers.filter(m => m.id).map(m => (
                     <SelectItem key={m.id} value={m.id}>{m.display_name ?? m.id}</SelectItem>
                   ))}
                 </SelectContent>
@@ -628,7 +628,7 @@ export default function ContentPlansPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All clients</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {clients.filter(c => c.id).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <span className="text-sm text-slate-500">{visiblePlans.length} plan{visiblePlans.length !== 1 ? 's' : ''}</span>

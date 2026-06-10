@@ -67,10 +67,10 @@ function PlanForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label>Client *</Label>
-        <Select value={form.client_id} onValueChange={(v) => set('client_id', v)} required>
+        <Select value={form.client_id || undefined} onValueChange={(v) => set('client_id', v)} required>
           <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
           <SelectContent>
-            {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {clients.filter(c => c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
