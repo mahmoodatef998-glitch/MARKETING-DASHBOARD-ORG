@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import SchedulePublishPanel from '@/components/tasks/SchedulePublishPanel'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2, Filter } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2, Filter, Film, Palette, Sparkles, Smartphone, Wrench, Eye, Circle, LayoutGrid, List } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Client, TaskAssignee } from '@/types'
@@ -262,13 +262,30 @@ function TaskForm({
   )
 }
 
-const statusColors: Record<string, string> = {
-  todo: 'bg-blue-500/20 text-blue-400',
-  in_progress: 'bg-purple-500/20 text-purple-400',
-  review: 'bg-amber-500/20 text-amber-400',
-  done: 'bg-green-500/20 text-green-400',
-  overdue: 'bg-red-500/20 text-red-400',
-}
+// ── Design system ─────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  todo:        { label: 'To Do',       border: 'border-l-blue-500',   bg: '',                      badge: 'bg-blue-500/15 text-blue-400',    Icon: Circle },
+  in_progress: { label: 'In Progress', border: 'border-l-violet-500', bg: 'bg-violet-500/[0.04]',  badge: 'bg-violet-500/15 text-violet-400', Icon: Loader2 },
+  review:      { label: 'Review',      border: 'border-l-amber-500',  bg: 'bg-amber-500/[0.04]',   badge: 'bg-amber-500/15 text-amber-400',  Icon: Eye },
+  done:        { label: 'Done',        border: 'border-l-green-500',  bg: '',                      badge: 'bg-green-500/15 text-green-400',  Icon: CheckCircle2 },
+  overdue:     { label: 'Overdue',     border: 'border-l-red-500',    bg: 'bg-red-500/[0.04]',     badge: 'bg-red-500/15 text-red-400',      Icon: AlertTriangle },
+} as const
+
+const TYPE_CONFIG = {
+  reel_video: { label: 'Reel',     Icon: Film,       color: 'bg-pink-500/15 text-pink-400 border-pink-500/20' },
+  design:     { label: 'Design',   Icon: Palette,    color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+  ai_video:   { label: 'AI Video', Icon: Sparkles,   color: 'bg-purple-500/15 text-purple-400 border-purple-500/20' },
+  post:       { label: 'Post',     Icon: Smartphone, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' },
+  custom:     { label: 'Custom',   Icon: Wrench,     color: 'bg-slate-500/15 text-slate-400 border-slate-500/20' },
+} as const
+
+const PRIORITY_CONFIG = {
+  low:    { label: 'Low',    dot: 'bg-slate-500',             color: 'text-slate-500' },
+  medium: { label: 'Medium', dot: 'bg-yellow-400',            color: 'text-yellow-400' },
+  high:   { label: 'High',   dot: 'bg-orange-400',            color: 'text-orange-400' },
+  urgent: { label: 'Urgent', dot: 'bg-red-400 animate-pulse', color: 'text-red-400' },
+} as const
 
 const statusFilterStyle: Record<string, string> = {
   all:         'bg-slate-700 text-slate-200 border-slate-600',
@@ -283,11 +300,197 @@ const statusLabel: Record<string, string> = {
   all: 'All', todo: 'To Do', in_progress: 'In Progress',
   review: 'Review', done: 'Done', overdue: 'Overdue',
 }
-const priorityColors: Record<string, string> = {
-  low: 'text-slate-400',
-  medium: 'text-yellow-400',
-  high: 'text-orange-400',
-  urgent: 'text-red-400',
+
+function dueDateLabel(dateStr: string): { text: string; color: string } {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due   = new Date(dateStr); due.setHours(0, 0, 0, 0)
+  const diff  = Math.round((due.getTime() - today.getTime()) / 86400000)
+  if (diff < 0)   return { text: `${Math.abs(diff)}d overdue`, color: 'text-red-400' }
+  if (diff === 0) return { text: 'Due today',                  color: 'text-amber-400' }
+  if (diff === 1) return { text: 'Tomorrow',                   color: 'text-amber-400' }
+  if (diff <= 7)  return { text: `${diff} days left`,          color: 'text-yellow-400' }
+  return { text: formatDate(dateStr), color: 'text-slate-500' }
+}
+
+function MemberAvatar({ name }: { name: string }) {
+  const initials = name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <div className="h-5 w-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+      <span className="text-[9px] font-bold text-indigo-400">{initials}</span>
+    </div>
+  )
+}
+
+// ── Task Card (grid + list) ────────────────────────────────────────────────────
+
+function TaskCard({
+  task, selected, onSelect, isAdmin, onEdit, onDelete, gridView,
+}: {
+  task: Task; selected: boolean; gridView: boolean
+  onSelect: (id: string) => void
+  isAdmin: boolean
+  onEdit: (t: Task) => void
+  onDelete: (id: string) => void
+}) {
+  const status   = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
+  const typeConf = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
+  const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
+  const due      = task.due_date ? dueDateLabel(task.due_date) : null
+  const { Icon: StatusIcon } = status
+
+  if (gridView) {
+    return (
+      <div className={`
+        group relative flex flex-col rounded-xl border border-l-[3px] border-slate-800
+        ${status.border} ${status.bg}
+        ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700 hover:shadow-lg hover:shadow-black/20'}
+        transition-all duration-200 overflow-hidden
+      `}>
+        {/* Reference image */}
+        {task.reference_image_url && (
+          <div className="relative h-28 overflow-hidden bg-slate-900 shrink-0">
+            <img src={task.reference_image_url} alt="" className="w-full h-full object-cover opacity-75 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/70" />
+          </div>
+        )}
+
+        <div className="flex flex-col flex-1 p-3.5 gap-2.5">
+          {/* Type + Status */}
+          <div className="flex items-center justify-between gap-2">
+            {typeConf ? (
+              <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
+                <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
+              </span>
+            ) : <span />}
+            <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${status.badge}`}>
+              <StatusIcon className="h-3 w-3" /> {status.label}
+            </span>
+          </div>
+
+          {/* Title */}
+          <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{task.title}</h3>
+
+          {/* Description */}
+          {task.description && (
+            <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
+          )}
+
+          {/* Meta */}
+          <div className="flex items-center gap-2 flex-wrap mt-auto pt-2 border-t border-slate-800/60">
+            <div className="flex items-center gap-1">
+              <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
+              <span className={`text-[10px] font-medium ${priority.color}`}>{priority.label}</span>
+            </div>
+            {due && (
+              <span className={`text-[10px] font-medium flex items-center gap-0.5 ${due.color}`}>
+                <Calendar className="h-2.5 w-2.5" /> {due.text}
+              </span>
+            )}
+            {task.assignee?.display_name && <MemberAvatar name={task.assignee.display_name} />}
+            {task.delivery_url && (
+              <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+                className="ml-auto text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors">
+                <ExternalLink className="h-2.5 w-2.5" /> delivery
+              </a>
+            )}
+          </div>
+
+          {/* Client + actions */}
+          <div className="flex items-center justify-between gap-2">
+            {task.client?.name ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700 truncate max-w-[130px]">
+                {task.client.name}
+              </span>
+            ) : <span />}
+            <div className="flex gap-0.5 items-center">
+              <button onClick={() => onSelect(task.id)} className="p-1 text-slate-600 hover:text-indigo-400 transition-colors">
+                {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-400" /> : <Square className="h-3.5 w-3.5" />}
+              </button>
+              {isAdmin && (
+                <>
+                  <button onClick={() => onEdit(task)} className="p-1 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-all">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => onDelete(task.id)} className="p-1 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── List view ──
+  return (
+    <div className={`
+      group flex items-stretch rounded-xl border border-l-[3px] border-slate-800
+      ${status.border} ${status.bg}
+      ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700'}
+      transition-all duration-200
+    `}>
+      <button onClick={() => onSelect(task.id)} className="flex items-center px-3 shrink-0 text-slate-600 hover:text-indigo-400 transition-colors">
+        {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
+      </button>
+
+      <div className="flex-1 min-w-0 py-3.5 pr-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {typeConf && (
+            <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
+              <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
+            </span>
+          )}
+          <h3 className="font-semibold text-slate-100 text-sm">{task.title}</h3>
+          <span className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ml-auto shrink-0 ${status.badge}`}>
+            <StatusIcon className="h-3 w-3" /> {status.label}
+          </span>
+        </div>
+        {task.description && <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
+            <span className={`text-[11px] font-medium ${priority.color}`}>{priority.label}</span>
+          </div>
+          {due && (
+            <span className={`text-[11px] font-medium flex items-center gap-1 ${due.color}`}>
+              <Calendar className="h-3 w-3" /> {due.text}
+            </span>
+          )}
+          {task.assignee?.display_name && (
+            <div className="flex items-center gap-1.5">
+              <MemberAvatar name={task.assignee.display_name} />
+              <span className="text-[11px] text-slate-400">{task.assignee.display_name}</span>
+            </div>
+          )}
+          {task.client?.name && (
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">{task.client.name}</span>
+          )}
+          {task.delivery_url && (
+            <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors">
+              <ExternalLink className="h-3 w-3" /> delivery
+            </a>
+          )}
+        </div>
+      </div>
+
+      {task.reference_image_url && (
+        <img src={task.reference_image_url} alt="" className="h-16 w-16 object-cover rounded-lg my-2 mr-2 border border-slate-700 opacity-70 group-hover:opacity-100 transition-opacity shrink-0" />
+      )}
+      {isAdmin && (
+        <div className="flex items-center gap-0.5 px-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(task)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => onDelete(task.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function TasksPage() {
@@ -310,6 +513,7 @@ export default function TasksPage() {
   const [completedOpen, setCompletedOpen] = useState(false)
   const [userRole,      setUserRole]      = useState<string>('')
   const [guardReady,    setGuardReady]    = useState(false)
+  const [gridView,      setGridView]      = useState(true)
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
@@ -512,12 +716,29 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-5">
-      {/* Top bar: search + new button */}
+      {/* Top bar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input className="pl-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+
+        {/* View toggle */}
+        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+          <button
+            onClick={() => setGridView(true)}
+            className={`p-1.5 rounded-md transition-all ${gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setGridView(false)}
+            className={`p-1.5 rounded-md transition-all ${!gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
         <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
           <Download className="h-4 w-4" /> Export
         </Button>
@@ -682,10 +903,14 @@ export default function TasksPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+        <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}>
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className={`rounded-xl bg-slate-800/50 animate-pulse ${gridView ? 'h-52' : 'h-20'}`} />
+          ))}
+        </div>
       ) : (
-        <div className="space-y-3">
-          {/* ── Active tasks ── */}
+        <div className="space-y-5">
+          {/* ── Empty state ── */}
           {filtered.length === 0 && filteredDone.length === 0 && (
             <Card><CardContent className="py-16 text-center">
               <p className="text-slate-400 text-sm">No tasks found.</p>
@@ -697,68 +922,23 @@ export default function TasksPage() {
             </CardContent></Card>
           )}
 
-          {filtered.map((task) => (
-            <Card key={task.id} className={`hover:border-slate-600 transition-colors ${selected.has(task.id) ? 'border-indigo-500/40 bg-indigo-500/5' : ''}`}>
-              <CardContent className="py-4 flex items-start gap-3">
-                <button
-                  onClick={() => toggleSelect(task.id)}
-                  className="mt-0.5 shrink-0 text-slate-500 hover:text-indigo-400 transition-colors"
-                >
-                  {selected.has(task.id)
-                    ? <CheckSquare className="h-4 w-4 text-indigo-400" />
-                    : <Square className="h-4 w-4" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium text-slate-100 text-sm">{task.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[task.status]}`}>
-                      {task.status.replace('_', ' ')}
-                    </span>
-                    <span className={`text-xs font-medium flex items-center gap-1 ${priorityColors[task.priority]}`}>
-                      {task.priority === 'urgent' && <AlertTriangle className="h-3 w-3" />}
-                      {task.priority}
-                    </span>
-                    {task.task_type && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 font-medium">
-                        {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
-                      </span>
-                    )}
-                  </div>
-                  {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
-                  <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
-                    {task.due_date && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {formatDate(task.due_date)}
-                      </span>
-                    )}
-                    {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
-                    {task.client?.name && <span>— {task.client.name}</span>}
-                    {task.reference_image_url && (
-                      <span className="flex items-center gap-1 text-indigo-400">
-                        <ImagePlus className="h-3 w-3" /> ref image
-                      </span>
-                    )}
-                    {task.delivery_url && (
-                      <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors">
-                        <ExternalLink className="h-3 w-3" /> delivery
-                      </a>
-                    )}
-                  </div>
-                </div>
-                {isAdmin && (
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(task); setOpen(true) }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400" onClick={() => handleDelete(task.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+          {/* ── Active tasks ── */}
+          {filtered.length > 0 && (
+            <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}>
+              {filtered.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  selected={selected.has(task.id)}
+                  gridView={gridView}
+                  onSelect={toggleSelect}
+                  isAdmin={isAdmin}
+                  onEdit={(t) => { setEditing(t); setOpen(true) }}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
 
           {/* ── Completed section ── */}
           {filteredDone.length > 0 && (
@@ -773,48 +953,23 @@ export default function TasksPage() {
                 <span className="ml-1 text-xs bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full font-semibold">
                   {filteredDone.length}
                 </span>
-                <span className="ml-auto text-xs text-slate-600">
-                  {completedOpen ? 'hide' : 'show'}
-                </span>
+                <span className="ml-auto text-xs text-slate-600">{completedOpen ? 'hide' : 'show'}</span>
               </button>
 
               {completedOpen && (
-                <div className="space-y-2 mt-2">
+                <div className={`mt-2 ${gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-2'}`}>
                   {filteredDone.map((task) => (
-                    <Card key={task.id} className="opacity-70 hover:opacity-90 transition-opacity border-green-500/10">
-                      <CardContent className="py-3 flex items-start gap-3">
-                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-slate-300 text-sm line-through">{task.title}</h3>
-                            {task.task_type && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 font-medium">
-                                {TASK_TYPE_OPTIONS.find((t) => t.value === task.task_type)?.label ?? task.task_type}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500 flex-wrap">
-                            {task.assignee?.display_name && <span>@ {task.assignee.display_name}</span>}
-                            {task.client?.name && <span>— {task.client.name}</span>}
-                            {task.client_rating && (
-                              <span className="text-amber-400">
-                                {'★'.repeat(task.client_rating)}{'☆'.repeat(5 - task.client_rating)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {isAdmin && (
-                          <div className="flex gap-1 shrink-0">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(task); setOpen(true) }}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(task.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                    <div key={task.id} className="opacity-60 hover:opacity-100 transition-opacity">
+                      <TaskCard
+                        task={task}
+                        selected={selected.has(task.id)}
+                        gridView={gridView}
+                        onSelect={toggleSelect}
+                        isAdmin={isAdmin}
+                        onEdit={(t) => { setEditing(t); setOpen(true) }}
+                        onDelete={handleDelete}
+                      />
+                    </div>
                   ))}
                 </div>
               )}
