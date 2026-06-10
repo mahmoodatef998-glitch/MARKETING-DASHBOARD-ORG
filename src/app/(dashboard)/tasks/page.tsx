@@ -358,93 +358,110 @@ function TaskCard({
   if (gridView) {
     return (
       <div className={`
-        group relative flex flex-col rounded-xl border border-l-[3px] border-slate-800
+        group relative flex flex-col rounded-2xl border-l-[3px] border border-slate-800/80
         ${dueStyle.border} ${dueStyle.bg}
-        ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700 hover:shadow-lg hover:shadow-black/20'}
+        ${selected ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.04]' : 'hover:border-slate-700 hover:shadow-xl hover:shadow-black/30'}
         transition-all duration-200 overflow-hidden
       `}>
         {/* Reference image */}
         {task.reference_image_url && (
-          <div className="relative h-28 overflow-hidden bg-slate-900 shrink-0">
-            <img src={task.reference_image_url} alt="" className="w-full h-full object-cover opacity-75 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/70" />
+          <div className="relative h-32 overflow-hidden bg-slate-950 shrink-0">
+            <img src={task.reference_image_url} alt="" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/90" />
           </div>
         )}
 
-        <div className="flex flex-col flex-1 p-3.5 gap-2.5">
-          {/* Type + Status */}
+        <div className="flex flex-col flex-1 p-5 gap-4">
+
+          {/* ── Zone 1: Badges ── */}
           <div className="flex items-center justify-between gap-2">
             {typeConf ? (
-              <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
-                <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
+              <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${typeConf.color}`}>
+                <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
               </span>
             ) : <span />}
-            <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${status.badge}`}>
+            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
               <StatusIcon className="h-3 w-3" /> {status.label}
             </span>
           </div>
 
-          {/* Title */}
-          <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{task.title}</h3>
+          {/* ── Zone 2: Title + Description ── */}
+          <div className="space-y-1.5">
+            <h3 className="font-semibold text-slate-100 text-[15px] leading-snug line-clamp-2">{task.title}</h3>
+            {task.description && (
+              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
+            )}
+          </div>
 
-          {/* Description */}
-          {task.description && (
-            <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
-          )}
-
-          {/* Assignee row — prominent */}
-          {assigneeName && (
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+          {/* ── Zone 3: Assignee ── */}
+          {assigneeName ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/40">
               <MemberAvatar name={assigneeName} size="md" />
-              <div className="min-w-0">
-                <p className="text-[10px] text-slate-500 leading-none mb-0.5">Assigned to</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-1">Assigned to</p>
                 <p className="text-xs font-semibold text-slate-200 truncate">{assigneeName}</p>
               </div>
             </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-slate-800 text-slate-600">
+              <div className="h-6 w-6 rounded-full border border-dashed border-slate-700 flex items-center justify-center shrink-0">
+                <span className="text-[9px]">?</span>
+              </div>
+              <span className="text-[11px]">Unassigned</span>
+            </div>
           )}
 
-          {/* Meta */}
-          <div className="flex items-center gap-2 flex-wrap mt-auto pt-2 border-t border-slate-800/60">
-            <div className="flex items-center gap-1">
-              <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
-              <span className={`text-[10px] font-medium ${priority.color}`}>{priority.label}</span>
-            </div>
-            {due && (
-              <span className={`text-[10px] font-semibold flex items-center gap-0.5 ${due.color}`}>
-                <Calendar className="h-2.5 w-2.5" /> {due.text}
-              </span>
-            )}
-            {task.delivery_url && (
-              <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-                className="ml-auto text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors">
-                <ExternalLink className="h-2.5 w-2.5" /> delivery
-              </a>
-            )}
-          </div>
-
-          {/* Client + actions */}
-          <div className="flex items-center justify-between gap-2">
-            {task.client?.name ? (
-              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700 truncate max-w-[130px]">
-                {task.client.name}
-              </span>
-            ) : <span />}
-            <div className="flex gap-0.5 items-center">
-              <button onClick={() => onSelect(task.id)} className="p-1 text-slate-600 hover:text-indigo-400 transition-colors">
-                {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-400" /> : <Square className="h-3.5 w-3.5" />}
-              </button>
-              {isAdmin && (
-                <>
-                  <button onClick={() => onEdit(task)} className="p-1 text-slate-600 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-all">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => onDelete(task.id)} className="p-1 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </>
+          {/* ── Zone 4: Footer ── */}
+          <div className="mt-auto pt-3 border-t border-slate-800/80 space-y-2.5">
+            {/* Priority + Due date */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${priority.dot}`} />
+                  <span className={`text-[11px] font-medium ${priority.color}`}>{priority.label}</span>
+                </div>
+                {due && (
+                  <span className={`text-[11px] font-semibold flex items-center gap-1 ${due.color}`}>
+                    <Calendar className="h-3 w-3 shrink-0" /> {due.text}
+                  </span>
+                )}
+              </div>
+              {task.delivery_url && (
+                <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors">
+                  <ExternalLink className="h-3 w-3" /> Delivery
+                </a>
               )}
             </div>
+
+            {/* Client + Actions */}
+            <div className="flex items-center justify-between gap-2">
+              {task.client?.name ? (
+                <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700/60 truncate max-w-[160px]">
+                  {task.client.name}
+                </span>
+              ) : <span />}
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => onSelect(task.id)}
+                  className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-400 hover:bg-slate-800 transition-all">
+                  {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-400" /> : <Square className="h-3.5 w-3.5" />}
+                </button>
+                {isAdmin && (
+                  <>
+                    <button onClick={() => onEdit(task)}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => onDelete(task.id)}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
     )
@@ -453,68 +470,82 @@ function TaskCard({
   // ── List view ──
   return (
     <div className={`
-      group flex items-stretch rounded-xl border border-l-[3px] border-slate-800
+      group flex items-stretch rounded-2xl border-l-[3px] border border-slate-800/80
       ${dueStyle.border} ${dueStyle.bg}
-      ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700'}
+      ${selected ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.04]' : 'hover:border-slate-700 hover:shadow-md hover:shadow-black/20'}
       transition-all duration-200
     `}>
-      <button onClick={() => onSelect(task.id)} className="flex items-center px-3 shrink-0 text-slate-600 hover:text-indigo-400 transition-colors">
+      {/* Checkbox */}
+      <button onClick={() => onSelect(task.id)}
+        className="flex items-center px-4 shrink-0 text-slate-600 hover:text-indigo-400 transition-colors">
         {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
       </button>
 
-      <div className="flex-1 min-w-0 py-3.5 pr-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {typeConf && (
-            <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
-              <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
-            </span>
-          )}
-          <h3 className="font-semibold text-slate-100 text-sm">{task.title}</h3>
-          <span className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ml-auto shrink-0 ${status.badge}`}>
+      {/* Main content */}
+      <div className="flex-1 min-w-0 py-4 pr-4 space-y-2.5">
+
+        {/* Row 1: title + status */}
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-semibold text-slate-100 text-sm leading-snug">{task.title}</h3>
+          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
             <StatusIcon className="h-3 w-3" /> {status.label}
           </span>
         </div>
-        {task.description && <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{task.description}</p>}
-        <div className="flex items-center gap-3 mt-2 flex-wrap">
+
+        {/* Row 2: description */}
+        {task.description && (
+          <p className="text-xs text-slate-500 line-clamp-1 leading-relaxed">{task.description}</p>
+        )}
+
+        {/* Row 3: meta chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {typeConf && (
+            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
+              <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
+            </span>
+          )}
           <div className="flex items-center gap-1.5">
-            <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
+            <div className={`h-2 w-2 rounded-full shrink-0 ${priority.dot}`} />
             <span className={`text-[11px] font-medium ${priority.color}`}>{priority.label}</span>
           </div>
           {due && (
-            <span className={`text-[11px] font-medium flex items-center gap-1 ${due.color}`}>
-              <Calendar className="h-3 w-3" /> {due.text}
+            <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${due.color}`}>
+              <Calendar className="h-3 w-3 shrink-0" /> {due.text}
             </span>
           )}
-          {task.assignee?.display_name && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">
-              <MemberAvatar name={task.assignee.display_name} size="md" />
-              <div className="min-w-0">
-                <p className="text-[9px] text-slate-500 leading-none">Assigned</p>
-                <p className="text-[11px] font-semibold text-slate-200 leading-tight truncate">{task.assignee.display_name}</p>
-              </div>
+          {assigneeName && (
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/70 border border-slate-700/50">
+              <MemberAvatar name={assigneeName} />
+              <span className="text-[11px] font-semibold text-slate-300">{assigneeName}</span>
             </div>
           )}
           {task.client?.name && (
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">{task.client.name}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800/70 text-slate-400 border border-slate-700/50">
+              {task.client.name}
+            </span>
           )}
           {task.delivery_url && (
             <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors">
-              <ExternalLink className="h-3 w-3" /> delivery
+              className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+              <ExternalLink className="h-3 w-3" /> Delivery
             </a>
           )}
         </div>
       </div>
 
+      {/* Thumbnail */}
       {task.reference_image_url && (
-        <img src={task.reference_image_url} alt="" className="h-16 w-16 object-cover rounded-lg my-2 mr-2 border border-slate-700 opacity-70 group-hover:opacity-100 transition-opacity shrink-0" />
+        <img src={task.reference_image_url} alt=""
+          className="h-16 w-16 object-cover rounded-xl my-3 border border-slate-700/60 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
       )}
+
+      {/* Admin actions */}
       {isAdmin && (
-        <div className="flex items-center gap-0.5 px-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(task)}>
+        <div className="flex items-center gap-0.5 px-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl" onClick={() => onEdit(task)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => onDelete(task.id)}>
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10" onClick={() => onDelete(task.id)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -933,13 +964,13 @@ export default function TasksPage() {
       </div>
 
       {loading ? (
-        <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}>
+        <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>
           {[...Array(6)].map((_, i) => (
-            <div key={i} className={`rounded-xl bg-slate-800/50 animate-pulse ${gridView ? 'h-52' : 'h-20'}`} />
+            <div key={i} className={`rounded-2xl bg-slate-800/50 animate-pulse ${gridView ? 'h-64' : 'h-20'}`} />
           ))}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* ── Empty state ── */}
           {filtered.length === 0 && filteredDone.length === 0 && (
             <Card><CardContent className="py-16 text-center">
@@ -954,7 +985,7 @@ export default function TasksPage() {
 
           {/* ── Active tasks ── */}
           {filtered.length > 0 && (
-            <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}>
+            <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>
               {filtered.map((task) => (
                 <TaskCard
                   key={task.id}
@@ -987,7 +1018,7 @@ export default function TasksPage() {
               </button>
 
               {completedOpen && (
-                <div className={`mt-2 ${gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-2'}`}>
+                <div className={`mt-3 ${gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-2'}`}>
                   {filteredDone.map((task) => (
                     <div key={task.id} className="opacity-60 hover:opacity-100 transition-opacity">
                       <TaskCard
