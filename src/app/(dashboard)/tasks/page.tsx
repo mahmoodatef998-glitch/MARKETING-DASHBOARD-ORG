@@ -306,17 +306,32 @@ function dueDateLabel(dateStr: string): { text: string; color: string } {
   const due   = new Date(dateStr); due.setHours(0, 0, 0, 0)
   const diff  = Math.round((due.getTime() - today.getTime()) / 86400000)
   if (diff < 0)   return { text: `${Math.abs(diff)}d overdue`, color: 'text-red-400' }
-  if (diff === 0) return { text: 'Due today',                  color: 'text-amber-400' }
+  if (diff === 0) return { text: 'Due today',                  color: 'text-red-400' }
   if (diff === 1) return { text: 'Tomorrow',                   color: 'text-amber-400' }
   if (diff <= 7)  return { text: `${diff} days left`,          color: 'text-yellow-400' }
   return { text: formatDate(dateStr), color: 'text-slate-500' }
 }
 
-function MemberAvatar({ name }: { name: string }) {
+function dueBorderStyle(dueDate: string | undefined | null): { border: string; bg: string } {
+  if (!dueDate) return { border: 'border-l-slate-700', bg: '' }
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due   = new Date(dueDate); due.setHours(0, 0, 0, 0)
+  const diff  = Math.round((due.getTime() - today.getTime()) / 86400000)
+  if (diff < 0)   return { border: 'border-l-red-500',    bg: 'bg-red-500/[0.04]' }
+  if (diff === 0) return { border: 'border-l-red-400',    bg: 'bg-red-500/[0.03]' }
+  if (diff === 1) return { border: 'border-l-orange-400', bg: 'bg-orange-500/[0.03]' }
+  if (diff <= 3)  return { border: 'border-l-amber-400',  bg: '' }
+  if (diff <= 7)  return { border: 'border-l-yellow-500', bg: '' }
+  return                 { border: 'border-l-green-500',  bg: '' }
+}
+
+function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
   const initials = name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  const dim = size === 'md' ? 'h-7 w-7' : 'h-5 w-5'
+  const txt = size === 'md' ? 'text-[10px]' : 'text-[9px]'
   return (
-    <div className="h-5 w-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-      <span className="text-[9px] font-bold text-indigo-400">{initials}</span>
+    <div className={`${dim} rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0`}>
+      <span className={`${txt} font-bold text-indigo-400`}>{initials}</span>
     </div>
   )
 }
@@ -332,17 +347,19 @@ function TaskCard({
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
 }) {
-  const status   = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
-  const typeConf = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
-  const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
-  const due      = task.due_date ? dueDateLabel(task.due_date) : null
+  const status    = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
+  const typeConf  = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
+  const priority  = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
+  const due       = task.due_date ? dueDateLabel(task.due_date) : null
+  const dueStyle  = dueBorderStyle(task.due_date)
   const { Icon: StatusIcon } = status
+  const assigneeName = task.assignee?.display_name
 
   if (gridView) {
     return (
       <div className={`
         group relative flex flex-col rounded-xl border border-l-[3px] border-slate-800
-        ${status.border} ${status.bg}
+        ${dueStyle.border} ${dueStyle.bg}
         ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700 hover:shadow-lg hover:shadow-black/20'}
         transition-all duration-200 overflow-hidden
       `}>
@@ -375,6 +392,17 @@ function TaskCard({
             <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
           )}
 
+          {/* Assignee row — prominent */}
+          {assigneeName && (
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+              <MemberAvatar name={assigneeName} size="md" />
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 leading-none mb-0.5">Assigned to</p>
+                <p className="text-xs font-semibold text-slate-200 truncate">{assigneeName}</p>
+              </div>
+            </div>
+          )}
+
           {/* Meta */}
           <div className="flex items-center gap-2 flex-wrap mt-auto pt-2 border-t border-slate-800/60">
             <div className="flex items-center gap-1">
@@ -382,11 +410,10 @@ function TaskCard({
               <span className={`text-[10px] font-medium ${priority.color}`}>{priority.label}</span>
             </div>
             {due && (
-              <span className={`text-[10px] font-medium flex items-center gap-0.5 ${due.color}`}>
+              <span className={`text-[10px] font-semibold flex items-center gap-0.5 ${due.color}`}>
                 <Calendar className="h-2.5 w-2.5" /> {due.text}
               </span>
             )}
-            {task.assignee?.display_name && <MemberAvatar name={task.assignee.display_name} />}
             {task.delivery_url && (
               <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
                 className="ml-auto text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors">
@@ -427,7 +454,7 @@ function TaskCard({
   return (
     <div className={`
       group flex items-stretch rounded-xl border border-l-[3px] border-slate-800
-      ${status.border} ${status.bg}
+      ${dueStyle.border} ${dueStyle.bg}
       ${selected ? 'ring-1 ring-inset ring-indigo-500/50 bg-indigo-500/5' : 'hover:border-slate-700'}
       transition-all duration-200
     `}>
@@ -459,9 +486,12 @@ function TaskCard({
             </span>
           )}
           {task.assignee?.display_name && (
-            <div className="flex items-center gap-1.5">
-              <MemberAvatar name={task.assignee.display_name} />
-              <span className="text-[11px] text-slate-400">{task.assignee.display_name}</span>
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">
+              <MemberAvatar name={task.assignee.display_name} size="md" />
+              <div className="min-w-0">
+                <p className="text-[9px] text-slate-500 leading-none">Assigned</p>
+                <p className="text-[11px] font-semibold text-slate-200 leading-tight truncate">{task.assignee.display_name}</p>
+              </div>
             </div>
           )}
           {task.client?.name && (
