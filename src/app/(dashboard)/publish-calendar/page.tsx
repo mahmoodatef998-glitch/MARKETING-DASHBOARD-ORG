@@ -475,19 +475,31 @@ export default function PublishCalendarPage() {
                     day === now.getDate() && month === now.getMonth() && year === now.getFullYear()
                   const ymd    = day !== null ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null
                   const dayEvs = ymd ? (eventsByDay[ymd] ?? []) : []
+                  const allDone = dayEvs.length > 0 && dayEvs.every(e => e.status === 'published')
 
                   return (
                     <div key={idx} className={cn(
-                      'min-h-[100px] p-1.5 border-b border-r border-slate-800/60',
+                      'min-h-[100px] p-1.5 border-b border-r border-slate-800/60 transition-colors',
                       day === null && 'bg-slate-950/30',
+                      allDone && 'bg-green-500/5',
                     )}>
                       {day !== null && (
                         <>
-                          <div className={cn(
-                            'w-6 h-6 flex items-center justify-center rounded-full text-xs mb-1.5 font-medium',
-                            isToday ? 'bg-indigo-600 text-white' : 'text-slate-500'
-                          )}>
-                            {day}
+                          <div className="flex items-center gap-1 mb-1.5">
+                            <div className={cn(
+                              'w-6 h-6 flex items-center justify-center rounded-full text-xs font-medium',
+                              allDone  ? 'bg-green-500 text-white' :
+                              isToday  ? 'bg-indigo-600 text-white' :
+                              'text-slate-500'
+                            )}>
+                              {allDone
+                                ? <CheckCircle2 className="h-3.5 w-3.5" />
+                                : day
+                              }
+                            </div>
+                            {allDone && (
+                              <span className="text-[9px] text-green-500 font-semibold">All done</span>
+                            )}
                           </div>
                           <div className="space-y-0.5">
                             {dayEvs.slice(0, 3).map(ev => (
@@ -511,19 +523,30 @@ export default function PublishCalendarPage() {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
               <div className="grid grid-cols-7 border-b border-slate-800">
                 {weekDays.map((d, i) => {
-                  const isToday = toYMD(d) === toYMD(now)
+                  const ymd     = toYMD(d)
+                  const isToday = ymd === toYMD(now)
+                  const dayEvs  = eventsByDay[ymd] ?? []
+                  const allDone = dayEvs.length > 0 && dayEvs.every(e => e.status === 'published')
                   return (
                     <div key={i} className={cn(
                       'py-3 text-center border-r border-slate-800 last:border-0',
-                      isToday && 'bg-indigo-600/10'
+                      isToday  && 'bg-indigo-600/10',
+                      allDone  && 'bg-green-500/10',
                     )}>
                       <p className="text-xs text-slate-500">{DOW[d.getDay()]}</p>
-                      <p className={cn(
-                        'text-sm font-bold mt-0.5',
-                        isToday ? 'text-indigo-400' : 'text-slate-300'
-                      )}>
-                        {d.getDate()}
-                      </p>
+                      {allDone ? (
+                        <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                          <span className="text-[9px] text-green-500 font-semibold leading-none">All done</span>
+                        </div>
+                      ) : (
+                        <p className={cn(
+                          'text-sm font-bold mt-0.5',
+                          isToday ? 'text-indigo-400' : 'text-slate-300'
+                        )}>
+                          {d.getDate()}
+                        </p>
+                      )}
                     </div>
                   )
                 })}
