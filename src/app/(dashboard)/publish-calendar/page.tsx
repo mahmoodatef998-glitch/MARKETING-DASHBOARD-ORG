@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -73,28 +73,47 @@ function monthYMStr(year: number, month: number) {
 // ─── Event Chip ───────────────────────────────────────────────────────────────
 
 function EventChip({ event, onClick }: { event: PublishEvent; onClick: () => void }) {
-  const p = PLATFORM_META[event.platform]
+  const p          = PLATFORM_META[event.platform]
+  const isDone     = event.status === 'published'
+  const isFailed   = event.status === 'failed'
+
   return (
     <button
       onClick={onClick}
       className={cn(
         'w-full text-left rounded-md px-1.5 py-1 border text-[10px] leading-tight transition-all hover:opacity-90 active:scale-95',
-        p.bg, p.border
+        isDone   ? 'bg-green-500/20 border-green-500/50' :
+        isFailed ? 'bg-red-500/15 border-red-500/40' :
+        cn(p.bg, p.border)
       )}
     >
       <div className="flex items-center gap-1 mb-0.5">
-        <p.icon className={cn('h-2.5 w-2.5 shrink-0', p.color)} />
-        <span className={cn('font-semibold truncate', p.color)}>{fmtTime(event.scheduled_at)}</span>
+        {isDone
+          ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-green-400" />
+          : <p.icon className={cn('h-2.5 w-2.5 shrink-0', p.color)} />
+        }
         <span className={cn(
-          'ml-auto shrink-0 px-1 rounded text-[9px]',
-          event.status === 'ready' ? 'bg-emerald-500/30 text-emerald-400' :
-          event.status === 'published' ? 'bg-green-500/30 text-green-400' :
-          event.status === 'failed' ? 'bg-red-500/30 text-red-400' :
-          'bg-slate-700 text-slate-500'
-        )}>{event.status}</span>
+          'font-semibold truncate',
+          isDone ? 'text-green-400' : isFailed ? 'text-red-400' : p.color
+        )}>{fmtTime(event.scheduled_at)}</span>
+        {isDone && (
+          <span className="ml-auto shrink-0 text-[9px] text-green-400 font-bold">✓ Done</span>
+        )}
+        {!isDone && (
+          <span className={cn(
+            'ml-auto shrink-0 px-1 rounded text-[9px]',
+            event.status === 'ready'    ? 'bg-emerald-500/30 text-emerald-400' :
+            event.status === 'failed'   ? 'bg-red-500/30 text-red-400' :
+            'bg-slate-700 text-slate-500'
+          )}>{event.status}</span>
+        )}
       </div>
-      <p className="text-slate-400 truncate">{event.item.plan.client.name}</p>
-      <p className="text-slate-500 truncate">{event.item.title}</p>
+      <p className={cn('truncate', isDone ? 'text-green-300/70' : 'text-slate-400')}>
+        {event.item.plan.client.name}
+      </p>
+      <p className={cn('truncate', isDone ? 'text-green-400/50' : 'text-slate-500')}>
+        {event.item.title}
+      </p>
     </button>
   )
 }
@@ -106,10 +125,11 @@ function EventDetail({ event, onClose, onMarkPublished }: {
   onClose: () => void
   onMarkPublished: (id: string) => void
 }) {
-  const p        = PLATFORM_META[event.platform]
+  const p      = PLATFORM_META[event.platform]
+  const isDone = event.status === 'published'
   const [busy, setBusy] = useState(false)
 
-  async function handleMarkPublished() {
+  async function handleMarkDone() {
     setBusy(true)
     try {
       const res = await fetch(`/api/publish-events/${event.id}`, {
@@ -126,15 +146,26 @@ function EventDetail({ event, onClose, onMarkPublished }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-5 space-y-4">
+      <div className={cn(
+        'bg-slate-900 rounded-2xl w-full max-w-sm p-5 space-y-4 border transition-colors',
+        isDone ? 'border-green-500/40' : 'border-slate-700'
+      )}>
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', p.bg, p.border, 'border')}>
-              <p.icon className={cn('h-4 w-4', p.color)} />
+            <div className={cn(
+              'w-9 h-9 rounded-xl flex items-center justify-center border',
+              isDone ? 'bg-green-500/20 border-green-500/40' : cn(p.bg, p.border)
+            )}>
+              {isDone
+                ? <CheckCircle2 className="h-4 w-4 text-green-400" />
+                : <p.icon className={cn('h-4 w-4', p.color)} />
+              }
             </div>
             <div>
-              <p className={cn('text-sm font-bold', p.color)}>{p.label}</p>
+              <p className={cn('text-sm font-bold', isDone ? 'text-green-400' : p.color)}>
+                {p.label} {isDone && '— Published ✓'}
+              </p>
               <p className="text-xs text-slate-500">
                 {new Date(event.scheduled_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}
                 {' '}{fmtTime(event.scheduled_at)}
@@ -172,11 +203,19 @@ function EventDetail({ event, onClose, onMarkPublished }: {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-1">
-          {event.status === 'ready' && (
-            <button onClick={handleMarkPublished} disabled={busy}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-semibold transition-colors disabled:opacity-50">
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '✓'} Mark Published
+        <div className="pt-1">
+          {isDone ? (
+            <div className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-500/10 border border-green-500/30 text-sm font-semibold text-green-400">
+              <CheckCircle2 className="h-4 w-4" /> تم النشر بنجاح
+            </div>
+          ) : event.status !== 'cancelled' && (
+            <button onClick={handleMarkDone} disabled={busy}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 active:scale-95 text-sm text-white font-semibold transition-all disabled:opacity-50">
+              {busy
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <CheckCircle2 className="h-4 w-4" />
+              }
+              Mark as Done
             </button>
           )}
         </div>
