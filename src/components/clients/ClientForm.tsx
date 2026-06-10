@@ -16,9 +16,14 @@ export interface BillingFormData {
   next_invoice_date: string
 }
 
+export interface PackageFormData {
+  name: string
+  total: number
+}
+
 interface Props {
   initial?: Partial<Client>
-  onSave: (data: Partial<Client>, billing?: BillingFormData) => Promise<void>
+  onSave: (data: Partial<Client>, billing?: BillingFormData, pkg?: PackageFormData) => Promise<void>
   onCancel: () => void
 }
 
@@ -57,10 +62,12 @@ export default function ClientForm({ initial, onSave, onCancel }: Props) {
     notes:   initial?.notes   ?? '',
   })
   const [billing, setBilling] = useState(getInitialBilling(existingPlan))
+  const [pkg, setPkg] = useState({ name: '', total: '' })
   const [loading, setLoading] = useState(false)
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
   function setB(k: string, v: string) { setBilling((b) => ({ ...b, [k]: v })) }
+  function setP(k: string, v: string) { setPkg((p) => ({ ...p, [k]: v })) }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -68,7 +75,6 @@ export default function ClientForm({ initial, onSave, onCancel }: Props) {
 
     let billingData: BillingFormData | undefined
     if (billing.cycle && billing.amount) {
-      // Map every_15_days → custom_days with 15
       const cycle_type  = billing.cycle === 'every_15_days' ? 'custom_days' : billing.cycle
       const custom_days = billing.cycle === 'every_15_days' ? 15
                         : billing.cycle === 'custom_days'   ? Number(billing.custom_days)
@@ -82,7 +88,11 @@ export default function ClientForm({ initial, onSave, onCancel }: Props) {
       }
     }
 
-    await onSave(form as Partial<Client>, billingData)
+    const pkgData: PackageFormData | undefined = pkg.name && pkg.total
+      ? { name: pkg.name, total: Number(pkg.total) }
+      : undefined
+
+    await onSave(form as Partial<Client>, billingData, pkgData)
     setLoading(false)
   }
 
@@ -196,6 +206,40 @@ export default function ClientForm({ initial, onSave, onCancel }: Props) {
           </div>
         )}
       </div>
+
+      {/* ── Package (optional) ── */}
+      {!initial?.id && (
+        <div className="border-t border-slate-800 pt-4 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-slate-300">Package</span>
+            <span className="text-xs text-slate-500">(optional — for payment progress tracking)</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Package Name</Label>
+              <Input
+                value={pkg.name}
+                onChange={(e) => setP('name', e.target.value)}
+                placeholder="e.g. Social Media Q3"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Total Contract Value</Label>
+              <Input
+                type="number" min={0} step="0.01"
+                value={pkg.total}
+                onChange={(e) => setP('total', e.target.value)}
+                placeholder={billing.amount ? `e.g. ${billing.amount}` : '0.00'}
+              />
+            </div>
+          </div>
+          {pkg.name && pkg.total && (
+            <p className="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-3 py-2">
+              Payment progress will be tracked — mark each invoice as received to update the progress bar.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

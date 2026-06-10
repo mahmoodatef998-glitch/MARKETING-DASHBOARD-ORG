@@ -23,7 +23,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const authErr  = await requireAdmin(supabase)
   if (authErr) return authErr
 
-  const { action } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
+  const { action } = body
 
   if (action === 'mark_paid') {
     const { data: inv } = await supabase
@@ -112,6 +113,53 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     return NextResponse.json(data)
+  }
+
+  if (action === 'mark_received') {
+    const receivedAmount   = Number(body.received_amount ?? 0)
+    const paymentReference = body.payment_reference ?? null
+    const paymentNotes     = body.payment_notes ?? null
+
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single()
+
+    if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const fullyPaid = receivedAmount >= inv.total
+    const newStatus = fullyPaid ? 'paid' : inv.status
+
+    const { data, error } = await supabase
+      .from('invoices')
+      .update({
+        received_amount:   receivedAmount,
+        received_at:       new Date().toISOString(),
+        payment_reference: paymentReference,
+        payment_notes:     paymentNotes,
+        status:            newStatus,
+        updated_at:        new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+
+    let nextInvoiceDateResult: string | null = null
+    if (fullyPaid) {
+      const client = inv.client as any
+      const plan = (client?.billing_plans as any[])?.find((p: any) => p.is_active)
+      if (plan && plan.cycle_type !== 'manual') {
+        const next = nextInvoiceDate(new Date(), plan.cycle_type as CycleType, plan.custom_days ?? undefined)
+        await supabase.from('billing_plans').update({ next_invoice_date: toDateStr(next) }).eq('id', plan.id)
+        nextInvoiceDateResult = toDateStr(next)
+      }
+    }
+
+    return NextResponse.json({ ...data, nextInvoiceDate: nextInvoiceDateResult })
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

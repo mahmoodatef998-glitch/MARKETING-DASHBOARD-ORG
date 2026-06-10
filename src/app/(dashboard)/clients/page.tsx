@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import ClientForm, { type BillingFormData } from '@/components/clients/ClientForm'
+import ClientForm, { type BillingFormData, type PackageFormData } from '@/components/clients/ClientForm'
 import ClientProfileModal from '@/components/clients/ClientProfileModal'
 import { useToast } from '@/components/ui/toast'
 import { Plus, Search, Pencil, Trash2, Mail, Phone, Globe, LayoutDashboard, Download, CreditCard, Loader2 } from 'lucide-react'
@@ -64,8 +64,8 @@ export default function ClientsPage() {
 
   useEffect(() => { void load() }, [])
 
-  async function handleSave(data: Partial<Client>, billing?: BillingFormData) {
-    const body = { ...data, billing_plan: billing ?? null }
+  async function handleSave(data: Partial<Client>, billing?: BillingFormData, pkg?: PackageFormData) {
+    const body = { ...data, billing_plan: billing ?? null, package: pkg ?? null }
     if (editing) {
       const res = await fetch(`/api/clients/${editing.id}`, {
         method: 'PUT',

@@ -187,6 +187,10 @@ export interface Invoice {
   due_date?: string
   issued_date: string
   notes?: string
+  received_amount?: number
+  received_at?: string
+  payment_reference?: string
+  payment_notes?: string
   created_at: string
   updated_at: string
 }

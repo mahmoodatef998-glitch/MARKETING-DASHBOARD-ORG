@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const rawBody = await req.json().catch(() => null)
-  const { billing_plan, ...clientBody } = rawBody ?? {}
+  const { billing_plan, package: packageData, ...clientBody } = rawBody ?? {}
 
   const parsed = parseBody(ClientCreateSchema, clientBody)
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
@@ -78,6 +78,21 @@ export async function POST(req: NextRequest) {
       is_active:         true,
       created_at:        new Date().toISOString(),
       updated_at:        new Date().toISOString(),
+    })
+  }
+
+  // Create service package if provided
+  if (packageData?.name && packageData?.total) {
+    await supabase.from('client_packages').insert({
+      id:           generateId(),
+      client_id:    client.id,
+      name:         packageData.name,
+      price:        Number(packageData.total),
+      renewal_type: 'one_time',
+      start_date:   billing_plan?.next_invoice_date ?? new Date().toISOString().split('T')[0],
+      is_active:    true,
+      created_at:   new Date().toISOString(),
+      updated_at:   new Date().toISOString(),
     })
   }
 

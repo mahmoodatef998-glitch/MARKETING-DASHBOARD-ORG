@@ -548,3 +548,9 @@ CREATE INDEX IF NOT EXISTS idx_publish_events_scheduled  ON public.publish_event
 CREATE INDEX IF NOT EXISTS idx_publish_events_status     ON public.publish_events(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_plan_item           ON public.tasks(plan_item_id);
 
+
+-- ── Payment tracking on invoices ─────────────────────────────────────────────
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS received_amount   numeric(12,2);
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS received_at       timestamptz;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference text;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_notes     text;
