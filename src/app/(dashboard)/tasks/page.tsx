@@ -265,20 +265,27 @@ function TaskForm({
 // ── Design system ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  todo:        { label: 'To Do',       border: 'border-l-blue-500',   bg: '',                      badge: 'bg-blue-500/15 text-blue-400',    Icon: Circle },
-  in_progress: { label: 'In Progress', border: 'border-l-violet-500', bg: 'bg-violet-500/[0.04]',  badge: 'bg-violet-500/15 text-violet-400', Icon: Loader2 },
-  review:      { label: 'Review',      border: 'border-l-amber-500',  bg: 'bg-amber-500/[0.04]',   badge: 'bg-amber-500/15 text-amber-400',  Icon: Eye },
-  done:        { label: 'Done',        border: 'border-l-green-500',  bg: '',                      badge: 'bg-green-500/15 text-green-400',  Icon: CheckCircle2 },
-  overdue:     { label: 'Overdue',     border: 'border-l-red-500',    bg: 'bg-red-500/[0.04]',     badge: 'bg-red-500/15 text-red-400',      Icon: AlertTriangle },
+  todo:        { label: 'To Do',       badge: 'bg-slate-700/80 text-slate-300 border border-slate-600/50',         Icon: Circle },
+  in_progress: { label: 'In Progress', badge: 'bg-violet-500/20 text-violet-300 border border-violet-500/30',      Icon: Loader2 },
+  review:      { label: 'Review',      badge: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',         Icon: Eye },
+  done:        { label: 'Done',        badge: 'bg-green-500/20 text-green-300 border border-green-500/30',         Icon: CheckCircle2 },
+  overdue:     { label: 'Overdue',     badge: 'bg-red-500/25 text-red-300 border border-red-500/40',               Icon: AlertTriangle },
 } as const
 
 const TYPE_CONFIG = {
-  reel_video: { label: 'Reel',     Icon: Film,       color: 'bg-pink-500/15 text-pink-400 border-pink-500/20' },
-  design:     { label: 'Design',   Icon: Palette,    color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
-  ai_video:   { label: 'AI Video', Icon: Sparkles,   color: 'bg-purple-500/15 text-purple-400 border-purple-500/20' },
-  post:       { label: 'Post',     Icon: Smartphone, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' },
-  custom:     { label: 'Custom',   Icon: Wrench,     color: 'bg-slate-500/15 text-slate-400 border-slate-500/20' },
+  reel_video: { label: 'Reel',     Icon: Film,       color: 'bg-pink-500/15 text-pink-400 border-pink-500/20',
+    header: 'from-pink-600/90 to-rose-700/90',   iconBg: 'bg-pink-500/20',   iconColor: 'text-pink-200' },
+  design:     { label: 'Design',   Icon: Palette,    color: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
+    header: 'from-blue-600/90 to-indigo-700/90', iconBg: 'bg-blue-500/20',   iconColor: 'text-blue-200' },
+  ai_video:   { label: 'AI Video', Icon: Sparkles,   color: 'bg-purple-500/15 text-purple-400 border-purple-500/20',
+    header: 'from-purple-600/90 to-violet-700/90', iconBg: 'bg-purple-500/20', iconColor: 'text-purple-200' },
+  post:       { label: 'Post',     Icon: Smartphone, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
+    header: 'from-cyan-600/90 to-teal-700/90',   iconBg: 'bg-cyan-500/20',   iconColor: 'text-cyan-200' },
+  custom:     { label: 'Custom',   Icon: Wrench,     color: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
+    header: 'from-slate-600/90 to-slate-700/90', iconBg: 'bg-slate-500/20',  iconColor: 'text-slate-300' },
 } as const
+
+const TYPE_FALLBACK_HEADER = 'from-slate-700/80 to-slate-800/80'
 
 const PRIORITY_CONFIG = {
   low:    { label: 'Low',    dot: 'bg-slate-500',             color: 'text-slate-500' },
@@ -312,17 +319,17 @@ function dueDateLabel(dateStr: string): { text: string; color: string } {
   return { text: formatDate(dateStr), color: 'text-slate-500' }
 }
 
-function dueBorderStyle(dueDate: string | undefined | null): { border: string; bg: string } {
-  if (!dueDate) return { border: 'border-l-slate-700', bg: '' }
+function dueBorderStyle(dueDate: string | undefined | null): { border: string; bg: string; ring: string } {
+  if (!dueDate) return { border: 'border-l-slate-700', bg: '', ring: '' }
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const due   = new Date(dueDate); due.setHours(0, 0, 0, 0)
   const diff  = Math.round((due.getTime() - today.getTime()) / 86400000)
-  if (diff < 0)   return { border: 'border-l-red-500',    bg: 'bg-red-500/[0.04]' }
-  if (diff === 0) return { border: 'border-l-red-400',    bg: 'bg-red-500/[0.03]' }
-  if (diff === 1) return { border: 'border-l-orange-400', bg: 'bg-orange-500/[0.03]' }
-  if (diff <= 3)  return { border: 'border-l-amber-400',  bg: '' }
-  if (diff <= 7)  return { border: 'border-l-yellow-500', bg: '' }
-  return                 { border: 'border-l-green-500',  bg: '' }
+  if (diff < 0)   return { border: 'border-l-red-500',    bg: 'bg-red-950/30',    ring: 'shadow-[0_0_0_1px_rgba(239,68,68,0.25)]' }
+  if (diff === 0) return { border: 'border-l-orange-400', bg: 'bg-orange-950/20', ring: 'shadow-[0_0_0_1px_rgba(251,146,60,0.2)]' }
+  if (diff === 1) return { border: 'border-l-amber-400',  bg: '',                 ring: '' }
+  if (diff <= 3)  return { border: 'border-l-amber-500',  bg: '',                 ring: '' }
+  if (diff <= 7)  return { border: 'border-l-yellow-500', bg: '',                 ring: '' }
+  return                 { border: 'border-l-green-600',  bg: '',                 ring: '' }
 }
 
 function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
@@ -347,109 +354,150 @@ function TaskCard({
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
 }) {
-  const status    = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
-  const typeConf  = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
-  const priority  = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
-  const due       = task.due_date ? dueDateLabel(task.due_date) : null
-  const dueStyle  = dueBorderStyle(task.due_date)
+  const status       = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
+  const typeConf     = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
+  const priority     = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
+  const due          = task.due_date ? dueDateLabel(task.due_date) : null
+  const dueStyle     = dueBorderStyle(task.due_date)
   const { Icon: StatusIcon } = status
   const assigneeName = task.assignee?.display_name
+  const headerGradient = typeConf ? typeConf.header : TYPE_FALLBACK_HEADER
 
   if (gridView) {
     return (
       <div className={`
-        group relative flex flex-col rounded-2xl border-l-[3px] border border-slate-800/80
-        ${dueStyle.border} ${dueStyle.bg}
-        ${selected ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.04]' : 'hover:border-slate-700 hover:shadow-xl hover:shadow-black/30'}
-        transition-all duration-200 overflow-hidden
+        group relative flex flex-col rounded-2xl overflow-hidden
+        border-l-[3px] border border-slate-800/70
+        ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
+        ${selected
+          ? 'ring-2 ring-inset ring-indigo-500/50 bg-indigo-500/[0.04]'
+          : 'hover:border-slate-600 hover:shadow-2xl hover:shadow-black/50 hover:-translate-y-0.5'}
+        transition-all duration-200
       `}>
-        {/* Reference image */}
-        {task.reference_image_url && (
-          <div className="relative h-32 overflow-hidden bg-slate-950 shrink-0">
-            <img src={task.reference_image_url} alt="" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/90" />
+
+        {/* ── Header: image or colored gradient ── */}
+        {task.reference_image_url ? (
+          <div className="relative h-36 overflow-hidden bg-slate-950 shrink-0">
+            <img src={task.reference_image_url} alt=""
+              className="w-full h-full object-cover opacity-75 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/70" />
+            {/* Badges overlaid on image */}
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-3 pb-2.5">
+              {typeConf && (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-white/90 border border-white/10">
+                  <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
+                </span>
+              )}
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ml-auto ${status.badge}`}>
+                <StatusIcon className="h-3 w-3" /> {status.label}
+              </span>
+            </div>
+            {/* Select */}
+            <button onClick={() => onSelect(task.id)}
+              className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/30 hover:bg-black/50 backdrop-blur-sm text-white/60 hover:text-white transition-all">
+              {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-300" /> : <Square className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        ) : (
+          <div className={`relative h-[76px] bg-gradient-to-br ${headerGradient} flex items-center justify-between px-4 shrink-0 overflow-hidden`}>
+            {/* Subtle radial highlight */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(255,255,255,0.12),transparent_60%)]" />
+            {/* Type icon */}
+            <div className={`relative z-10 flex items-center gap-3`}>
+              {typeConf ? (
+                <div className={`h-10 w-10 rounded-xl ${typeConf.iconBg} flex items-center justify-center shadow-inner`}>
+                  <typeConf.Icon className={`h-5 w-5 ${typeConf.iconColor}`} />
+                </div>
+              ) : (
+                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
+                  <CheckCircle2 className="h-5 w-5 text-white/50" />
+                </div>
+              )}
+              <span className="text-xs font-bold text-white/80 tracking-wide">
+                {typeConf?.label ?? 'Task'}
+              </span>
+            </div>
+            {/* Status badge + select */}
+            <div className="relative z-10 flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ${status.badge}`}>
+                <StatusIcon className="h-3 w-3" /> {status.label}
+              </span>
+              <button onClick={() => onSelect(task.id)}
+                className="p-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/50 hover:text-white transition-all">
+                {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-300" /> : <Square className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           </div>
         )}
 
+        {/* ── Body ── */}
         <div className="flex flex-col flex-1 p-5 gap-4">
 
-          {/* ── Zone 1: Badges ── */}
-          <div className="flex items-center justify-between gap-2">
-            {typeConf ? (
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${typeConf.color}`}>
-                <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
-              </span>
-            ) : <span />}
-            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
-              <StatusIcon className="h-3 w-3" /> {status.label}
-            </span>
-          </div>
-
-          {/* ── Zone 2: Title + Description ── */}
-          <div className="space-y-1.5">
-            <h3 className="font-semibold text-slate-100 text-[15px] leading-snug line-clamp-2">{task.title}</h3>
+          {/* Title + Description */}
+          <div className="space-y-2">
+            <h3 className="font-bold text-slate-100 text-base leading-snug line-clamp-2 tracking-tight">
+              {task.title}
+            </h3>
             {task.description && (
               <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
             )}
           </div>
 
-          {/* ── Zone 3: Assignee ── */}
+          {/* Assignee */}
           {assigneeName ? (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/40">
+            <div className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-slate-800/50 border border-slate-700/40 hover:border-slate-600/50 transition-colors">
               <MemberAvatar name={assigneeName} size="md" />
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-1">Assigned to</p>
-                <p className="text-xs font-semibold text-slate-200 truncate">{assigneeName}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                  Assigned to
+                </p>
+                <p className="text-sm font-semibold text-slate-200 truncate">{assigneeName}</p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-slate-800 text-slate-600">
-              <div className="h-6 w-6 rounded-full border border-dashed border-slate-700 flex items-center justify-center shrink-0">
-                <span className="text-[9px]">?</span>
+            <div className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-dashed border-slate-800 text-slate-600">
+              <div className="h-7 w-7 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center shrink-0">
+                <span className="text-slate-600 text-[10px]">?</span>
               </div>
-              <span className="text-[11px]">Unassigned</span>
+              <span className="text-xs text-slate-600">Unassigned</span>
             </div>
           )}
 
-          {/* ── Zone 4: Footer ── */}
-          <div className="mt-auto pt-3 border-t border-slate-800/80 space-y-2.5">
-            {/* Priority + Due date */}
+          {/* Footer */}
+          <div className="mt-auto space-y-2.5 pt-4 border-t border-slate-800/70">
+            {/* Row A: priority + due */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <div className={`h-2 w-2 rounded-full shrink-0 ${priority.dot}`} />
-                  <span className={`text-[11px] font-medium ${priority.color}`}>{priority.label}</span>
+                  <div className={`h-2 w-2 rounded-full ${priority.dot}`} />
+                  <span className={`text-[11px] font-semibold ${priority.color}`}>{priority.label}</span>
                 </div>
                 {due && (
-                  <span className={`text-[11px] font-semibold flex items-center gap-1 ${due.color}`}>
-                    <Calendar className="h-3 w-3 shrink-0" /> {due.text}
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${due.color}`}>
+                    <Calendar className="h-3 w-3" /> {due.text}
                   </span>
                 )}
               </div>
               {task.delivery_url && (
                 <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors">
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
                   <ExternalLink className="h-3 w-3" /> Delivery
                 </a>
               )}
             </div>
 
-            {/* Client + Actions */}
+            {/* Row B: client + actions */}
             <div className="flex items-center justify-between gap-2">
               {task.client?.name ? (
-                <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700/60 truncate max-w-[160px]">
+                <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700/50 truncate max-w-[55%] font-medium">
                   {task.client.name}
                 </span>
               ) : <span />}
               <div className="flex items-center gap-0.5">
-                <button onClick={() => onSelect(task.id)}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-400 hover:bg-slate-800 transition-all">
-                  {selected ? <CheckSquare className="h-3.5 w-3.5 text-indigo-400" /> : <Square className="h-3.5 w-3.5" />}
-                </button>
                 {isAdmin && (
                   <>
                     <button onClick={() => onEdit(task)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all">
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-slate-200 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button onClick={() => onDelete(task.id)}
@@ -470,23 +518,37 @@ function TaskCard({
   // ── List view ──
   return (
     <div className={`
-      group flex items-stretch rounded-2xl border-l-[3px] border border-slate-800/80
-      ${dueStyle.border} ${dueStyle.bg}
-      ${selected ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.04]' : 'hover:border-slate-700 hover:shadow-md hover:shadow-black/20'}
+      group flex items-stretch rounded-2xl overflow-hidden
+      border-l-[3px] border border-slate-800/70
+      ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
+      ${selected
+        ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.03]'
+        : 'hover:border-slate-600 hover:shadow-lg hover:shadow-black/30'}
       transition-all duration-200
     `}>
-      {/* Checkbox */}
-      <button onClick={() => onSelect(task.id)}
-        className="flex items-center px-4 shrink-0 text-slate-600 hover:text-indigo-400 transition-colors">
-        {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
-      </button>
+
+      {/* Type color strip */}
+      <div className={`w-1 shrink-0 bg-gradient-to-b ${headerGradient} opacity-80`} />
+
+      {/* Checkbox + type icon */}
+      <div className="flex flex-col items-center justify-center gap-1.5 px-3 py-3 shrink-0">
+        <button onClick={() => onSelect(task.id)}
+          className="text-slate-600 hover:text-indigo-400 transition-colors">
+          {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
+        </button>
+        {typeConf && (
+          <div className={`h-6 w-6 rounded-md ${typeConf.iconBg} flex items-center justify-center`}>
+            <typeConf.Icon className={`h-3.5 w-3.5 ${typeConf.iconColor}`} />
+          </div>
+        )}
+      </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 py-4 pr-4 space-y-2.5">
+      <div className="flex-1 min-w-0 py-3.5 pr-3 space-y-2">
 
         {/* Row 1: title + status */}
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-semibold text-slate-100 text-sm leading-snug">{task.title}</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-bold text-slate-100 text-sm leading-snug truncate tracking-tight">{task.title}</h3>
           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
             <StatusIcon className="h-3 w-3" /> {status.label}
           </span>
@@ -497,36 +559,31 @@ function TaskCard({
           <p className="text-xs text-slate-500 line-clamp-1 leading-relaxed">{task.description}</p>
         )}
 
-        {/* Row 3: meta chips */}
+        {/* Row 3: meta */}
         <div className="flex items-center gap-2 flex-wrap">
-          {typeConf && (
-            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeConf.color}`}>
-              <typeConf.Icon className="h-3 w-3" /> {typeConf.label}
-            </span>
-          )}
           <div className="flex items-center gap-1.5">
-            <div className={`h-2 w-2 rounded-full shrink-0 ${priority.dot}`} />
-            <span className={`text-[11px] font-medium ${priority.color}`}>{priority.label}</span>
+            <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
+            <span className={`text-[11px] font-semibold ${priority.color}`}>{priority.label}</span>
           </div>
           {due && (
-            <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${due.color}`}>
-              <Calendar className="h-3 w-3 shrink-0" /> {due.text}
+            <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${due.color}`}>
+              <Calendar className="h-3 w-3" /> {due.text}
             </span>
           )}
           {assigneeName && (
-            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/70 border border-slate-700/50">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700/40">
               <MemberAvatar name={assigneeName} />
               <span className="text-[11px] font-semibold text-slate-300">{assigneeName}</span>
             </div>
           )}
           {task.client?.name && (
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800/70 text-slate-400 border border-slate-700/50">
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800/60 text-slate-400 border border-slate-700/40 font-medium">
               {task.client.name}
             </span>
           )}
           {task.delivery_url && (
             <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
               <ExternalLink className="h-3 w-3" /> Delivery
             </a>
           )}
@@ -536,13 +593,13 @@ function TaskCard({
       {/* Thumbnail */}
       {task.reference_image_url && (
         <img src={task.reference_image_url} alt=""
-          className="h-16 w-16 object-cover rounded-xl my-3 border border-slate-700/60 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
+          className="h-16 w-16 object-cover rounded-xl my-3 border border-slate-700/40 opacity-50 group-hover:opacity-90 transition-opacity shrink-0" />
       )}
 
       {/* Admin actions */}
       {isAdmin && (
-        <div className="flex items-center gap-0.5 px-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl" onClick={() => onEdit(task)}>
+        <div className="flex items-center gap-0.5 px-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-slate-700/50" onClick={() => onEdit(task)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10" onClick={() => onDelete(task.id)}>
