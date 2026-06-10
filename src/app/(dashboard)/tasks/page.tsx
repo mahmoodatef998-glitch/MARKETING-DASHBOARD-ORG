@@ -346,9 +346,9 @@ function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' 
 // ── Task Card (grid + list) ────────────────────────────────────────────────────
 
 function TaskCard({
-  task, selected, onSelect, isAdmin, onEdit, onDelete, gridView,
+  task, selected, onSelect, isAdmin, onEdit, onDelete, gridView, index,
 }: {
-  task: Task; selected: boolean; gridView: boolean
+  task: Task; selected: boolean; gridView: boolean; index: number
   onSelect: (id: string) => void
   isAdmin: boolean
   onEdit: (t: Task) => void
@@ -365,15 +365,19 @@ function TaskCard({
 
   if (gridView) {
     return (
-      <div className={`
-        group relative flex flex-col rounded-2xl overflow-hidden
-        border-l-[3px] border border-slate-800/70
-        ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
-        ${selected
-          ? 'ring-2 ring-inset ring-indigo-500/50 bg-indigo-500/[0.04]'
-          : 'hover:border-slate-600 hover:shadow-2xl hover:shadow-black/50 hover:-translate-y-0.5'}
-        transition-all duration-200
-      `}>
+      <div
+        className={`
+          group relative flex flex-col rounded-2xl overflow-hidden
+          border-l-[3px] border border-slate-800/70
+          ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
+          ${selected
+            ? 'ring-2 ring-inset ring-indigo-500/50 bg-indigo-500/[0.04]'
+            : 'hover:border-slate-600 hover:shadow-2xl hover:shadow-black/50 hover:-translate-y-0.5'}
+          transition-all duration-200
+          animate-[task-enter_0.4s_ease_both]
+        `}
+        style={{ animationDelay: `${index * 45}ms`, willChange: 'transform, opacity' }}
+      >
 
         {/* ── Header: image or colored gradient ── */}
         {task.reference_image_url ? (
@@ -381,6 +385,10 @@ function TaskCard({
             <img src={task.reference_image_url} alt=""
               className="w-full h-full object-cover opacity-75 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/70" />
+            {/* Shimmer sweep */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute inset-y-0 w-2/5 -translate-x-full group-hover:translate-x-[280%] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent -skew-x-12 transition-transform duration-700 ease-out" />
+            </div>
             {/* Badges overlaid on image */}
             <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-3 pb-2.5">
               {typeConf && (
@@ -389,7 +397,9 @@ function TaskCard({
                 </span>
               )}
               <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ml-auto ${status.badge}`}>
-                <StatusIcon className="h-3 w-3" /> {status.label}
+                <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+                  style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
+                {status.label}
               </span>
             </div>
             {/* Select */}
@@ -400,27 +410,31 @@ function TaskCard({
           </div>
         ) : (
           <div className={`relative h-[76px] bg-gradient-to-br ${headerGradient} flex items-center justify-between px-4 shrink-0 overflow-hidden`}>
-            {/* Subtle radial highlight */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(255,255,255,0.12),transparent_60%)]" />
+            {/* Radial highlight */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(255,255,255,0.10),transparent_60%)]" />
+            {/* Shimmer sweep */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute inset-y-0 w-2/5 -translate-x-full group-hover:translate-x-[280%] bg-gradient-to-r from-transparent via-white/[0.09] to-transparent -skew-x-12 transition-transform duration-700 ease-out" />
+            </div>
             {/* Type icon */}
-            <div className={`relative z-10 flex items-center gap-3`}>
+            <div className="relative z-10 flex items-center gap-3">
               {typeConf ? (
-                <div className={`h-10 w-10 rounded-xl ${typeConf.iconBg} flex items-center justify-center shadow-inner`}>
+                <div className={`h-10 w-10 rounded-xl ${typeConf.iconBg} flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300`}>
                   <typeConf.Icon className={`h-5 w-5 ${typeConf.iconColor}`} />
                 </div>
               ) : (
-                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                   <CheckCircle2 className="h-5 w-5 text-white/50" />
                 </div>
               )}
-              <span className="text-xs font-bold text-white/80 tracking-wide">
-                {typeConf?.label ?? 'Task'}
-              </span>
+              <span className="text-xs font-bold text-white/80 tracking-wide">{typeConf?.label ?? 'Task'}</span>
             </div>
-            {/* Status badge + select */}
+            {/* Status + select */}
             <div className="relative z-10 flex items-center gap-2">
               <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ${status.badge}`}>
-                <StatusIcon className="h-3 w-3" /> {status.label}
+                <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+                  style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
+                {status.label}
               </span>
               <button onClick={() => onSelect(task.id)}
                 className="p-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/50 hover:text-white transition-all">
@@ -517,15 +531,19 @@ function TaskCard({
 
   // ── List view ──
   return (
-    <div className={`
-      group flex items-stretch rounded-2xl overflow-hidden
-      border-l-[3px] border border-slate-800/70
-      ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
-      ${selected
-        ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.03]'
-        : 'hover:border-slate-600 hover:shadow-lg hover:shadow-black/30'}
-      transition-all duration-200
-    `}>
+    <div
+      className={`
+        group flex items-stretch rounded-2xl overflow-hidden
+        border-l-[3px] border border-slate-800/70
+        ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
+        ${selected
+          ? 'ring-2 ring-inset ring-indigo-500/40 bg-indigo-500/[0.03]'
+          : 'hover:border-slate-600 hover:shadow-lg hover:shadow-black/30'}
+        transition-all duration-200
+        animate-[task-enter-list_0.35s_ease_both]
+      `}
+      style={{ animationDelay: `${index * 40}ms`, willChange: 'transform, opacity' }}
+    >
 
       {/* Type color strip */}
       <div className={`w-1 shrink-0 bg-gradient-to-b ${headerGradient} opacity-80`} />
@@ -550,7 +568,9 @@ function TaskCard({
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-bold text-slate-100 text-sm leading-snug truncate tracking-tight">{task.title}</h3>
           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
-            <StatusIcon className="h-3 w-3" /> {status.label}
+            <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+              style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
+            {status.label}
           </span>
         </div>
 
@@ -1043,10 +1063,11 @@ export default function TasksPage() {
           {/* ── Active tasks ── */}
           {filtered.length > 0 && (
             <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>
-              {filtered.map((task) => (
+              {filtered.map((task, i) => (
                 <TaskCard
                   key={task.id}
                   task={task}
+                  index={i}
                   selected={selected.has(task.id)}
                   gridView={gridView}
                   onSelect={toggleSelect}
@@ -1076,10 +1097,11 @@ export default function TasksPage() {
 
               {completedOpen && (
                 <div className={`mt-3 ${gridView ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-2'}`}>
-                  {filteredDone.map((task) => (
+                  {filteredDone.map((task, i) => (
                     <div key={task.id} className="opacity-60 hover:opacity-100 transition-opacity">
                       <TaskCard
                         task={task}
+                        index={i}
                         selected={selected.has(task.id)}
                         gridView={gridView}
                         onSelect={toggleSelect}
