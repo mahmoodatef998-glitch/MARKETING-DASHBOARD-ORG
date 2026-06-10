@@ -274,18 +274,18 @@ const STATUS_CONFIG = {
 
 const TYPE_CONFIG = {
   reel_video: { label: 'Reel',     Icon: Film,       color: 'bg-pink-500/15 text-pink-400 border-pink-500/20',
-    header: 'from-pink-600/90 to-rose-700/90',   iconBg: 'bg-pink-500/20',   iconColor: 'text-pink-200' },
+    header: 'from-rose-900/80 to-slate-900',    iconBg: 'bg-rose-500/15',   iconColor: 'text-rose-300' },
   design:     { label: 'Design',   Icon: Palette,    color: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-    header: 'from-blue-600/90 to-indigo-700/90', iconBg: 'bg-blue-500/20',   iconColor: 'text-blue-200' },
+    header: 'from-blue-900/80 to-slate-900',    iconBg: 'bg-blue-500/15',   iconColor: 'text-blue-300' },
   ai_video:   { label: 'AI Video', Icon: Sparkles,   color: 'bg-purple-500/15 text-purple-400 border-purple-500/20',
-    header: 'from-purple-600/90 to-violet-700/90', iconBg: 'bg-purple-500/20', iconColor: 'text-purple-200' },
+    header: 'from-violet-900/80 to-slate-900',  iconBg: 'bg-violet-500/15', iconColor: 'text-violet-300' },
   post:       { label: 'Post',     Icon: Smartphone, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
-    header: 'from-cyan-600/90 to-teal-700/90',   iconBg: 'bg-cyan-500/20',   iconColor: 'text-cyan-200' },
+    header: 'from-teal-900/80 to-slate-900',    iconBg: 'bg-teal-500/15',   iconColor: 'text-teal-300' },
   custom:     { label: 'Custom',   Icon: Wrench,     color: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
-    header: 'from-slate-600/90 to-slate-700/90', iconBg: 'bg-slate-500/20',  iconColor: 'text-slate-300' },
+    header: 'from-slate-800/90 to-slate-900',   iconBg: 'bg-slate-500/15',  iconColor: 'text-slate-400' },
 } as const
 
-const TYPE_FALLBACK_HEADER = 'from-slate-700/80 to-slate-800/80'
+const TYPE_FALLBACK_HEADER = 'from-slate-800/90 to-slate-900'
 
 const PRIORITY_CONFIG = {
   low:    { label: 'Low',    dot: 'bg-slate-500',             color: 'text-slate-500' },
