@@ -334,11 +334,11 @@ function dueBorderStyle(dueDate: string | undefined | null): { border: string; b
 
 function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
   const initials = name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
-  const dim = size === 'md' ? 'h-7 w-7' : 'h-5 w-5'
-  const txt = size === 'md' ? 'text-[10px]' : 'text-[9px]'
+  const dim = size === 'md' ? 'h-8 w-8' : 'h-6 w-6'
+  const txt = size === 'md' ? 'text-xs'   : 'text-[10px]'
   return (
     <div className={`${dim} rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0`}>
-      <span className={`${txt} font-bold text-indigo-400`}>{initials}</span>
+      <span className={`${txt} font-bold text-indigo-300`}>{initials}</span>
     </div>
   )
 }
@@ -390,14 +390,14 @@ function TaskCard({
               <div className="absolute inset-y-0 w-2/5 -translate-x-full group-hover:translate-x-[280%] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent -skew-x-12 transition-transform duration-700 ease-out" />
             </div>
             {/* Badges overlaid on image */}
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-3 pb-2.5">
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-3 pb-3">
               {typeConf && (
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-white/90 border border-white/10">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-black/55 backdrop-blur-sm text-white border border-white/10">
                   <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
                 </span>
               )}
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ml-auto ${status.badge}`}>
-                <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm ml-auto ${status.badge}`}>
+                <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
                   style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
                 {status.label}
               </span>
@@ -431,8 +431,8 @@ function TaskCard({
             </div>
             {/* Status + select */}
             <div className="relative z-10 flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm ${status.badge}`}>
-                <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm ${status.badge}`}>
+                <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
                   style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
                 {status.label}
               </span>
@@ -449,53 +449,53 @@ function TaskCard({
 
           {/* Title + Description */}
           <div className="space-y-2">
-            <h3 className="font-bold text-slate-100 text-base leading-snug line-clamp-2 tracking-tight">
+            <h3 className="font-bold text-white text-[15px] leading-snug line-clamp-2 tracking-tight">
               {task.title}
             </h3>
             {task.description && (
-              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
+              <p className="text-[13px] text-slate-400 line-clamp-2 leading-relaxed">{task.description}</p>
             )}
           </div>
 
           {/* Assignee */}
           {assigneeName ? (
-            <div className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-slate-800/50 border border-slate-700/40 hover:border-slate-600/50 transition-colors">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600/60 transition-colors">
               <MemberAvatar name={assigneeName} size="md" />
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                <p className="text-[11px] font-medium text-slate-500 uppercase tracking-widest leading-none mb-1.5">
                   Assigned to
                 </p>
-                <p className="text-sm font-semibold text-slate-200 truncate">{assigneeName}</p>
+                <p className="text-sm font-bold text-slate-100 truncate">{assigneeName}</p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-dashed border-slate-800 text-slate-600">
-              <div className="h-7 w-7 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center shrink-0">
-                <span className="text-slate-600 text-[10px]">?</span>
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-slate-800">
+              <div className="h-8 w-8 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center shrink-0">
+                <span className="text-slate-600 text-xs">?</span>
               </div>
-              <span className="text-xs text-slate-600">Unassigned</span>
+              <span className="text-sm text-slate-600">Unassigned</span>
             </div>
           )}
 
           {/* Footer */}
-          <div className="mt-auto space-y-2.5 pt-4 border-t border-slate-800/70">
+          <div className="mt-auto space-y-3 pt-4 border-t border-slate-800/70">
             {/* Row A: priority + due */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <div className={`h-2 w-2 rounded-full ${priority.dot}`} />
-                  <span className={`text-[11px] font-semibold ${priority.color}`}>{priority.label}</span>
+                <div className="flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${priority.dot}`} />
+                  <span className={`text-xs font-bold ${priority.color}`}>{priority.label}</span>
                 </div>
                 {due && (
-                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${due.color}`}>
-                    <Calendar className="h-3 w-3" /> {due.text}
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${due.color}`}>
+                    <Calendar className="h-3.5 w-3.5" /> {due.text}
                   </span>
                 )}
               </div>
               {task.delivery_url && (
                 <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
-                  <ExternalLink className="h-3 w-3" /> Delivery
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
+                  <ExternalLink className="h-3.5 w-3.5" /> Delivery
                 </a>
               )}
             </div>
@@ -503,7 +503,7 @@ function TaskCard({
             {/* Row B: client + actions */}
             <div className="flex items-center justify-between gap-2">
               {task.client?.name ? (
-                <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700/50 truncate max-w-[55%] font-medium">
+                <span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60 truncate max-w-[55%]">
                   {task.client.name}
                 </span>
               ) : <span />}
@@ -511,12 +511,12 @@ function TaskCard({
                 {isAdmin && (
                   <>
                     <button onClick={() => onEdit(task)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-slate-200 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all">
-                      <Pencil className="h-3.5 w-3.5" />
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all">
+                      <Pencil className="h-4 w-4" />
                     </button>
                     <button onClick={() => onDelete(task.id)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
-                      <Trash2 className="h-3.5 w-3.5" />
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </>
                 )}
@@ -549,26 +549,26 @@ function TaskCard({
       <div className={`w-1 shrink-0 bg-gradient-to-b ${headerGradient} opacity-80`} />
 
       {/* Checkbox + type icon */}
-      <div className="flex flex-col items-center justify-center gap-1.5 px-3 py-3 shrink-0">
+      <div className="flex flex-col items-center justify-center gap-2 px-3.5 py-4 shrink-0">
         <button onClick={() => onSelect(task.id)}
-          className="text-slate-600 hover:text-indigo-400 transition-colors">
+          className="text-slate-500 hover:text-indigo-400 transition-colors">
           {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
         </button>
         {typeConf && (
-          <div className={`h-6 w-6 rounded-md ${typeConf.iconBg} flex items-center justify-center`}>
-            <typeConf.Icon className={`h-3.5 w-3.5 ${typeConf.iconColor}`} />
+          <div className={`h-7 w-7 rounded-lg ${typeConf.iconBg} flex items-center justify-center`}>
+            <typeConf.Icon className={`h-4 w-4 ${typeConf.iconColor}`} />
           </div>
         )}
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 py-3.5 pr-3 space-y-2">
+      <div className="flex-1 min-w-0 py-4 pr-4 space-y-2.5">
 
         {/* Row 1: title + status */}
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-bold text-slate-100 text-sm leading-snug truncate tracking-tight">{task.title}</h3>
-          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${status.badge}`}>
-            <StatusIcon className={`h-3 w-3 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+          <h3 className="font-bold text-white text-[15px] leading-snug truncate tracking-tight">{task.title}</h3>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full shrink-0 ${status.badge}`}>
+            <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
               style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
             {status.label}
           </span>
@@ -576,35 +576,35 @@ function TaskCard({
 
         {/* Row 2: description */}
         {task.description && (
-          <p className="text-xs text-slate-500 line-clamp-1 leading-relaxed">{task.description}</p>
+          <p className="text-[13px] text-slate-400 line-clamp-1 leading-relaxed">{task.description}</p>
         )}
 
-        {/* Row 3: meta */}
+        {/* Row 3: meta chips */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <div className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
-            <span className={`text-[11px] font-semibold ${priority.color}`}>{priority.label}</span>
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full ${priority.dot}`} />
+            <span className={`text-xs font-bold ${priority.color}`}>{priority.label}</span>
           </div>
           {due && (
-            <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${due.color}`}>
-              <Calendar className="h-3 w-3" /> {due.text}
+            <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${due.color}`}>
+              <Calendar className="h-3.5 w-3.5" /> {due.text}
             </span>
           )}
           {assigneeName && (
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700/40">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-800/70 border border-slate-700/50">
               <MemberAvatar name={assigneeName} />
-              <span className="text-[11px] font-semibold text-slate-300">{assigneeName}</span>
+              <span className="text-xs font-semibold text-slate-200">{assigneeName}</span>
             </div>
           )}
           {task.client?.name && (
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800/60 text-slate-400 border border-slate-700/40 font-medium">
+            <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-800/60 text-slate-300 border border-slate-700/50">
               {task.client.name}
             </span>
           )}
           {task.delivery_url && (
             <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
-              <ExternalLink className="h-3 w-3" /> Delivery
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
+              <ExternalLink className="h-3.5 w-3.5" /> Delivery
             </a>
           )}
         </div>
@@ -613,17 +613,17 @@ function TaskCard({
       {/* Thumbnail */}
       {task.reference_image_url && (
         <img src={task.reference_image_url} alt=""
-          className="h-16 w-16 object-cover rounded-xl my-3 border border-slate-700/40 opacity-50 group-hover:opacity-90 transition-opacity shrink-0" />
+          className="h-[68px] w-[68px] object-cover rounded-xl my-3 border border-slate-700/50 opacity-55 group-hover:opacity-90 transition-opacity shrink-0" />
       )}
 
       {/* Admin actions */}
       {isAdmin && (
         <div className="flex items-center gap-0.5 px-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-slate-700/50" onClick={() => onEdit(task)}>
-            <Pencil className="h-3.5 w-3.5" />
+          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-slate-700/50" onClick={() => onEdit(task)}>
+            <Pencil className="h-4 w-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10" onClick={() => onDelete(task.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
+          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:text-red-400 hover:bg-red-500/10" onClick={() => onDelete(task.id)}>
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       )}
