@@ -83,7 +83,9 @@ function InvoiceDetailsModal({
       const data = await res.json()
       setNextDate(data.nextInvoiceDate ?? null)
       onUpdate({ ...inv, status: 'paid' })
-      toast('Invoice marked as paid ✓', 'success')
+      toast('Invoice marked as done ✓', 'success')
+      // Auto-close modal after short delay so user sees the success state
+      setTimeout(() => onClose(), 1800)
     } else {
       toast('Failed to update', 'error')
     }
@@ -99,7 +101,7 @@ function InvoiceDetailsModal({
     })
     if (res.ok) {
       onUpdate({ ...inv, status: 'overdue' })
-      toast('Marked as overdue', 'success')
+      toast('Marked as overdue — reminder email sent to client', 'success')
     } else {
       toast('Failed to update', 'error')
     }
@@ -230,13 +232,13 @@ function InvoiceDetailsModal({
 
         {/* ── Actions ── */}
         <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
-          {/* Mark as Paid */}
+          {/* Mark as Done */}
           {(isSent || isOverdue) && (
             <Button onClick={markPaid} disabled={!!loading}
               className="gap-2 bg-green-600 hover:bg-green-500 text-white">
               {loading === 'paid'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Marking…</>
-                : <><BadgeCheck className="h-4 w-4" /> Mark as Paid</>}
+                : <><BadgeCheck className="h-4 w-4" /> Mark as Done</>}
             </Button>
           )}
 
@@ -464,11 +466,12 @@ function InvoiceRow({ inv, onClick }: { inv: Invoice; onClick: () => void }) {
 // ── Section Ribbon ─────────────────────────────────────────────────────────────
 
 function SectionRibbon({ label, color, icon, count }: {
-  label: string; color: 'violet' | 'green'; icon: React.ReactNode; count: number
+  label: string; color: 'violet' | 'green' | 'red'; icon: React.ReactNode; count: number
 }) {
   const styles = {
     violet: 'bg-violet-500/10 border-violet-500/30 text-violet-300',
     green:  'bg-green-500/10  border-green-500/30  text-green-400',
+    red:    'bg-red-500/10    border-red-500/30    text-red-400',
   }
   return (
     <div className="flex items-center gap-3 mb-4">
@@ -633,8 +636,9 @@ export default function InvoicesPage() {
     </div>
   )
 
-  const activeInvoices = invoices.filter((i) => i.status !== 'paid' && matches(i))
-  const doneInvoices   = invoices.filter((i) => i.status === 'paid'  && matches(i))
+  const doneInvoices    = invoices.filter((i) => i.status === 'paid'    && matches(i))
+  const overdueInvoices = invoices.filter((i) => i.status === 'overdue' && matches(i))
+  const activeInvoices  = invoices.filter((i) => i.status !== 'paid' && i.status !== 'overdue' && matches(i))
 
   const billingClients = clients.filter((c) =>
     c.billing_plans?.some((p) => p.is_active && p.cycle_type !== 'manual') &&
@@ -688,6 +692,23 @@ export default function InvoicesPage() {
         </div>
       ) : (
         <>
+          {/* ── OVERDUE ── */}
+          {overdueInvoices.length > 0 && (
+            <div>
+              <SectionRibbon
+                label="OVERDUE"
+                color="red"
+                icon={<AlertTriangle className="h-3.5 w-3.5 animate-pulse" />}
+                count={overdueInvoices.length}
+              />
+              <div className="space-y-2">
+                {overdueInvoices.map((inv) => (
+                  <InvoiceRow key={inv.id} inv={inv} onClick={() => setDetailInv(inv)} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── ACTIVE ── */}
           <div>
             <SectionRibbon
@@ -721,11 +742,11 @@ export default function InvoicesPage() {
             ) : null}
           </div>
 
-          {/* ── PAID ── */}
+          {/* ── DONE ── */}
           {doneInvoices.length > 0 && (
             <div>
               <SectionRibbon
-                label="PAID"
+                label="DONE"
                 color="green"
                 icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                 count={doneInvoices.length}

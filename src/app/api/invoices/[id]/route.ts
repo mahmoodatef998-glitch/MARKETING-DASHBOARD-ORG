@@ -5,6 +5,8 @@ import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionInvoice, deleteNotionPage } from '@/lib/notion'
 import { dbError } from '@/lib/utils'
 import { nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { sendEmail } from '@/lib/gmail'
+import { generateEmailContent } from '@/lib/gemini'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -59,6 +61,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (action === 'mark_overdue') {
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('*, client:clients(id, name, email)')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single()
+
+    if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const { data, error } = await supabase
       .from('invoices')
       .update({ status: 'overdue', updated_at: new Date().toISOString() })
@@ -67,6 +78,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .single()
 
     if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+
+    // Send overdue email notification to client
+    const client = inv.client as { name?: string; email?: string } | null
+    if (client?.email) {
+      try {
+        const { subject, body } = await generateEmailContent({
+          type:          'payment_reminder',
+          recipientName: client.name ?? 'Valued Client',
+          details:       `Invoice #${inv.invoice_number} for ${inv.total} was due on ${inv.due_date}. Please settle your payment at your earliest convenience.`,
+        })
+        await sendEmail({ to: client.email, subject, body })
+        await supabase.from('automation_logs').insert({
+          type:            'payment_reminder',
+          recipient_email: client.email,
+          subject,
+          status:          'sent',
+          created_at:      new Date().toISOString(),
+        })
+      } catch (emailErr: any) {
+        console.error('[mark_overdue] email failed:', emailErr.message)
+        await supabase.from('automation_logs').insert({
+          type:            'payment_reminder',
+          recipient_email: client.email,
+          subject:         'Payment Reminder',
+          status:          'failed',
+          error:           emailErr.message,
+          created_at:      new Date().toISOString(),
+        }).catch(() => {})
+      }
+    }
+
     return NextResponse.json(data)
   }
 
