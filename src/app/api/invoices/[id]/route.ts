@@ -98,14 +98,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         })
       } catch (emailErr: any) {
         console.error('[mark_overdue] email failed:', emailErr.message)
-        await supabase.from('automation_logs').insert({
-          type:            'payment_reminder',
-          recipient_email: client.email,
-          subject:         'Payment Reminder',
-          status:          'failed',
-          error:           emailErr.message,
-          created_at:      new Date().toISOString(),
-        }).catch(() => {})
+        try {
+          await supabase.from('automation_logs').insert({
+            type:            'payment_reminder',
+            recipient_email: client.email,
+            subject:         'Payment Reminder',
+            status:          'failed',
+            error:           emailErr.message,
+            created_at:      new Date().toISOString(),
+          })
+        } catch {}
       }
     }
 
