@@ -554,3 +554,18 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS received_amount   numeric(1
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS received_at       timestamptz;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference text;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_notes     text;
+
+-- ── Invoice payments (multi-payment / installments) ───────────────────────────
+CREATE TABLE IF NOT EXISTS public.invoice_payments (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id     uuid        NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+  amount         numeric(12,2) NOT NULL CHECK (amount > 0),
+  payment_method text        CHECK (payment_method IN ('bank_transfer','cash','vodafone_cash','instapay','credit_card','other')),
+  reference      text,
+  notes          text,
+  received_at    timestamptz NOT NULL DEFAULT now(),
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON public.invoice_payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_date    ON public.invoice_payments(received_at);

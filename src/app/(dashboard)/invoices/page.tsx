@@ -13,9 +13,26 @@ import {
   Plus, Search, Pencil, Trash2, Download, Loader2, X,
   Calendar, CheckCircle2, Clock, CreditCard, TrendingUp,
   AlertTriangle, BadgeCheck, ChevronRight, FileText, Send,
+  Banknote, Wallet, Smartphone, Building2,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { Invoice, Client, InvoiceItem, Task, BillingPlan } from '@/types'
+import type { Invoice, Client, InvoiceItem, Task, BillingPlan, InvoicePayment, PaymentMethod } from '@/types'
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
+  { value: 'bank_transfer', label: 'Bank Transfer',   icon: <Building2 className="h-3.5 w-3.5" /> },
+  { value: 'instapay',      label: 'InstaPay',         icon: <Smartphone className="h-3.5 w-3.5" /> },
+  { value: 'vodafone_cash', label: 'Vodafone Cash',   icon: <Wallet className="h-3.5 w-3.5" /> },
+  { value: 'cash',          label: 'Cash',             icon: <Banknote className="h-3.5 w-3.5" /> },
+  { value: 'credit_card',   label: 'Credit Card',     icon: <CreditCard className="h-3.5 w-3.5" /> },
+  { value: 'other',         label: 'Other',            icon: <Wallet className="h-3.5 w-3.5" /> },
+]
+
+function methodLabel(m?: string) {
+  return PAYMENT_METHODS.find((p) => p.value === m)?.label ?? m ?? 'Payment'
+}
+function methodIcon(m?: string) {
+  return PAYMENT_METHODS.find((p) => p.value === m)?.icon ?? <Wallet className="h-3.5 w-3.5" />
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,27 +81,42 @@ function InvoiceDetailsModal({
   onDelete: () => void
 }) {
   const { toast } = useToast()
-  const [loading,  setLoading]  = useState<'received' | 'overdue' | 'send' | null>(null)
+  const [loading,  setLoading]  = useState<'overdue' | 'send' | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
-  // receive payment inline form
-  const [showReceiveForm, setShowReceiveForm] = useState(false)
-  const [receiveForm, setReceiveForm] = useState({
-    amount:    String(inv.total ?? ''),
-    reference: inv.payment_reference ?? '',
-    notes:     inv.payment_notes ?? '',
+  const [payments, setPayments] = useState<InvoicePayment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({
+    amount:         '',
+    payment_method: '' as PaymentMethod | '',
+    reference:      '',
+    notes:          '',
+    received_at:    new Date().toISOString().split('T')[0],
   })
-  // package progress
+  const [savingPayment, setSavingPayment] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [activePkg, setActivePkg] = useState<{ name: string; price: number } | null>(null)
 
   const client    = inv.client as { name?: string; email?: string } | null
-  const isOverdue = inv.status === 'overdue'
   const isSent    = inv.status === 'sent'
   const isPaid    = inv.status === 'paid'
   const pastDue   = inv.due_date && new Date(inv.due_date) < new Date() && !isPaid
 
-  // Compute package progress from sibling invoices already in state
   const clientInvoices = allInvoices.filter((i) => i.client_id === inv.client_id)
-  const totalReceived  = clientInvoices.reduce((s, i) => s + (i.received_amount ?? 0), 0)
+  const pkgTotalReceived = clientInvoices.reduce((s, i) => s + (i.received_amount ?? 0), 0)
+
+  const totalPaid    = payments.reduce((s, p) => s + p.amount, 0)
+  const balanceDue   = Math.max(inv.total - totalPaid, 0)
+
+  async function loadPayments() {
+    setPaymentsLoading(true)
+    const res = await fetch(`/api/invoices/${inv.id}/payments`)
+    const data = await res.json()
+    setPayments(Array.isArray(data) ? data : [])
+    setPaymentsLoading(false)
+  }
+
+  useEffect(() => { void loadPayments() }, [inv.id])
 
   useEffect(() => {
     if (!inv.client_id) return
@@ -97,39 +129,49 @@ function InvoiceDetailsModal({
       .catch(() => {})
   }, [inv.client_id])
 
-  async function markReceived() {
-    const amount = Number(receiveForm.amount)
+  async function addPayment() {
+    const amount = Number(addForm.amount)
     if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return }
-    setLoading('received')
-    const res = await fetch(`/api/invoices/${inv.id}`, {
-      method:  'PATCH',
+    setSavingPayment(true)
+    const res = await fetch(`/api/invoices/${inv.id}/payments`, {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        action:            'mark_received',
-        received_amount:   amount,
-        payment_reference: receiveForm.reference || null,
-        payment_notes:     receiveForm.notes || null,
+        amount,
+        payment_method: addForm.payment_method || null,
+        reference:      addForm.reference || null,
+        notes:          addForm.notes || null,
+        received_at:    addForm.received_at ? new Date(addForm.received_at).toISOString() : undefined,
       }),
     })
     if (res.ok) {
       const data = await res.json()
-      setNextDate(data.nextInvoiceDate ?? null)
-      const fullyPaid = amount >= inv.total
-      onUpdate({
-        ...inv,
-        status:            fullyPaid ? 'paid' : inv.status,
-        received_amount:   amount,
-        received_at:       new Date().toISOString(),
-        payment_reference: receiveForm.reference || undefined,
-        payment_notes:     receiveForm.notes || undefined,
-      })
-      toast(fullyPaid ? 'Payment received — invoice marked as done ✓' : `Payment of ${formatCurrency(amount)} recorded`, 'success')
-      setShowReceiveForm(false)
-      if (fullyPaid) setTimeout(() => onClose(), 1800)
+      if (data.nextInvoiceDate) setNextDate(data.nextInvoiceDate)
+      onUpdate(data.invoice)
+      await loadPayments()
+      toast(data.invoice.status === 'paid' ? 'Fully paid — invoice closed ✓' : `${formatCurrency(amount)} recorded`, 'success')
+      setShowAddForm(false)
+      setAddForm({ amount: '', payment_method: '', reference: '', notes: '', received_at: new Date().toISOString().split('T')[0] })
     } else {
-      toast('Failed to record payment', 'error')
+      const j = await res.json().catch(() => ({}))
+      toast(j.error ?? 'Failed to record payment', 'error')
     }
-    setLoading(null)
+    setSavingPayment(false)
+  }
+
+  async function deletePayment(paymentId: string) {
+    if (!confirm('Delete this payment record?')) return
+    setDeletingId(paymentId)
+    const res = await fetch(`/api/invoice-payments/${paymentId}`, { method: 'DELETE' })
+    if (res.ok) {
+      const data = await res.json()
+      onUpdate(data.invoice)
+      await loadPayments()
+      toast('Payment removed', 'success')
+    } else {
+      toast('Failed to delete payment', 'error')
+    }
+    setDeletingId(null)
   }
 
   async function markOverdue() {
@@ -271,21 +313,21 @@ function InvoiceDetailsModal({
                 <span className="text-sm font-medium text-indigo-300">{activePkg.name}</span>
               </div>
               <span className="text-xs font-bold text-indigo-300">
-                {Math.min(Math.round((totalReceived / activePkg.price) * 100), 100)}%
+                {Math.min(Math.round((pkgTotalReceived / activePkg.price) * 100), 100)}%
               </span>
             </div>
             <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
-                style={{ width: `${Math.min((totalReceived / activePkg.price) * 100, 100)}%` }}
+                style={{ width: `${Math.min((pkgTotalReceived / activePkg.price) * 100, 100)}%` }}
               />
             </div>
             <div className="flex justify-between text-xs text-slate-400">
-              <span>Received: <span className="text-green-400 font-medium">{formatCurrency(totalReceived)}</span></span>
-              <span>Remaining: <span className="text-amber-400 font-medium">{formatCurrency(Math.max(activePkg.price - totalReceived, 0))}</span></span>
+              <span>Received: <span className="text-green-400 font-medium">{formatCurrency(pkgTotalReceived)}</span></span>
+              <span>Remaining: <span className="text-amber-400 font-medium">{formatCurrency(Math.max(activePkg.price - pkgTotalReceived, 0))}</span></span>
               <span>Total: <span className="text-slate-300">{formatCurrency(activePkg.price)}</span></span>
             </div>
-            {totalReceived >= activePkg.price && (
+            {pkgTotalReceived >= activePkg.price && (
               <div className="flex items-center gap-2 text-green-400 text-xs font-semibold pt-1">
                 <CheckCircle2 className="h-4 w-4" /> Package fully paid — ready for renewal
               </div>
@@ -293,63 +335,139 @@ function InvoiceDetailsModal({
           </div>
         )}
 
-        {/* ── Payment received info ── */}
-        {inv.received_amount != null && inv.received_amount > 0 && (
-          <div className="bg-green-950/30 border border-green-500/20 rounded-xl px-4 py-3 space-y-1">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider">Payment Received</p>
-            <div className="flex items-center justify-between">
-              <span className="text-green-400 font-bold">{formatCurrency(inv.received_amount)}</span>
-              {inv.received_at && <span className="text-xs text-slate-400">{formatDate(inv.received_at)}</span>}
-            </div>
-            {inv.payment_reference && (
-              <p className="text-xs text-slate-400">Ref: <span className="text-slate-300 font-mono">{inv.payment_reference}</span></p>
-            )}
-            {inv.payment_notes && <p className="text-xs text-slate-400">{inv.payment_notes}</p>}
+        {/* ── Payment summary bar ── */}
+        <div className={`grid grid-cols-3 gap-3 rounded-xl p-4 border ${isPaid ? 'bg-green-950/30 border-green-500/20' : balanceDue > 0 ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-800/50 border-slate-700'}`}>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Total</p>
+            <p className="font-bold text-slate-100 text-sm">{formatCurrency(inv.total)}</p>
           </div>
-        )}
+          <div className="text-center border-x border-slate-700">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Received</p>
+            <p className="font-bold text-green-400 text-sm">{formatCurrency(totalPaid)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Balance</p>
+            <p className={`font-bold text-sm ${balanceDue > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+              {balanceDue > 0 ? formatCurrency(balanceDue) : '✓ Paid'}
+            </p>
+          </div>
+        </div>
 
-        {/* ── Receive payment inline form ── */}
-        {showReceiveForm && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3">
-            <p className="text-sm font-medium text-slate-200">Record Payment</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Amount Received *</Label>
-                <Input
-                  type="number" min={0.01} step="0.01"
-                  value={receiveForm.amount}
-                  onChange={(e) => setReceiveForm((f) => ({ ...f, amount: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Reference / Receipt #</Label>
-                <Input
-                  value={receiveForm.reference}
-                  onChange={(e) => setReceiveForm((f) => ({ ...f, reference: e.target.value }))}
-                  placeholder="e.g. TRF-12345"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Notes (optional)</Label>
-              <Input
-                value={receiveForm.notes}
-                onChange={(e) => setReceiveForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="e.g. Bank transfer received"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={markReceived} disabled={!!loading}
-                className="gap-2 bg-green-600 hover:bg-green-500 text-white">
-                {loading === 'received'
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
-                  : <><BadgeCheck className="h-4 w-4" /> Confirm Receipt</>}
+        {/* ── Payments history ── */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Payment History</p>
+            {!isPaid && !showAddForm && (
+              <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-500 text-white gap-1"
+                onClick={() => setShowAddForm(true)}>
+                <Plus className="h-3 w-3" /> Add Payment
               </Button>
-              <Button variant="ghost" onClick={() => setShowReceiveForm(false)}>Cancel</Button>
-            </div>
+            )}
           </div>
-        )}
+
+          {paymentsLoading ? (
+            <div className="h-12 rounded-lg bg-slate-800/50 animate-pulse" />
+          ) : payments.length === 0 ? (
+            <div className="text-center py-4 text-sm text-slate-500 border border-dashed border-slate-700 rounded-xl">
+              No payments recorded yet
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {payments.map((p) => (
+                <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/60 rounded-xl px-3 py-2.5">
+                  <div className="h-8 w-8 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center text-green-400 shrink-0">
+                    {methodIcon(p.payment_method)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-green-400">{formatCurrency(p.amount)}</span>
+                      <span className="text-xs text-slate-500">{methodLabel(p.payment_method)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                      <span>{formatDate(p.received_at)}</span>
+                      {p.reference && <span className="font-mono text-slate-400">#{p.reference}</span>}
+                      {p.notes && <span className="truncate">{p.notes}</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deletePayment(p.id)}
+                    disabled={deletingId === p.id}
+                    className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    {deletingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add payment form */}
+          {showAddForm && (
+            <div className="bg-slate-800/60 border border-green-500/20 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-200">Record Payment</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Amount *</Label>
+                  <Input
+                    type="number" min={0.01} step="0.01"
+                    value={addForm.amount}
+                    onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
+                    placeholder={`Max ${formatCurrency(balanceDue)}`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Date</Label>
+                  <Input
+                    type="date"
+                    value={addForm.received_at}
+                    onChange={(e) => setAddForm((f) => ({ ...f, received_at: e.target.value }))}
+                    className="text-slate-300"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Payment Method</Label>
+                  <Select value={addForm.payment_method || undefined} onValueChange={(v) => setAddForm((f) => ({ ...f, payment_method: v as PaymentMethod }))}>
+                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          <span className="flex items-center gap-2">{m.icon}{m.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Reference / Receipt #</Label>
+                  <Input
+                    value={addForm.reference}
+                    onChange={(e) => setAddForm((f) => ({ ...f, reference: e.target.value }))}
+                    placeholder="e.g. TRF-12345"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notes (optional)</Label>
+                <Input
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. First installment"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={addPayment} disabled={savingPayment}
+                  className="gap-2 bg-green-600 hover:bg-green-500 text-white">
+                  {savingPayment
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+                    : <><BadgeCheck className="h-4 w-4" /> Confirm</>}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Notes ── */}
         {inv.notes && (
@@ -361,14 +479,6 @@ function InvoiceDetailsModal({
 
         {/* ── Actions ── */}
         <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
-          {/* Mark as Received */}
-          {!isPaid && !showReceiveForm && (
-            <Button onClick={() => setShowReceiveForm(true)} disabled={!!loading}
-              className="gap-2 bg-green-600 hover:bg-green-500 text-white">
-              <BadgeCheck className="h-4 w-4" />
-              {inv.received_amount ? 'Update Payment' : 'Mark as Received'}
-            </Button>
-          )}
 
           {/* Mark as Overdue */}
           {isSent && pastDue && (

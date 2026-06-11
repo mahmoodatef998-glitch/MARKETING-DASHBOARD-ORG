@@ -195,6 +195,19 @@ export interface Invoice {
   updated_at: string
 }
 
+export type PaymentMethod = 'bank_transfer' | 'cash' | 'vodafone_cash' | 'instapay' | 'credit_card' | 'other'
+
+export interface InvoicePayment {
+  id: string
+  invoice_id: string
+  amount: number
+  payment_method?: PaymentMethod
+  reference?: string
+  notes?: string
+  received_at: string
+  created_at: string
+}
+
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export type BillingCycle = 'monthly' | 'biweekly' | 'every_10_days' | 'custom_days' | 'manual'
 
