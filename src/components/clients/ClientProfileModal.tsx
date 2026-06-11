@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/toast'
 import {
   Plus, Pencil, Trash2, X, Loader2, Package,
-  Mail, Phone, Globe, CalendarDays, DollarSign,
+  Mail, Phone, Globe, CalendarDays, DollarSign, RefreshCw,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import PackageProgress from '@/components/clients/PackageProgress'
@@ -341,12 +341,18 @@ interface Props {
   onClose: () => void
 }
 
+function isPackageComplete(pkg: ClientPackage): boolean {
+  if (!pkg.items || pkg.items.length === 0) return false
+  return pkg.items.every((item) => (item.used ?? 0) >= item.total_quantity && item.total_quantity > 0)
+}
+
 export default function ClientProfileModal({ client, open, onClose }: Props) {
   const { toast } = useToast()
   const [packages, setPackages]       = useState<ClientPackage[]>([])
   const [loading, setLoading]         = useState(false)
   const [pkgOpen, setPkgOpen]         = useState(false)
   const [editingPkg, setEditingPkg]   = useState<ClientPackage | null>(null)
+  const [renewingId, setRenewingId]   = useState<string | null>(null)
 
   async function loadPackages() {
     if (!client) return
@@ -386,6 +392,24 @@ export default function ClientProfileModal({ client, open, onClose }: Props) {
     const res = await fetch(`/api/packages/${id}`, { method: 'DELETE' })
     if (res.ok) { toast('Package deleted', 'success'); loadPackages() }
     else toast('Failed to delete', 'error')
+  }
+
+  async function handleRenew(pkg: ClientPackage) {
+    if (!confirm(`Renew "${pkg.name}"? This will create a new package starting today and deactivate the current one.`)) return
+    setRenewingId(pkg.id)
+    try {
+      const res = await fetch('/api/packages/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId: pkg.id }),
+      })
+      if (res.ok) { toast('Package renewed successfully', 'success'); loadPackages() }
+      else { const j = await res.json(); toast(j.error ?? 'Failed to renew', 'error') }
+    } catch {
+      toast('Failed to renew package', 'error')
+    } finally {
+      setRenewingId(null)
+    }
   }
 
   if (!client) return null
@@ -458,19 +482,36 @@ export default function ClientProfileModal({ client, open, onClose }: Props) {
                 </div>
               ) : (
                 <>
-                  {activePackages.map((pkg) => (
-                    <div key={pkg.id} className="border border-slate-700 rounded-xl p-4 bg-slate-800/30 space-y-4">
-                      <PackageProgress pkg={pkg} />
-                      <div className="flex justify-end gap-1 pt-3 border-t border-slate-700/60">
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingPkg(pkg); setPkgOpen(true) }}>
-                          <Pencil className="h-3 w-3 mr-1" /> Edit
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs hover:text-red-400" onClick={() => handleDeletePackage(pkg.id)}>
-                          <Trash2 className="h-3 w-3 mr-1" /> Delete
-                        </Button>
+                  {activePackages.map((pkg) => {
+                    const complete = isPackageComplete(pkg)
+                    return (
+                      <div key={pkg.id} className={`border rounded-xl p-4 bg-slate-800/30 space-y-4 transition-colors ${complete ? 'border-emerald-500/40' : 'border-slate-700'}`}>
+                        <PackageProgress pkg={pkg} />
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-700/60">
+                          {complete ? (
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1"
+                              onClick={() => handleRenew(pkg)}
+                              disabled={renewingId === pkg.id}
+                            >
+                              {renewingId === pkg.id
+                                ? <><Loader2 className="h-3 w-3 animate-spin" /> Renewing…</>
+                                : <><RefreshCw className="h-3 w-3" /> Renew Package</>}
+                            </Button>
+                          ) : <span />}
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingPkg(pkg); setPkgOpen(true) }}>
+                              <Pencil className="h-3 w-3 mr-1" /> Edit
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs hover:text-red-400" onClick={() => handleDeletePackage(pkg.id)}>
+                              <Trash2 className="h-3 w-3 mr-1" /> Delete
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {inactivePackages.length > 0 && (
                     <details className="group">
                       <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 list-none flex items-center gap-1">
