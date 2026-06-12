@@ -72,7 +72,7 @@ function monthYMStr(year: number, month: number) {
 
 // ─── Event Chip ───────────────────────────────────────────────────────────────
 
-function EventChip({ event, onClick }: { event: PublishEvent; onClick: () => void }) {
+function EventChip({ event, onClick }: { event: PublishEvent; onClick: (e: React.MouseEvent) => void }) {
   const p          = PLATFORM_META[event.platform]
   const isDone     = event.status === 'published'
   const isFailed   = event.status === 'failed'
@@ -224,7 +224,78 @@ function EventDetail({ event, onClose, onMarkPublished }: {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Day Events Modal ─────────────────────────────────────────────────────────
+
+function DayEventsModal({ date, events, onClose, onSelectEvent }: {
+  date: string
+  events: PublishEvent[]
+  onClose: () => void
+  onSelectEvent: (ev: PublishEvent) => void
+}) {
+  const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const published = events.filter(e => e.status === 'published').length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+          <div>
+            <p className="font-semibold text-slate-100">{label}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {events.length} event{events.length !== 1 ? 's' : ''}
+              {published > 0 && <span className="ml-2 text-green-400">· {published} published</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xl leading-none p-1">×</button>
+        </div>
+
+        {/* Events list */}
+        <div className="overflow-y-auto p-3 space-y-2">
+          {events.map(ev => {
+            const p      = PLATFORM_META[ev.platform]
+            const isDone = ev.status === 'published'
+            const isFailed = ev.status === 'failed'
+            return (
+              <button key={ev.id} onClick={() => { onClose(); onSelectEvent(ev) }}
+                className={cn(
+                  'w-full text-left rounded-xl px-3 py-2.5 border transition-all hover:opacity-90 active:scale-[0.98]',
+                  isDone   ? 'bg-green-500/10 border-green-500/30' :
+                  isFailed ? 'bg-red-500/10 border-red-500/30' :
+                  cn(p.bg, p.border)
+                )}>
+                <div className="flex items-center gap-2">
+                  <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border',
+                    isDone ? 'bg-green-500/20 border-green-500/40' : cn(p.bg, p.border))}>
+                    {isDone
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                      : <p.icon className={cn('h-3.5 w-3.5', p.color)} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('text-sm font-semibold', isDone ? 'text-green-400' : isFailed ? 'text-red-400' : p.color)}>
+                        {fmtTime(ev.scheduled_at)}
+                      </span>
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded-full border', STATUS_STYLE[ev.status])}>
+                        {ev.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 truncate mt-0.5">{ev.item.title}</p>
+                    <p className="text-xs text-slate-500 truncate">{ev.item.plan.client.name}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-600 shrink-0" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 
 export default function PublishCalendarPage() {
   const router = useRouter()
@@ -242,6 +313,7 @@ export default function PublishCalendarPage() {
   const [filterStatus,  setFilterStatus]  = useState('all')
   const [filterType,    setFilterType]    = useState('all')
   const [selectedEvent, setSelectedEvent] = useState<PublishEvent | null>(null)
+  const [selectedDay,   setSelectedDay]   = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
@@ -478,11 +550,14 @@ export default function PublishCalendarPage() {
                   const allDone = dayEvs.length > 0 && dayEvs.every(e => e.status === 'published')
 
                   return (
-                    <div key={idx} className={cn(
-                      'min-h-[100px] p-1.5 border-b border-r border-slate-800/60 transition-colors',
-                      day === null && 'bg-slate-950/30',
-                      allDone && 'bg-green-500/5',
-                    )}>
+                    <div key={idx}
+                      onClick={() => day !== null && dayEvs.length > 0 && setSelectedDay(ymd)}
+                      className={cn(
+                        'min-h-[100px] p-1.5 border-b border-r border-slate-800/60 transition-colors',
+                        day === null && 'bg-slate-950/30',
+                        allDone && 'bg-green-500/5',
+                        day !== null && dayEvs.length > 0 && 'cursor-pointer hover:bg-slate-800/30',
+                      )}>
                       {day !== null && (
                         <>
                           <div className="flex items-center gap-1 mb-1.5">
@@ -503,10 +578,14 @@ export default function PublishCalendarPage() {
                           </div>
                           <div className="space-y-0.5">
                             {dayEvs.slice(0, 3).map(ev => (
-                              <EventChip key={ev.id} event={ev} onClick={() => setSelectedEvent(ev)} />
+                              <EventChip key={ev.id} event={ev} onClick={(e) => { e.stopPropagation(); setSelectedEvent(ev) }} />
                             ))}
                             {dayEvs.length > 3 && (
-                              <p className="text-[10px] text-slate-500 pl-1">+{dayEvs.length - 3} more</p>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedDay(ymd) }}
+                                className="text-[10px] text-indigo-400 hover:text-indigo-300 pl-1 font-medium transition-colors">
+                                +{dayEvs.length - 3} more
+                              </button>
                             )}
                           </div>
                         </>
@@ -558,12 +637,15 @@ export default function PublishCalendarPage() {
                   const dayEvs = eventsByDay[ymd] ?? []
                   const isToday = ymd === toYMD(now)
                   return (
-                    <div key={i} className={cn(
-                      'p-2 border-r border-slate-800 last:border-0 space-y-1',
-                      isToday && 'bg-indigo-600/5'
-                    )}>
+                    <div key={i}
+                      onClick={() => dayEvs.length > 0 && setSelectedDay(ymd)}
+                      className={cn(
+                        'p-2 border-r border-slate-800 last:border-0 space-y-1',
+                        isToday && 'bg-indigo-600/5',
+                        dayEvs.length > 0 && 'cursor-pointer hover:bg-slate-800/30 transition-colors',
+                      )}>
                       {dayEvs.map(ev => (
-                        <EventChip key={ev.id} event={ev} onClick={() => setSelectedEvent(ev)} />
+                        <EventChip key={ev.id} event={ev} onClick={(e) => { e.stopPropagation(); setSelectedEvent(ev) }} />
                       ))}
                       {dayEvs.length === 0 && (
                         <p className="text-[10px] text-slate-700 text-center pt-4">—</p>
@@ -583,6 +665,16 @@ export default function PublishCalendarPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Day events modal */}
+      {selectedDay && (
+        <DayEventsModal
+          date={selectedDay}
+          events={eventsByDay[selectedDay] ?? []}
+          onClose={() => setSelectedDay(null)}
+          onSelectEvent={(ev) => { setSelectedDay(null); setSelectedEvent(ev) }}
+        />
       )}
 
       {/* Event detail panel */}
