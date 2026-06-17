@@ -263,6 +263,9 @@ function InvoiceDetailsModal({
   const [markingId,       setMarkingId]       = useState<string | null>(null)
   const [deletingId,      setDeletingId]      = useState<string | null>(null)
   const [showRenew,       setShowRenew]       = useState(false)
+  const [showAddSchedule, setShowAddSchedule] = useState(false)
+  const [scheduleItems,   setScheduleItems]   = useState<PaymentInstallmentInput[]>([])
+  const [savingSchedule,  setSavingSchedule]  = useState(false)
   const [activePkg,       setActivePkg]       = useState<{ name: string; price: number } | null>(null)
 
   const [addForm, setAddForm] = useState({
@@ -384,6 +387,26 @@ function InvoiceDetailsModal({
       toast(j.error ?? 'Failed to record', 'error')
     }
     setMarkingId(null)
+  }
+
+  async function saveSchedule() {
+    if (!scheduleItems.length) { toast('Choose a payment structure first', 'error'); return }
+    setSavingSchedule(true)
+    const res = await fetch(`/api/invoices/${inv.id}/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installments: scheduleItems }),
+    })
+    if (res.ok) {
+      await loadPayments()
+      setShowAddSchedule(false)
+      setScheduleItems([])
+      toast('Payment schedule added ✓', 'success')
+    } else {
+      const j = await res.json().catch(() => ({}))
+      toast(j.error ?? 'Failed to save schedule', 'error')
+    }
+    setSavingSchedule(false)
   }
 
   async function markOverdue() {
@@ -571,11 +594,17 @@ function InvoiceDetailsModal({
             <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
               {hasSchedule ? 'Payment Schedule' : 'Payment History'}
             </p>
-            {!isPaid && !hasSchedule && !showAddForm && (
-              <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-500 text-white gap-1"
-                onClick={() => setShowAddForm(true)}>
-                <Plus className="h-3 w-3" /> Add Payment
-              </Button>
+            {!isPaid && !hasSchedule && !showAddForm && !showAddSchedule && (
+              <div className="flex gap-2">
+                <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1"
+                  onClick={() => setShowAddSchedule(true)}>
+                  <Calendar className="h-3 w-3" /> Add Schedule
+                </Button>
+                <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-500 text-white gap-1"
+                  onClick={() => setShowAddForm(true)}>
+                  <Plus className="h-3 w-3" /> Add Payment
+                </Button>
+              </div>
             )}
           </div>
 
@@ -713,6 +742,25 @@ function InvoiceDetailsModal({
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {/* Add schedule to existing invoice */}
+          {showAddSchedule && !hasSchedule && (
+            <div className="bg-slate-800/60 border border-indigo-500/20 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-200">Add Payment Schedule</p>
+              <PaymentStructureSelector total={inv.total} onChange={setScheduleItems} />
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" onClick={saveSchedule} disabled={savingSchedule || !scheduleItems.length}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1">
+                  {savingSchedule
+                    ? <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>
+                    : <><CheckCircle2 className="h-3 w-3" /> Confirm Schedule</>}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowAddSchedule(false); setScheduleItems([]) }}>
+                  Cancel
+                </Button>
+              </div>
             </div>
           )}
 
