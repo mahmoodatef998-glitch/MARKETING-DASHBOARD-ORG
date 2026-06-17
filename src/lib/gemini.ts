@@ -113,6 +113,56 @@ Return ONLY the caption text (no JSON, no quotes, no explanation).`
   return result.response.text().trim()
 }
 
+export async function analyzeFinancials(data: {
+  revenue:      { thisMonth: number; lastMonth: number; ytd: number }
+  expenses:     { thisMonth: number; lastMonth: number; ytd: number; byCategory: Record<string, number> }
+  profit:       { thisMonth: number; lastMonth: number }
+  outstanding:  { total: number; count: number; overdueTotal: number; overdueCount: number }
+  mrr:          number
+  collectionRate: number
+  cashFlow:     Array<{ month: string; revenue: number; expenses: number; profit: number }>
+  topClients:   Array<{ name: string; revenue: number }>
+  overdueInvoices: Array<{ invoice_number: string; client: string; total: number; due_date: string }>
+}): Promise<{ health_score: number; summary: string; insights: Array<{ type: string; title: string; detail: string }>; recommendations: Array<{ priority: string; title: string; detail: string; action_type: string; action_label?: string; action_data?: Record<string, unknown> }> }> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+  const prompt = `You are a CFO AI assistant for a marketing agency. Analyze this financial data and return a JSON object.
+
+FINANCIAL DATA:
+${JSON.stringify(data, null, 2)}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "health_score": <0-100 integer based on profit margin, collection rate, outstanding debt>,
+  "summary": "<2-3 sentence executive summary of financial health>",
+  "insights": [
+    { "type": "<warning|info|success>", "title": "<short title>", "detail": "<one sentence>" }
+  ],
+  "recommendations": [
+    {
+      "priority": "<high|medium|low>",
+      "title": "<action title>",
+      "detail": "<what to do and why>",
+      "action_type": "<send_payment_reminders|generate_invoice|none>",
+      "action_label": "<button label if action_type != none>",
+      "action_data": {}
+    }
+  ]
+}
+
+Rules:
+- health_score: 80-100 = healthy, 60-79 = caution, 0-59 = critical
+- Max 3 insights, max 4 recommendations, ordered by priority
+- Be specific with numbers from the data (use actual amounts)
+- action_type "send_payment_reminders" when overdue invoices exist
+- action_type "generate_invoice" when billing plan renewal is due
+- action_type "none" for informational recommendations`
+
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(text)
+}
+
 export async function chatWithAssistant(opts: {
   message: string
   history: Array<{ role: 'user' | 'model'; parts: string }>

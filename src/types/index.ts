@@ -197,6 +197,44 @@ export interface Invoice {
 
 export type PaymentMethod = 'bank_transfer' | 'cash' | 'vodafone_cash' | 'instapay' | 'credit_card' | 'other'
 
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+export type ExpenseCategory = 'salary' | 'tools' | 'ads' | 'office' | 'freelancer' | 'other'
+
+export interface Expense {
+  id: string
+  title: string
+  amount: number
+  category?: ExpenseCategory
+  date: string
+  notes?: string
+  recurring: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ─── Financial AI ─────────────────────────────────────────────────────────────
+export interface FinancialInsight {
+  type: 'warning' | 'info' | 'success'
+  title: string
+  detail: string
+}
+
+export interface FinancialRecommendation {
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  detail: string
+  action_type: 'send_payment_reminders' | 'generate_invoice' | 'none'
+  action_label?: string
+  action_data?: Record<string, unknown>
+}
+
+export interface FinancialAnalysis {
+  health_score: number
+  summary: string
+  insights: FinancialInsight[]
+  recommendations: FinancialRecommendation[]
+}
+
 export interface InvoicePayment {
   id: string
   invoice_id: string

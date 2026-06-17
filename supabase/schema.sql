@@ -569,3 +569,18 @@ CREATE TABLE IF NOT EXISTS public.invoice_payments (
 
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON public.invoice_payments(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_date    ON public.invoice_payments(received_at);
+
+-- ── Expenses ──────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.expenses (
+  id          uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       text          NOT NULL,
+  amount      numeric(12,2) NOT NULL CHECK (amount > 0),
+  category    text          CHECK (category IN ('salary','tools','ads','office','freelancer','other')),
+  date        date          NOT NULL DEFAULT CURRENT_DATE,
+  notes       text,
+  recurring   boolean       NOT NULL DEFAULT false,
+  created_at  timestamptz   NOT NULL DEFAULT now(),
+  updated_at  timestamptz   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date     ON public.expenses(date);
+CREATE INDEX IF NOT EXISTS idx_expenses_category ON public.expenses(category);
