@@ -49,7 +49,7 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   // ── Finance ──────────────────────────────────────────────────────────────────
   { href: '/finance',          label: 'Overview',         icon: TrendingUp,      roles: ['admin'],                        sectionLabel: 'Finance' },
   { href: '/invoices',         label: 'Invoices',         icon: FileText,        roles: ['admin'] },
-  { href: '/billing',          label: 'Billing',          icon: CreditCard,      roles: ['admin'] },
+  { href: '/billing',          label: 'History',          icon: CreditCard,      roles: ['admin'] },
   // ── Content ──────────────────────────────────────────────────────────────────
   { href: '/content-plans',    label: 'Content Plans',    icon: LayoutList,      roles: ['admin', 'media_buyer'],         sectionLabel: 'Content' },
   { href: '/publish-calendar', label: 'Publish Calendar', icon: Calendar,        roles: ['admin', 'media_buyer'] },
