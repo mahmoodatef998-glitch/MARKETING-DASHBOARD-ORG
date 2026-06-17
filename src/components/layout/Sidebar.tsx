@@ -37,7 +37,8 @@ import { useEffect, useRef, useState } from 'react'
 
 // roles: null = visible to all authenticated dashboard users
 //        string[] = visible only to users whose role is in the list
-const nav: { href: string; label: string; icon: React.ElementType; roles: string[] | null }[] = [
+// sectionLabel: renders a section header above this item (shown only when item is visible)
+const nav: { href: string; label: string; icon: React.ElementType; roles: string[] | null; sectionLabel?: string }[] = [
   { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, roles: null },
   { href: '/reports',         label: 'Reports',       icon: BarChart2,       roles: ['admin'] },
   { href: '/clients',         label: 'Clients',       icon: Users,           roles: ['admin'] },
@@ -45,9 +46,9 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     roles: null },
   { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       roles: null },
   { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    roles: ['admin'] },
+  { href: '/finance',         label: 'Overview',      icon: TrendingUp,      roles: ['admin'], sectionLabel: 'Finance' },
   { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
   { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
-  { href: '/finance',         label: 'Finance',       icon: TrendingUp,      roles: ['admin'] },
   { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },
   { href: '/content-plans',     label: 'Content Plans',    icon: LayoutList,   roles: ['admin', 'media_buyer'] },
   { href: '/publish-calendar', label: 'Publish Calendar', icon: Calendar,     roles: ['admin', 'media_buyer'] },
@@ -239,40 +240,49 @@ function SidebarContent({
           </Link>
         )}
 
-        {visibleNav.map(({ href, label, icon: Icon }) => {
+        {visibleNav.map(({ href, label, icon: Icon, sectionLabel }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           const badgeCount = badgeMap[href] ?? 0
           return (
-            <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
-              onClick={onNavClick}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
-                active
-                  ? 'bg-indigo-600/20 text-indigo-400'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+            <div key={href}>
+              {sectionLabel && !collapsed && (
+                <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500 select-none">
+                  {sectionLabel}
+                </p>
               )}
-            >
-              <div className="relative shrink-0">
-                <Icon className={cn('h-4 w-4', active && 'text-indigo-400')} />
-                {collapsed && badgeCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+              {sectionLabel && collapsed && (
+                <div className="my-2 mx-3 border-t border-slate-700/60" />
+              )}
+              <Link
+                href={href}
+                title={collapsed ? label : undefined}
+                onClick={onNavClick}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                  active
+                    ? 'bg-indigo-600/20 text-indigo-400'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                )}
+              >
+                <div className="relative shrink-0">
+                  <Icon className={cn('h-4 w-4', active && 'text-indigo-400')} />
+                  {collapsed && badgeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
+                </div>
+                {!collapsed && <span>{label}</span>}
+                {!collapsed && badgeCount > 0 && (
+                  <span className="ml-auto min-w-[18px] h-4.5 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center leading-none">
                     {badgeCount > 99 ? '99+' : badgeCount}
                   </span>
                 )}
-              </div>
-              {!collapsed && <span>{label}</span>}
-              {!collapsed && badgeCount > 0 && (
-                <span className="ml-auto min-w-[18px] h-4.5 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center leading-none">
-                  {badgeCount > 99 ? '99+' : badgeCount}
-                </span>
-              )}
-              {active && !collapsed && badgeCount === 0 && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              )}
-            </Link>
+                {active && !collapsed && badgeCount === 0 && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                )}
+              </Link>
+            </div>
           )
         })}
       </nav>
