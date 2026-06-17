@@ -12,28 +12,12 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
   return null
 }
 
-// GET /api/invoices/[id]/payments — list all payments for an invoice
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data, error } = await supabase
-    .from('invoice_payments')
-    .select('*')
-    .eq('invoice_id', id)
-    .order('installment_no', { ascending: true, nullsFirst: false })
-    .order('due_date', { ascending: true, nullsFirst: false })
-    .order('received_at', { ascending: true, nullsFirst: false })
-
-  if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
-  return NextResponse.json(data ?? [])
-}
-
-// POST /api/invoices/[id]/payments — record a new payment
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+// PATCH — mark a pending installment as received
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; paymentId: string }> }
+) {
+  const { id, paymentId } = await params
   const supabase = await createServerClient()
   const authErr = await requireAdmin(supabase)
   if (authErr) return authErr
@@ -42,8 +26,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const amount = Number(body.amount ?? 0)
   if (!amount || amount <= 0) return NextResponse.json({ error: 'Valid amount required' }, { status: 400 })
 
-  // Fetch invoice
   const adminDb = createAdminClient()
+
+  const { error: payErr } = await adminDb
+    .from('invoice_payments')
+    .update({
+      amount,
+      payment_method: body.payment_method || null,
+      reference:      body.reference || null,
+      notes:          body.notes || null,
+      received_at:    body.received_at ? new Date(body.received_at).toISOString() : new Date().toISOString(),
+      status:         'paid',
+    })
+    .eq('id', paymentId)
+    .eq('invoice_id', id)
+
+  if (payErr) return NextResponse.json({ error: dbError(payErr) }, { status: 500 })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: inv } = await adminDb
     .from('invoices')
     .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
@@ -53,40 +53,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
-  // Insert payment record (ad-hoc, always paid immediately)
-  const { data: payment, error: payErr } = await adminDb
-    .from('invoice_payments')
-    .insert({
-      invoice_id:     id,
-      amount,
-      payment_method: body.payment_method || null,
-      reference:      body.reference || null,
-      notes:          body.notes || null,
-      received_at:    body.received_at || new Date().toISOString(),
-      status:         'paid',
-    })
-    .select()
-    .single()
-
-  if (payErr) return NextResponse.json({ error: dbError(payErr) }, { status: 500 })
-
-  // Recalculate total received (only paid installments)
-  const { data: allPayments } = await adminDb
+  const { data: paidRows } = await adminDb
     .from('invoice_payments')
     .select('amount')
     .eq('invoice_id', id)
     .eq('status', 'paid')
 
-  const totalReceived = (allPayments ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+  const totalReceived = (paidRows ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
   const fullyPaid = totalReceived >= inv.total
 
-  // Update invoice received_amount and status
   const { data: updatedInv, error: invErr } = await adminDb
     .from('invoices')
     .update({
       received_amount: totalReceived,
       received_at:     new Date().toISOString(),
-      status:          fullyPaid ? 'paid' : inv.status,
+      status:          fullyPaid ? 'paid' : (inv.status === 'draft' ? 'sent' : inv.status),
       updated_at:      new Date().toISOString(),
     })
     .eq('id', id)
@@ -95,7 +76,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (invErr) return NextResponse.json({ error: dbError(invErr) }, { status: 500 })
 
-  // Advance billing plan if fully paid
   let nextInvoiceDateResult: string | null = null
   if (fullyPaid) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,5 +89,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ payment, invoice: updatedInv, nextInvoiceDate: nextInvoiceDateResult }, { status: 201 })
+  return NextResponse.json({ invoice: updatedInv, nextInvoiceDate: nextInvoiceDateResult })
 }

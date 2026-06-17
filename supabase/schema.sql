@@ -570,6 +570,17 @@ CREATE TABLE IF NOT EXISTS public.invoice_payments (
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON public.invoice_payments(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_date    ON public.invoice_payments(received_at);
 
+-- ── Payment schedule columns (installment tracking) ───────────────────────────
+ALTER TABLE public.invoice_payments ALTER COLUMN received_at DROP NOT NULL;
+ALTER TABLE public.invoice_payments
+  ADD COLUMN IF NOT EXISTS due_date        date,
+  ADD COLUMN IF NOT EXISTS status          text NOT NULL DEFAULT 'paid'
+    CHECK (status IN ('pending','paid','overdue')),
+  ADD COLUMN IF NOT EXISTS installment_no  int;
+
+CREATE INDEX IF NOT EXISTS idx_ip_status   ON public.invoice_payments(status);
+CREATE INDEX IF NOT EXISTS idx_ip_due_date ON public.invoice_payments(due_date);
+
 -- ── Expenses ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.expenses (
   id          uuid          PRIMARY KEY DEFAULT gen_random_uuid(),

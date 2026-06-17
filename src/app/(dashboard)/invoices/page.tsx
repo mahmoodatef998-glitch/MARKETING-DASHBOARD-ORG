@@ -13,10 +13,182 @@ import {
   Plus, Search, Pencil, Trash2, Download, Loader2, X,
   Calendar, CheckCircle2, Clock, CreditCard, TrendingUp,
   AlertTriangle, BadgeCheck, ChevronRight, FileText, Send,
-  Banknote, Wallet, Smartphone, Building2,
+  Banknote, Wallet, Smartphone, Building2, RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { Invoice, Client, InvoiceItem, Task, BillingPlan, InvoicePayment, PaymentMethod } from '@/types'
+import type { Invoice, Client, InvoiceItem, Task, BillingPlan, InvoicePayment, PaymentMethod, PaymentStructureType, PaymentInstallmentInput } from '@/types'
+
+// ── Payment schedule helpers ───────────────────────────────────────────────────
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function generateSchedule(
+  type: PaymentStructureType,
+  total: number,
+  params: { single_due?: string; advance_pct?: number; advance_due?: string; final_due?: string; start_date?: string; custom?: { installment_no: number; amount: string; due_date: string }[] }
+): PaymentInstallmentInput[] {
+  if (!total || total <= 0) return []
+  if (type === 'single' && params.single_due) {
+    return [{ installment_no: 1, amount: total, due_date: params.single_due }]
+  }
+  if (type === 'split_50_50' && params.advance_due && params.final_due) {
+    const pct = (params.advance_pct ?? 50) / 100
+    const adv = Math.round(total * pct * 100) / 100
+    return [
+      { installment_no: 1, amount: adv, due_date: params.advance_due },
+      { installment_no: 2, amount: Math.round((total - adv) * 100) / 100, due_date: params.final_due },
+    ]
+  }
+  if (type === 'every_10_days' && params.start_date) {
+    const part = Math.floor((total / 3) * 100) / 100
+    const rem  = Math.round((total - part * 2) * 100) / 100
+    return [
+      { installment_no: 1, amount: part, due_date: params.start_date },
+      { installment_no: 2, amount: part, due_date: addDays(params.start_date, 10) },
+      { installment_no: 3, amount: rem,  due_date: addDays(params.start_date, 20) },
+    ]
+  }
+  if (type === 'custom' && params.custom?.length) {
+    return params.custom
+      .filter(c => c.due_date && Number(c.amount) > 0)
+      .map(c => ({ installment_no: c.installment_no, amount: Number(c.amount), due_date: c.due_date }))
+  }
+  return []
+}
+
+function daysRelative(dateStr: string): number {
+  const diff = new Date(dateStr).setHours(0,0,0,0) - new Date().setHours(0,0,0,0)
+  return Math.ceil(diff / 86400000)
+}
+
+// ── Payment Structure Selector ─────────────────────────────────────────────────
+
+function PaymentStructureSelector({ total, onChange }: { total: number; onChange: (s: PaymentInstallmentInput[]) => void }) {
+  const today = new Date().toISOString().split('T')[0]
+  const [type, setType] = useState<PaymentStructureType | ''>('')
+  const [params, setParams] = useState({
+    single_due:   '',
+    advance_pct:  50,
+    advance_due:  today,
+    final_due:    '',
+    start_date:   today,
+    custom: [{ installment_no: 1, amount: '', due_date: today }] as { installment_no: number; amount: string; due_date: string }[],
+  })
+  function setP(k: string, v: unknown) { setParams(p => ({ ...p, [k]: v })) }
+
+  useEffect(() => {
+    if (!type) { onChange([]); return }
+    onChange(generateSchedule(type, total, params))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, total, JSON.stringify(params)])
+
+  const preview = type ? generateSchedule(type, total, params) : []
+
+  return (
+    <div className="space-y-3 border-t border-slate-700 pt-4">
+      <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Schedule (optional)</Label>
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          { value: 'single',        label: 'Single Payment'  },
+          { value: 'split_50_50',   label: 'Advance + Final' },
+          { value: 'every_10_days', label: 'Every 10 Days'   },
+          { value: 'custom',        label: 'Custom'          },
+        ] as { value: PaymentStructureType; label: string }[]).map(opt => (
+          <button key={opt.value} type="button"
+            onClick={() => setType(t => t === opt.value ? '' : opt.value)}
+            className={`text-left px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+              type === opt.value ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'
+            }`}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {type === 'single' && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Due Date *</Label>
+          <Input type="date" value={params.single_due} onChange={e => setP('single_due', e.target.value)} className="text-slate-300" />
+        </div>
+      )}
+
+      {type === 'split_50_50' && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Advance %</Label>
+            <Input type="number" min={1} max={99} value={params.advance_pct} onChange={e => setP('advance_pct', Number(e.target.value))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Advance Due Date</Label>
+            <Input type="date" value={params.advance_due} onChange={e => setP('advance_due', e.target.value)} className="text-slate-300" />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-xs">Final Payment Due Date</Label>
+            <Input type="date" value={params.final_due} onChange={e => setP('final_due', e.target.value)} className="text-slate-300" />
+          </div>
+        </div>
+      )}
+
+      {type === 'every_10_days' && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">First Payment Date</Label>
+          <Input type="date" value={params.start_date} onChange={e => setP('start_date', e.target.value)} className="text-slate-300" />
+        </div>
+      )}
+
+      {type === 'custom' && (
+        <div className="space-y-2">
+          {params.custom.map((c, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+              <span className="col-span-1 text-xs text-slate-500 text-right">#{i+1}</span>
+              <div className="col-span-5">
+                <Input type="number" min={0.01} step="0.01" placeholder="Amount"
+                  value={c.amount}
+                  onChange={e => setP('custom', params.custom.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))} />
+              </div>
+              <div className="col-span-5">
+                <Input type="date" value={c.due_date} className="text-slate-300"
+                  onChange={e => setP('custom', params.custom.map((x, idx) => idx === i ? { ...x, due_date: e.target.value } : x))} />
+              </div>
+              <div className="col-span-1">
+                {params.custom.length > 1 && (
+                  <button type="button" onClick={() => setP('custom', params.custom.filter((_, idx) => idx !== i))}
+                    className="p-1 text-slate-600 hover:text-red-400"><X className="h-3 w-3" /></button>
+                )}
+              </div>
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm"
+            onClick={() => setP('custom', [...params.custom, { installment_no: params.custom.length + 1, amount: '', due_date: today }])}>
+            <Plus className="h-3 w-3" /> Add Installment
+          </Button>
+        </div>
+      )}
+
+      {preview.length > 0 && (
+        <div className="bg-slate-800/50 rounded-lg p-3 space-y-1.5">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">Schedule Preview</p>
+          {preview.map(p => (
+            <div key={p.installment_no} className="flex items-center justify-between text-xs">
+              <span className="text-slate-500">Installment {p.installment_no}</span>
+              <span className="font-medium text-slate-300">{formatCurrency(p.amount)}</span>
+              <span className="text-slate-500">{formatDate(p.due_date)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-xs font-bold pt-1.5 border-t border-slate-700 text-slate-200">
+            <span>Total</span>
+            <span className={Math.abs(preview.reduce((s,p) => s+p.amount, 0) - total) > 0.5 ? 'text-red-400' : 'text-green-400'}>
+              {formatCurrency(preview.reduce((s,p) => s+p.amount, 0))}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
   { value: 'bank_transfer', label: 'Bank Transfer',   icon: <Building2 className="h-3.5 w-3.5" /> },
@@ -71,7 +243,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 // ── Invoice Details Modal ──────────────────────────────────────────────────────
 
 function InvoiceDetailsModal({
-  inv, allInvoices, onClose, onUpdate, onEdit, onDelete,
+  inv, allInvoices, onClose, onUpdate, onEdit, onDelete, onRenew,
 }: {
   inv: Invoice
   allInvoices: Invoice[]
@@ -79,34 +251,46 @@ function InvoiceDetailsModal({
   onUpdate: (updated: Invoice) => void
   onEdit: () => void
   onDelete: () => void
+  onRenew: () => void
 }) {
   const { toast } = useToast()
-  const [loading,  setLoading]  = useState<'overdue' | 'send' | null>(null)
-  const [nextDate, setNextDate] = useState<string | null>(null)
-  const [payments, setPayments] = useState<InvoicePayment[]>([])
+  const [loading,         setLoading]         = useState<'overdue' | 'send' | null>(null)
+  const [nextDate,        setNextDate]        = useState<string | null>(null)
+  const [payments,        setPayments]        = useState<InvoicePayment[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showAddForm,     setShowAddForm]     = useState(false)
+  const [expandedId,      setExpandedId]      = useState<string | null>(null)
+  const [markingId,       setMarkingId]       = useState<string | null>(null)
+  const [deletingId,      setDeletingId]      = useState<string | null>(null)
+  const [showRenew,       setShowRenew]       = useState(false)
+  const [activePkg,       setActivePkg]       = useState<{ name: string; price: number } | null>(null)
+
   const [addForm, setAddForm] = useState({
-    amount:         '',
-    payment_method: '' as PaymentMethod | '',
-    reference:      '',
-    notes:          '',
-    received_at:    new Date().toISOString().split('T')[0],
+    amount: '', payment_method: '' as PaymentMethod | '', reference: '', notes: '',
+    received_at: new Date().toISOString().split('T')[0],
+  })
+  const [markForm, setMarkForm] = useState({
+    amount: '', payment_method: '' as PaymentMethod | '', reference: '',
+    received_at: new Date().toISOString().split('T')[0],
   })
   const [savingPayment, setSavingPayment] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [activePkg, setActivePkg] = useState<{ name: string; price: number } | null>(null)
 
-  const client    = inv.client as { name?: string; email?: string } | null
-  const isSent    = inv.status === 'sent'
-  const isPaid    = inv.status === 'paid'
-  const pastDue   = inv.due_date && new Date(inv.due_date) < new Date() && !isPaid
+  const client  = inv.client as { name?: string; email?: string } | null
+  const isSent  = inv.status === 'sent'
+  const isPaid  = inv.status === 'paid'
+  const pastDue = inv.due_date && new Date(inv.due_date) < new Date() && !isPaid
 
-  const clientInvoices = allInvoices.filter((i) => i.client_id === inv.client_id)
+  const clientInvoices   = allInvoices.filter((i) => i.client_id === inv.client_id)
   const pkgTotalReceived = clientInvoices.reduce((s, i) => s + (i.received_amount ?? 0), 0)
 
-  const totalPaid    = payments.reduce((s, p) => s + p.amount, 0)
-  const balanceDue   = Math.max(inv.total - totalPaid, 0)
+  const hasSchedule  = payments.some(p => p.installment_no != null)
+  const sortedPayments = [...payments].sort((a, b) => {
+    if (a.installment_no != null && b.installment_no != null) return a.installment_no - b.installment_no
+    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
+    return new Date(a.received_at ?? a.created_at).getTime() - new Date(b.received_at ?? b.created_at).getTime()
+  })
+  const totalPaid  = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0)
+  const balanceDue = Math.max(inv.total - totalPaid, 0)
 
   async function loadPayments() {
     setPaymentsLoading(true)
@@ -172,6 +356,34 @@ function InvoiceDetailsModal({
       toast('Failed to delete payment', 'error')
     }
     setDeletingId(null)
+  }
+
+  async function markReceived(paymentId: string) {
+    const amount = Number(markForm.amount)
+    if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return }
+    setMarkingId(paymentId)
+    const res = await fetch(`/api/invoices/${inv.id}/payments/${paymentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount,
+        payment_method: markForm.payment_method || null,
+        reference:      markForm.reference || null,
+        received_at:    markForm.received_at,
+      }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.nextInvoiceDate) setNextDate(data.nextInvoiceDate)
+      onUpdate(data.invoice)
+      await loadPayments()
+      setExpandedId(null)
+      toast(data.invoice.status === 'paid' ? '🎉 Invoice fully paid!' : 'Payment recorded ✓', 'success')
+    } else {
+      const j = await res.json().catch(() => ({}))
+      toast(j.error ?? 'Failed to record', 'error')
+    }
+    setMarkingId(null)
   }
 
   async function markOverdue() {
@@ -353,11 +565,13 @@ function InvoiceDetailsModal({
           </div>
         </div>
 
-        {/* ── Payments history ── */}
+        {/* ── Payment Schedule / History ── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Payment History</p>
-            {!isPaid && !showAddForm && (
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
+              {hasSchedule ? 'Payment Schedule' : 'Payment History'}
+            </p>
+            {!isPaid && !hasSchedule && !showAddForm && (
               <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-500 text-white gap-1"
                 onClick={() => setShowAddForm(true)}>
                 <Plus className="h-3 w-3" /> Add Payment
@@ -367,71 +581,166 @@ function InvoiceDetailsModal({
 
           {paymentsLoading ? (
             <div className="h-12 rounded-lg bg-slate-800/50 animate-pulse" />
-          ) : payments.length === 0 ? (
+          ) : sortedPayments.length === 0 ? (
             <div className="text-center py-4 text-sm text-slate-500 border border-dashed border-slate-700 rounded-xl">
               No payments recorded yet
             </div>
           ) : (
             <div className="space-y-2">
-              {payments.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 border border-slate-700/60 rounded-xl px-3 py-2.5">
-                  <div className="h-8 w-8 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center text-green-400 shrink-0">
-                    {methodIcon(p.payment_method)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-green-400">{formatCurrency(p.amount)}</span>
-                      <span className="text-xs text-slate-500">{methodLabel(p.payment_method)}</span>
+              {sortedPayments.map((p) => {
+                const overdue = p.status === 'pending' && p.due_date && new Date(p.due_date) < new Date()
+                const days = p.due_date ? daysRelative(p.due_date) : null
+                const isExpanded = expandedId === p.id
+
+                return (
+                  <div key={p.id} className={`rounded-xl border overflow-hidden transition-all ${
+                    p.status === 'paid'   ? 'border-green-500/25 bg-green-500/5' :
+                    overdue               ? 'border-red-500/30 bg-red-500/5' :
+                                            'border-slate-700 bg-slate-800/30'
+                  }`}>
+                    <div className="flex items-center gap-3 px-3 py-2.5">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
+                        p.status === 'paid' ? 'bg-green-500/20 text-green-400' :
+                        overdue             ? 'bg-red-500/20 text-red-400' :
+                                              'bg-slate-700/80 text-slate-500'
+                      }`}>
+                        {p.status === 'paid' ? <CheckCircle2 className="h-4 w-4" /> :
+                         overdue             ? <AlertTriangle className="h-4 w-4" /> :
+                                               <Clock className="h-4 w-4" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {p.installment_no && (
+                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                              Installment {p.installment_no}
+                            </span>
+                          )}
+                          <span className={`text-sm font-bold ${
+                            p.status === 'paid' ? 'text-green-400' :
+                            overdue             ? 'text-red-400'   : 'text-slate-200'
+                          }`}>{formatCurrency(p.amount)}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5 flex-wrap">
+                          {p.status === 'paid' ? (
+                            <>
+                              {p.received_at && <span>{formatDate(p.received_at)}</span>}
+                              <span>{methodLabel(p.payment_method)}</span>
+                              {p.reference && <span className="font-mono text-slate-400">#{p.reference}</span>}
+                            </>
+                          ) : p.due_date ? (
+                            <span className={overdue ? 'text-red-400 font-medium' : days === 0 ? 'text-amber-400 font-medium' : ''}>
+                              {overdue
+                                ? `${Math.abs(days!)} day${Math.abs(days!) !== 1 ? 's' : ''} late · Due ${formatDate(p.due_date)}`
+                                : days === 0 ? `Due today · ${formatDate(p.due_date)}`
+                                : `Due ${formatDate(p.due_date)} · in ${days} day${days !== 1 ? 's' : ''}`}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {p.status === 'pending' && !isPaid && (
+                          <Button size="sm"
+                            onClick={() => {
+                              setMarkForm(f => ({ ...f, amount: String(p.amount) }))
+                              setExpandedId(isExpanded ? null : p.id)
+                            }}
+                            className={`h-7 text-[11px] gap-1 ${overdue ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'} text-white`}>
+                            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                            {isExpanded ? 'Cancel' : 'Mark Received'}
+                          </Button>
+                        )}
+                        <button onClick={() => deletePayment(p.id)} disabled={deletingId === p.id}
+                          className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors">
+                          {deletingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                      <span>{formatDate(p.received_at)}</span>
-                      {p.reference && <span className="font-mono text-slate-400">#{p.reference}</span>}
-                      {p.notes && <span className="truncate">{p.notes}</span>}
-                    </div>
+
+                    {/* Inline mark-as-received form */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-700 bg-slate-900/80 p-3 space-y-3">
+                        <p className="text-xs font-semibold text-slate-300">
+                          Record Payment — Installment {p.installment_no ?? ''}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Amount Received *</Label>
+                            <Input type="number" min={0.01} step="0.01"
+                              value={markForm.amount}
+                              onChange={e => setMarkForm(f => ({ ...f, amount: e.target.value }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Date</Label>
+                            <Input type="date" value={markForm.received_at} className="text-slate-300"
+                              onChange={e => setMarkForm(f => ({ ...f, received_at: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Payment Method</Label>
+                            <Select value={markForm.payment_method || undefined}
+                              onValueChange={v => setMarkForm(f => ({ ...f, payment_method: v as PaymentMethod }))}>
+                              <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                              <SelectContent>
+                                {PAYMENT_METHODS.map(m => (
+                                  <SelectItem key={m.value} value={m.value}>
+                                    <span className="flex items-center gap-2">{m.icon}{m.label}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Reference #</Label>
+                            <Input value={markForm.reference}
+                              onChange={e => setMarkForm(f => ({ ...f, reference: e.target.value }))}
+                              placeholder="e.g. TRF-12345" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" onClick={() => markReceived(p.id)} disabled={markingId === p.id}
+                            className="bg-green-600 hover:bg-green-500 text-white gap-1">
+                            {markingId === p.id
+                              ? <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>
+                              : <><CheckCircle2 className="h-3 w-3" /> Confirm Received</>}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setExpandedId(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => deletePayment(p.id)}
-                    disabled={deletingId === p.id}
-                    className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors shrink-0"
-                  >
-                    {deletingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
-          {/* Add payment form */}
-          {showAddForm && (
+          {/* Ad-hoc add payment form (only for invoices without a schedule) */}
+          {showAddForm && !hasSchedule && (
             <div className="bg-slate-800/60 border border-green-500/20 rounded-xl p-4 space-y-3">
               <p className="text-sm font-semibold text-slate-200">Record Payment</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Amount *</Label>
-                  <Input
-                    type="number" min={0.01} step="0.01"
-                    value={addForm.amount}
-                    onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
-                    placeholder={`Max ${formatCurrency(balanceDue)}`}
-                  />
+                  <Input type="number" min={0.01} step="0.01" value={addForm.amount}
+                    onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder={`Max ${formatCurrency(balanceDue)}`} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Date</Label>
-                  <Input
-                    type="date"
-                    value={addForm.received_at}
-                    onChange={(e) => setAddForm((f) => ({ ...f, received_at: e.target.value }))}
-                    className="text-slate-300"
-                  />
+                  <Input type="date" value={addForm.received_at} className="text-slate-300"
+                    onChange={e => setAddForm(f => ({ ...f, received_at: e.target.value }))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Payment Method</Label>
-                  <Select value={addForm.payment_method || undefined} onValueChange={(v) => setAddForm((f) => ({ ...f, payment_method: v as PaymentMethod }))}>
+                  <Select value={addForm.payment_method || undefined}
+                    onValueChange={v => setAddForm(f => ({ ...f, payment_method: v as PaymentMethod }))}>
                     <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_METHODS.map((m) => (
+                      {PAYMENT_METHODS.map(m => (
                         <SelectItem key={m.value} value={m.value}>
                           <span className="flex items-center gap-2">{m.icon}{m.label}</span>
                         </SelectItem>
@@ -440,21 +749,11 @@ function InvoiceDetailsModal({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Reference / Receipt #</Label>
-                  <Input
-                    value={addForm.reference}
-                    onChange={(e) => setAddForm((f) => ({ ...f, reference: e.target.value }))}
-                    placeholder="e.g. TRF-12345"
-                  />
+                  <Label className="text-xs">Reference #</Label>
+                  <Input value={addForm.reference}
+                    onChange={e => setAddForm(f => ({ ...f, reference: e.target.value }))}
+                    placeholder="e.g. TRF-12345" />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Notes (optional)</Label>
-                <Input
-                  value={addForm.notes}
-                  onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder="e.g. First installment"
-                />
               </div>
               <div className="flex gap-2">
                 <Button onClick={addPayment} disabled={savingPayment}
@@ -479,8 +778,6 @@ function InvoiceDetailsModal({
 
         {/* ── Actions ── */}
         <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
-
-          {/* Mark as Overdue */}
           {isSent && pastDue && (
             <Button onClick={markOverdue} disabled={!!loading} variant="outline"
               className="gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10">
@@ -489,8 +786,6 @@ function InvoiceDetailsModal({
                 : <><AlertTriangle className="h-4 w-4" /> Mark Overdue</>}
             </Button>
           )}
-
-          {/* Send Email */}
           {!isPaid && (
             <Button onClick={sendInvoiceEmail} disabled={!!loading}
               className="gap-2 bg-violet-600 hover:bg-violet-500 text-white">
@@ -499,25 +794,114 @@ function InvoiceDetailsModal({
                 : <><Send className="h-4 w-4" /> Send Email</>}
             </Button>
           )}
-
-          {/* Download PDF */}
+          {isPaid && (
+            <Button onClick={() => setShowRenew(true)}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+              <RefreshCw className="h-4 w-4" /> Renew Invoice
+            </Button>
+          )}
           <Button variant="outline" className="gap-2"
             onClick={() => window.open(`/api/invoices/${inv.id}/pdf`, '_blank')}>
             <Download className="h-4 w-4" /> PDF
           </Button>
-
-          {/* Edit */}
           {!isPaid && (
             <Button variant="ghost" className="gap-2" onClick={onEdit}>
               <Pencil className="h-4 w-4" /> Edit
             </Button>
           )}
-
-          {/* Delete */}
           <Button variant="ghost" className="gap-2 hover:text-red-400 ml-auto" onClick={onDelete}>
             <Trash2 className="h-4 w-4" /> Delete
           </Button>
         </div>
+
+        {/* ── Renew Modal ── */}
+        {showRenew && (
+          <RenewInvoiceModal
+            inv={inv}
+            onClose={() => setShowRenew(false)}
+            onSuccess={() => { setShowRenew(false); onRenew() }}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Renew Invoice Modal ────────────────────────────────────────────────────────
+
+function RenewInvoiceModal({ inv, onClose, onSuccess }: {
+  inv: Invoice
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const { toast } = useToast()
+  const clientName = (inv.client as { name?: string } | null)?.name ?? 'Client'
+  const defaultDesc = (inv.items?.[0]?.description ?? 'Service') + ' — Renewal'
+
+  const [form, setForm] = useState({ total: inv.total, description: defaultDesc, tax: inv.tax ?? 0 })
+  const [schedule, setSchedule] = useState<PaymentInstallmentInput[]>([])
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.total || form.total <= 0) { toast('Total amount required', 'error'); return }
+    setLoading(true)
+    const res = await fetch(`/api/invoices/${inv.id}/renew`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        total:            form.total,
+        description:      form.description,
+        tax:              form.tax,
+        payment_schedule: schedule.length > 0 ? schedule : undefined,
+      }),
+    })
+    if (res.ok) {
+      toast('Invoice renewed!', 'success')
+      onSuccess()
+    } else {
+      const j = await res.json().catch(() => ({}))
+      toast(j.error ?? 'Failed to renew', 'error')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-emerald-400" />
+            Renew for {clientName}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Description</Label>
+            <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Total Amount *</Label>
+              <Input type="number" min={0.01} step="0.01" value={form.total}
+                onChange={e => setForm(f => ({ ...f, total: Number(e.target.value) }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tax (%)</Label>
+              <Input type="number" min={0} max={100} value={form.tax}
+                onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))} />
+            </div>
+          </div>
+          <PaymentStructureSelector total={form.total} onChange={setSchedule} />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+              {loading
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</>
+                : <><RefreshCw className="h-4 w-4" /> Create Renewal Invoice</>}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   )
@@ -530,7 +914,7 @@ function InvoiceForm({
 }: {
   initial?: Partial<Invoice>
   clients: Client[]
-  onSave: (d: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }) => Promise<void>
+  onSave: (d: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number; payment_schedule?: PaymentInstallmentInput[] }) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -543,6 +927,7 @@ function InvoiceForm({
   const [items, setItems] = useState<Partial<InvoiceItem>[]>(
     initial?.items ?? [{ description: '', quantity: 1, unit_price: 0 }]
   )
+  const [paymentSchedule, setPaymentSchedule] = useState<PaymentInstallmentInput[]>([])
   const [loading, setLoading] = useState(false)
 
   function setField(k: string, v: string | number) { setForm((f) => ({ ...f, [k]: v })) }
@@ -555,7 +940,10 @@ function InvoiceForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
-    await onSave({ ...form, items, subtotal, total })
+    await onSave({
+      ...form, items, subtotal, total,
+      payment_schedule: paymentSchedule.length > 0 ? paymentSchedule : undefined,
+    })
     setLoading(false)
   }
 
@@ -644,6 +1032,11 @@ function InvoiceForm({
         <Textarea value={form.notes} onChange={(e) => setField('notes', e.target.value)}
           placeholder="Payment terms, thank you note…" rows={2} />
       </div>
+
+      {/* Payment structure — only for new invoices */}
+      {!initial?.id && (
+        <PaymentStructureSelector total={total} onChange={setPaymentSchedule} />
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -833,7 +1226,7 @@ export default function InvoicesPage() {
   useEffect(() => { if (guardReady) void load() }, [guardReady])
 
   async function handleSave(
-    data: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number }
+    data: Omit<Partial<Invoice>, 'items'> & { items: Partial<InvoiceItem>[]; subtotal: number; total: number; payment_schedule?: PaymentInstallmentInput[] }
   ) {
     if (editing) {
       const res = await fetch(`/api/invoices/${editing.id}`, {
@@ -1011,6 +1404,7 @@ export default function InvoicesPage() {
           }}
           onEdit={() => { setEditing(detailInv); setDetailInv(null); setFormOpen(true) }}
           onDelete={() => handleDelete(detailInv.id)}
+          onRenew={() => { setDetailInv(null); void load() }}
         />
       )}
 

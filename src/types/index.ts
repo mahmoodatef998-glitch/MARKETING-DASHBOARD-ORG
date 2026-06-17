@@ -235,6 +235,15 @@ export interface FinancialAnalysis {
   recommendations: FinancialRecommendation[]
 }
 
+export type PaymentStatus = 'pending' | 'paid' | 'overdue'
+export type PaymentStructureType = 'single' | 'split_50_50' | 'every_10_days' | 'custom'
+
+export interface PaymentInstallmentInput {
+  installment_no: number
+  amount: number
+  due_date: string
+}
+
 export interface InvoicePayment {
   id: string
   invoice_id: string
@@ -242,8 +251,11 @@ export interface InvoicePayment {
   payment_method?: PaymentMethod
   reference?: string
   notes?: string
-  received_at: string
+  received_at?: string
   created_at: string
+  due_date?: string
+  status: PaymentStatus
+  installment_no?: number
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

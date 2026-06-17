@@ -92,5 +92,21 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.from('invoices').insert(invoice)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   try { const notionId = await createNotionInvoice(invoice); await supabase.from('invoices').update({ notion_id: notionId }).eq('id', invoice.id) } catch {}
+
+  // Create payment installments if a schedule was provided
+  const paymentSchedule = (rawBody as any)?.payment_schedule
+  if (Array.isArray(paymentSchedule) && paymentSchedule.length > 0) {
+    const installments = paymentSchedule.map((inst: any) => ({
+      invoice_id:     invoice.id,
+      installment_no: Number(inst.installment_no),
+      amount:         Number(inst.amount),
+      due_date:       inst.due_date,
+      status:         'pending',
+      received_at:    null,
+      created_at:     new Date().toISOString(),
+    }))
+    await supabase.from('invoice_payments').insert(installments)
+  }
+
   return NextResponse.json(invoice, { status: 201 })
 }

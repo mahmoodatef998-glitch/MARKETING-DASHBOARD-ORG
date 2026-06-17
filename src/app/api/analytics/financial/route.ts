@@ -27,6 +27,8 @@ export async function GET() {
   const { data: allPayments } = await adminDb
     .from('invoice_payments')
     .select('amount, received_at')
+    .eq('status', 'paid')
+    .not('received_at', 'is', null)
 
   const sumPayments = (from: string, to: string) =>
     (allPayments ?? [])
