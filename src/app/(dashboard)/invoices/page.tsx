@@ -941,7 +941,14 @@ function InvoiceForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
     await onSave({
-      ...form, items, subtotal, total,
+      ...form,
+      items: items.map(i => ({
+        ...i,
+        quantity:   Number(i.quantity)   || 0,
+        unit_price: Number(i.unit_price) || 0,
+      })),
+      subtotal,
+      total,
       payment_schedule: paymentSchedule.length > 0 ? paymentSchedule : undefined,
     })
     setLoading(false)

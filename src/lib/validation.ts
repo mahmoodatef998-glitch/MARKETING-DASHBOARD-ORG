@@ -36,8 +36,8 @@ export const ClientUpdateSchema = ClientCreateSchema.partial()
 // ── Invoice ───────────────────────────────────────────────────────────────────
 const InvoiceItemSchema = z.object({
   description: z.string().min(1).max(500),
-  quantity:    z.number().positive(),
-  unit_price:  z.number().nonnegative(),
+  quantity:    z.coerce.number().positive(),
+  unit_price:  z.coerce.number().nonnegative(),
 })
 
 export const InvoiceCreateSchema = z.object({
