@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, Sparkles,
   Plus, Trash2, Loader2, RefreshCw, CheckCircle2, X, Settings,
-  Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal,
+  Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, Zap,
 } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import type { Expense, ExpenseCategory, FinancialAnalysis, FinancialSettings } from '@/types'
@@ -189,6 +189,17 @@ interface FinancialData {
   topClients: Array<{ name: string; revenue: number }>
   overdueInvoices: Array<{ invoice_number: string; client: string; total: number; due_date: string }>
   recentExpenses: Expense[]
+  pnl: {
+    revenue: number
+    designCost: number
+    mediaBuyerCost: number
+    operationalExpenses: number
+    totalCosts: number
+    netProfit: number
+    designTaskCount: number
+    activeClientCount: number
+    partnerDistribution: { name: string; share: number; amount: number }[]
+  }
 }
 
 // ── Financial Settings Modal ──────────────────────────────────────────────────
@@ -310,6 +321,7 @@ export default function FinancePage() {
   const [showForm,     setShowForm]     = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [generating,   setGenerating]   = useState(false)
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
@@ -377,6 +389,23 @@ export default function FinancePage() {
     setActionLoading(null)
   }
 
+  async function generateDueInvoices() {
+    setGenerating(true)
+    const res = await fetch('/api/invoices/auto-generate', { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      if (data.created > 0) {
+        toast(`${data.created} invoice(s) generated ✓`, 'success')
+        void loadData()
+      } else {
+        toast('No invoices due today', 'success')
+      }
+    } else {
+      toast('Failed to generate invoices', 'error')
+    }
+    setGenerating(false)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -397,6 +426,10 @@ export default function FinancePage() {
           <p className="text-sm text-slate-500 mt-0.5">MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span> · ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span> · Collection rate <span className="text-green-400 font-semibold">{d.collectionRate}%</span></p>
         </div>
         <div className="flex items-center gap-2">
+          <Button onClick={generateDueInvoices} disabled={generating} variant="outline" size="sm" className="gap-1.5 text-xs">
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-amber-400" />}
+            Generate Invoices
+          </Button>
           <Button onClick={() => setShowSettings(true)} variant="ghost" size="sm" title="Financial Settings">
             <Settings className="h-4 w-4" />
           </Button>
@@ -511,6 +544,57 @@ export default function FinancePage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── P&L Breakdown ── */}
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">This Month — P&L Breakdown</h2>
+
+        {/* Revenue row */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Revenue</span>
+            <span className="text-green-400 font-semibold">{formatCurrency(d.pnl.revenue)}</span>
+          </div>
+
+          {/* Cost rows */}
+          <div className="border-l-2 border-red-500/30 ml-2 pl-3 space-y-1.5">
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})</span>
+              <span className="text-red-400">− {formatCurrency(d.pnl.designCost)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})</span>
+              <span className="text-red-400">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Operational expenses</span>
+              <span className="text-red-400">− {formatCurrency(d.pnl.operationalExpenses)}</span>
+            </div>
+          </div>
+
+          {/* Net profit */}
+          <div className={`flex justify-between text-sm font-bold border-t border-slate-700 pt-2 ${d.pnl.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <span>Net Profit</span>
+            <span>{formatCurrency(d.pnl.netProfit)}</span>
+          </div>
+        </div>
+
+        {/* Partner distribution */}
+        {d.pnl.netProfit > 0 && (
+          <div className="space-y-2 border-t border-slate-800 pt-3">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Profit Distribution</p>
+            {d.pnl.partnerDistribution.map((p, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="flex-1 flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-medium">{p.name}</span>
+                  <span className="text-slate-500">{p.share}%</span>
+                </div>
+                <span className="text-emerald-400 font-semibold text-sm w-28 text-right">{formatCurrency(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── AI Recommendations ── */}

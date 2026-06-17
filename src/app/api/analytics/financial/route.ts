@@ -129,6 +129,46 @@ export async function GET() {
     return { month: m.label, revenue: rev, expenses: exp, profit: rev - exp }
   })
 
+  // ── Financial Settings ───────────────────────────────────────────────────────
+  const { data: settings } = await adminDb
+    .from('financial_settings')
+    .select('*')
+    .eq('id', 1)
+    .single()
+
+  const costPerDesign = Number(settings?.cost_per_design ?? 15)
+  const mediaBuyerRate = Number(settings?.media_buyer_rate_per_client ?? 150)
+
+  // ── Design costs (completed design tasks this month) ─────────────────────────
+  const { data: designTasks } = await adminDb
+    .from('tasks')
+    .select('id, client_id')
+    .eq('task_type', 'design')
+    .eq('status', 'done')
+    .gte('updated_at', thisMonth.from)
+    .lte('updated_at', thisMonth.to + 'T23:59:59Z')
+
+  const designCostThisMonth = (designTasks ?? []).length * costPerDesign
+
+  // ── Media buyer costs (active clients × rate) ────────────────────────────────
+  const { data: activeClients } = await adminDb
+    .from('clients')
+    .select('id')
+    .eq('status', 'active')
+    .is('deleted_at', null)
+
+  const mediaBuyerCostThisMonth = (activeClients ?? []).length * mediaBuyerRate
+
+  // ── Auto P&L ─────────────────────────────────────────────────────────────────
+  const totalCostsThisMonth = designCostThisMonth + mediaBuyerCostThisMonth + expensesThisMonth
+  const netProfitThisMonth = revenueThisMonth - totalCostsThisMonth
+
+  const partnerDistribution = [
+    { name: settings?.partner1_name ?? 'Partner 1', share: Number(settings?.partner1_share ?? 50), amount: netProfitThisMonth * (Number(settings?.partner1_share ?? 50) / 100) },
+    { name: settings?.partner2_name ?? 'Partner 2', share: Number(settings?.partner2_share ?? 30), amount: netProfitThisMonth * (Number(settings?.partner2_share ?? 30) / 100) },
+    { name: settings?.partner3_name ?? 'Partner 3', share: Number(settings?.partner3_share ?? 20), amount: netProfitThisMonth * (Number(settings?.partner3_share ?? 20) / 100) },
+  ]
+
   return NextResponse.json({
     revenue: {
       thisMonth: revenueThisMonth,
@@ -167,5 +207,16 @@ export async function GET() {
     recentExpenses: ((allExpenses ?? []) as Array<{ date: string; title: string; amount: number; category?: string }>)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5),
+    pnl: {
+      revenue:             revenueThisMonth,
+      designCost:          designCostThisMonth,
+      mediaBuyerCost:      mediaBuyerCostThisMonth,
+      operationalExpenses: expensesThisMonth,
+      totalCosts:          totalCostsThisMonth,
+      netProfit:           netProfitThisMonth,
+      designTaskCount:     (designTasks ?? []).length,
+      activeClientCount:   (activeClients ?? []).length,
+      partnerDistribution,
+    },
   })
 }
