@@ -595,3 +595,18 @@ CREATE TABLE IF NOT EXISTS public.expenses (
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date     ON public.expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON public.expenses(category);
+
+-- Financial settings (singleton row)
+CREATE TABLE IF NOT EXISTS public.financial_settings (
+  id                         int PRIMARY KEY DEFAULT 1,
+  cost_per_design            numeric NOT NULL DEFAULT 15,
+  media_buyer_rate_per_client numeric NOT NULL DEFAULT 150,
+  partner1_name              text NOT NULL DEFAULT 'Partner 1',
+  partner1_share             numeric NOT NULL DEFAULT 50,
+  partner2_name              text NOT NULL DEFAULT 'Partner 2',
+  partner2_share             numeric NOT NULL DEFAULT 30,
+  partner3_name              text NOT NULL DEFAULT 'Partner 3',
+  partner3_share             numeric NOT NULL DEFAULT 20,
+  updated_at                 timestamptz DEFAULT now()
+);
+INSERT INTO public.financial_settings (id) VALUES (1) ON CONFLICT DO NOTHING;

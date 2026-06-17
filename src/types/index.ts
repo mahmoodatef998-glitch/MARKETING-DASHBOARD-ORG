@@ -323,6 +323,18 @@ export interface AutomationLog {
   created_at: string
 }
 
+// ─── Financial Settings ───────────────────────────────────────────────────────
+export interface FinancialSettings {
+  cost_per_design: number
+  media_buyer_rate_per_client: number
+  partner1_name: string
+  partner1_share: number
+  partner2_name: string
+  partner2_share: number
+  partner3_name: string
+  partner3_share: number
+}
+
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 export interface DashboardStats {
   total_clients: number
