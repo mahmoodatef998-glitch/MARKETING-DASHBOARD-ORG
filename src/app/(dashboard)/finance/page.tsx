@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, Sparkles,
-  Plus, Trash2, Loader2, RefreshCw, CheckCircle2, X,
+  Plus, Trash2, Loader2, RefreshCw, CheckCircle2, X, Settings,
   Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal,
 } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import type { Expense, ExpenseCategory, FinancialAnalysis } from '@/types'
+import type { Expense, ExpenseCategory, FinancialAnalysis, FinancialSettings } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -190,16 +191,124 @@ interface FinancialData {
   recentExpenses: Expense[]
 }
 
+// ── Financial Settings Modal ──────────────────────────────────────────────────
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast()
+  const [form, setForm] = useState<FinancialSettings>({
+    cost_per_design: 15,
+    media_buyer_rate_per_client: 150,
+    partner1_name: 'Partner 1', partner1_share: 50,
+    partner2_name: 'Partner 2', partner2_share: 30,
+    partner3_name: 'Partner 3', partner3_share: 20,
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings/financial')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setForm(f => ({ ...f, ...d })) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  function set(k: keyof FinancialSettings, v: string | number) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  async function save() {
+    setSaving(true)
+    const res = await fetch('/api/settings/financial', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    if (res.ok) { toast('Settings saved ✓', 'success'); onClose() }
+    else toast('Failed to save', 'error')
+    setSaving(false)
+  }
+
+  const totalShare = form.partner1_share + form.partner2_share + form.partner3_share
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="h-4 w-4 text-slate-400" /> Financial Settings
+          </DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+        ) : (
+          <div className="space-y-5">
+            {/* Cost rates */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cost Rates</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Cost per Design (AED)</Label>
+                  <Input type="number" min={0} step="0.01" value={form.cost_per_design}
+                    onChange={e => set('cost_per_design', Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Media Buyer / Client (AED)</Label>
+                  <Input type="number" min={0} step="0.01" value={form.media_buyer_rate_per_client}
+                    onChange={e => set('media_buyer_rate_per_client', Number(e.target.value))} />
+                </div>
+              </div>
+            </div>
+            {/* Partners */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Profit Distribution
+                <span className={`ml-2 font-bold ${totalShare === 100 ? 'text-green-400' : 'text-red-400'}`}>
+                  {totalShare}% {totalShare !== 100 && '⚠ must equal 100%'}
+                </span>
+              </p>
+              {([
+                ['partner1_name', 'partner1_share'],
+                ['partner2_name', 'partner2_share'],
+                ['partner3_name', 'partner3_share'],
+              ] as [keyof FinancialSettings, keyof FinancialSettings][]).map(([nameKey, shareKey], i) => (
+                <div key={i} className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Partner {i + 1} name</Label>
+                    <Input value={String(form[nameKey])} onChange={e => set(nameKey, e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Share %</Label>
+                    <Input type="number" min={0} max={100} value={Number(form[shareKey])}
+                      onChange={e => set(shareKey, Number(e.target.value))} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button onClick={save} disabled={saving || totalShare !== 100}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white">
+                {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : 'Save Settings'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function FinancePage() {
   const router   = useRouter()
   const { toast } = useToast()
 
-  const [data,      setData]      = useState<FinancialData | null>(null)
-  const [expenses,  setExpenses]  = useState<Expense[]>([])
-  const [analysis,  setAnalysis]  = useState<FinancialAnalysis | null>(null)
-  const [loading,   setLoading]   = useState(true)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [showForm,  setShowForm]  = useState(false)
+  const [data,         setData]         = useState<FinancialData | null>(null)
+  const [expenses,     setExpenses]     = useState<Expense[]>([])
+  const [analysis,     setAnalysis]     = useState<FinancialAnalysis | null>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [aiLoading,    setAiLoading]    = useState(false)
+  const [showForm,     setShowForm]     = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
@@ -287,10 +396,17 @@ export default function FinancePage() {
           <h1 className="text-2xl font-bold text-slate-100">Financial Intelligence</h1>
           <p className="text-sm text-slate-500 mt-0.5">MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span> · ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span> · Collection rate <span className="text-green-400 font-semibold">{d.collectionRate}%</span></p>
         </div>
-        <Button onClick={loadData} variant="ghost" size="sm">
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowSettings(true)} variant="ghost" size="sm" title="Financial Settings">
+            <Settings className="h-4 w-4" />
+          </Button>
+          <Button onClick={loadData} variant="ghost" size="sm">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
