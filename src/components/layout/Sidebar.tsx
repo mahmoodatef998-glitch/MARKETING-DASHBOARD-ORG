@@ -39,27 +39,31 @@ import { useEffect, useRef, useState } from 'react'
 //        string[] = visible only to users whose role is in the list
 // sectionLabel: renders a section header above this item (shown only when item is visible)
 const nav: { href: string; label: string; icon: React.ElementType; roles: string[] | null; sectionLabel?: string }[] = [
-  { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, roles: null },
-  { href: '/reports',         label: 'Reports',       icon: BarChart2,       roles: ['admin'] },
-  { href: '/clients',         label: 'Clients',       icon: Users,           roles: ['admin'] },
-  { href: '/team',            label: 'Team',          icon: UserCheck,       roles: ['admin'] },
-  { href: '/tasks',           label: 'Tasks',         icon: CheckSquare,     roles: null },
-  { href: '/approvals',       label: 'Approvals',     icon: FileCheck,       roles: null },
-  { href: '/meetings',        label: 'Meetings',      icon: CalendarDays,    roles: ['admin'] },
-  { href: '/finance',         label: 'Overview',      icon: TrendingUp,      roles: ['admin'], sectionLabel: 'Finance' },
-  { href: '/invoices',        label: 'Invoices',      icon: FileText,        roles: ['admin'] },
-  { href: '/billing',         label: 'Billing',       icon: CreditCard,      roles: ['admin'] },
-  { href: '/inbox',           label: 'Inbox',         icon: MessageSquare,   roles: null },
-  { href: '/content-plans',     label: 'Content Plans',    icon: LayoutList,   roles: ['admin', 'media_buyer'] },
-  { href: '/publish-calendar', label: 'Publish Calendar', icon: Calendar,     roles: ['admin', 'media_buyer'] },
-  { href: '/campaigns',         label: 'Campaigns',        icon: Megaphone,    roles: ['admin', 'media_buyer'] },
-  { href: '/scheduled-posts',   label: 'Publishing',       icon: CalendarDays, roles: ['admin', 'media_buyer'] },
-  { href: '/automation',      label: 'Automation',    icon: Zap,             roles: ['admin'] },
-  { href: '/ai-assistant',    label: 'AI Assistant',  icon: Bot,             roles: null },
-  { href: '/media-library',   label: 'Media Library', icon: ImageIcon,       roles: null },
-  { href: '/activity-logs',   label: 'Activity Log',  icon: Activity,        roles: ['admin'] },
-  { href: '/users',           label: 'Users',         icon: ShieldCheck,     roles: ['admin'] },
-  { href: '/settings',        label: 'Social Media',  icon: Settings,        roles: ['admin', 'media_buyer'] },
+  { href: '/dashboard',        label: 'Dashboard',        icon: LayoutDashboard, roles: null },
+  { href: '/reports',          label: 'Reports',          icon: BarChart2,       roles: ['admin'] },
+  { href: '/clients',          label: 'Clients',          icon: Users,           roles: ['admin'] },
+  { href: '/team',             label: 'Team',             icon: UserCheck,       roles: ['admin'] },
+  { href: '/tasks',            label: 'Tasks',            icon: CheckSquare,     roles: null },
+  { href: '/approvals',        label: 'Approvals',        icon: FileCheck,       roles: null },
+  { href: '/meetings',         label: 'Meetings',         icon: CalendarDays,    roles: ['admin'] },
+  // ── Finance ──────────────────────────────────────────────────────────────────
+  { href: '/finance',          label: 'Overview',         icon: TrendingUp,      roles: ['admin'],                        sectionLabel: 'Finance' },
+  { href: '/invoices',         label: 'Invoices',         icon: FileText,        roles: ['admin'] },
+  { href: '/billing',          label: 'Billing',          icon: CreditCard,      roles: ['admin'] },
+  // ── Content ──────────────────────────────────────────────────────────────────
+  { href: '/content-plans',    label: 'Content Plans',    icon: LayoutList,      roles: ['admin', 'media_buyer'],         sectionLabel: 'Content' },
+  { href: '/publish-calendar', label: 'Publish Calendar', icon: Calendar,        roles: ['admin', 'media_buyer'] },
+  { href: '/campaigns',        label: 'Campaigns',        icon: Megaphone,       roles: ['admin', 'media_buyer'] },
+  { href: '/scheduled-posts',  label: 'Publishing',       icon: CalendarDays,    roles: ['admin', 'media_buyer'] },
+  // ── Tools ────────────────────────────────────────────────────────────────────
+  { href: '/inbox',            label: 'Inbox',            icon: MessageSquare,   roles: null,                             sectionLabel: 'Tools' },
+  { href: '/automation',       label: 'Automation',       icon: Zap,             roles: ['admin'] },
+  { href: '/ai-assistant',     label: 'AI Assistant',     icon: Bot,             roles: null },
+  { href: '/media-library',    label: 'Media Library',    icon: ImageIcon,       roles: null },
+  // ── Admin ────────────────────────────────────────────────────────────────────
+  { href: '/activity-logs',    label: 'Activity Log',     icon: Activity,        roles: ['admin'],                        sectionLabel: 'Admin' },
+  { href: '/users',            label: 'Users',            icon: ShieldCheck,     roles: ['admin'] },
+  { href: '/settings',         label: 'Social Media',     icon: Settings,        roles: ['admin', 'media_buyer'] },
 ]
 
 interface Badges {
