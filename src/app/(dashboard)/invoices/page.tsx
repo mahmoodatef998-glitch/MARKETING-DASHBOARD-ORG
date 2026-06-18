@@ -440,7 +440,7 @@ function InvoiceDetailsModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+      <DialogContent className="max-w-2xl w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         {/* ── Header ── */}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
@@ -825,7 +825,7 @@ function InvoiceDetailsModal({
         )}
 
         {/* ── Actions ── */}
-        <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800 [&>*]:min-h-[44px] sm:[&>*]:min-h-0">
           {isSent && pastDue && (
             <Button onClick={markOverdue} disabled={!!loading} variant="outline"
               className="gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10">
@@ -1355,19 +1355,21 @@ export default function InvoicesPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-          <Input className="pl-9" placeholder="Search invoices or clients…" value={search}
+          <Input className="pl-9 w-full" placeholder="Search invoices or clients…" value={search}
             onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button variant="ghost" size="sm" onClick={() => window.open('/api/export?type=invoices', '_blank')}
-          className="gap-1.5 text-slate-400 hover:text-slate-100">
-          <Download className="h-4 w-4" /> Export
-        </Button>
-        <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
-          <Plus className="h-4 w-4" /> New Invoice
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => window.open('/api/export?type=invoices', '_blank')}
+            className="gap-1.5 text-slate-400 hover:text-slate-100 flex-1 sm:flex-none">
+            <Download className="h-4 w-4" /> Export
+          </Button>
+          <Button onClick={() => { setEditing(null); setFormOpen(true) }} className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
+            <Plus className="h-4 w-4" /> New Invoice
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -1465,7 +1467,7 @@ export default function InvoicesPage() {
 
       {/* Create / Edit Form */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+        <DialogContent className="max-w-2xl w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Invoice' : 'New Invoice'}</DialogTitle>
           </DialogHeader>

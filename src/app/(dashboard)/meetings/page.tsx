@@ -596,18 +596,18 @@ function MeetingCard({
           </div>
 
           {/* Actions — stop propagation so clicks don't open detail modal */}
-          <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={e => e.stopPropagation()}>
             {!isDone && (
               <button onClick={handleDone} disabled={markingDone}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold transition-colors">
+                className="flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold transition-colors min-h-[36px]">
                 {markingDone
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Done
+                <span className="hidden sm:inline">Done</span>
               </button>
             )}
             <button onClick={handleDelete} disabled={deleting}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50">
+              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 min-h-[36px] min-w-[36px] flex items-center justify-center">
               {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             </button>
           </div>
@@ -753,12 +753,12 @@ export default function MeetingsPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Meetings</h1>
           <p className="text-sm text-slate-400 mt-0.5">Schedule and track client meetings</p>
         </div>
-        <Button onClick={() => setShowNew(true)} className="flex items-center gap-2">
+        <Button onClick={() => setShowNew(true)} className="flex items-center gap-2 w-full sm:w-auto min-h-[44px] sm:min-h-0">
           <Plus className="h-4 w-4" /> Schedule Meeting
         </Button>
       </div>
@@ -772,7 +772,7 @@ export default function MeetingsPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Upcoming',  value: upcoming.length,  icon: CalendarDays, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
           { label: 'Today',     value: todayCount,        icon: Clock,        color: 'text-amber-400',  bg: 'bg-amber-500/10'  },
@@ -781,7 +781,7 @@ export default function MeetingsPage() {
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <Card key={label}>
             <CardContent className="pt-4 pb-3 flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${bg}`}>
+              <div className={`p-2 rounded-lg shrink-0 ${bg}`}>
                 <Icon className={`h-4 w-4 ${color}`} />
               </div>
               <div>

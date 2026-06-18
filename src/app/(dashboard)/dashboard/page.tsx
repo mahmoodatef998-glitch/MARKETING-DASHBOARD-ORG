@@ -127,18 +127,18 @@ function MediaBuyerDashboard({ data }: { data: MediaBuyerData | null }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {statsCards.map(k => (
           <Card key={k.title}>
-            <CardContent className="pt-5 pb-4">
+            <CardContent className="pt-4 pb-3 sm:pt-5 sm:pb-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0 pr-2">
                   <p className="text-xs text-slate-400">{k.title}</p>
-                  <p className="text-2xl font-bold text-slate-100 mt-1">{k.value}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p>
+                  <p className="text-lg sm:text-2xl font-bold text-slate-100 mt-1 truncate">{k.value}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{k.sub}</p>
                 </div>
-                <div className={`p-2.5 rounded-xl ${k.bg}`}>
-                  <k.icon className={`h-5 w-5 ${k.color}`} />
+                <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${k.bg}`}>
+                  <k.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${k.color}`} />
                 </div>
               </div>
             </CardContent>
@@ -455,7 +455,7 @@ export default function DashboardPage() {
 
       {/* Ready for Review alert */}
       {reviewTasks.length > 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-amber-500/15">
@@ -498,18 +498,18 @@ export default function DashboardPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpiCards.map((k) => (
           <Card key={k.title}>
-            <CardContent className="pt-5 pb-4">
+            <CardContent className="pt-4 pb-3 sm:pt-5 sm:pb-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0 pr-2">
                   <p className="text-xs text-slate-400">{k.title}</p>
-                  <p className="text-2xl font-bold text-slate-100 mt-1">{k.value}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p>
+                  <p className="text-lg sm:text-2xl font-bold text-slate-100 mt-1 truncate">{k.value}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">{k.sub}</p>
                 </div>
-                <div className={`p-2.5 rounded-xl ${k.bg}`}>
-                  <k.icon className={`h-5 w-5 ${k.color}`} />
+                <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${k.bg}`}>
+                  <k.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${k.color}`} />
                 </div>
               </div>
             </CardContent>
@@ -518,7 +518,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Revenue + Top Clients */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card className="lg:col-span-3">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -538,7 +538,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Status donuts + Performance rings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -603,18 +603,18 @@ export default function DashboardPage() {
       </div>
 
       {/* Advanced KPIs */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {advancedKpis.map((k) => (
           <Card key={k.title}>
-            <CardContent className="pt-5 pb-4">
+            <CardContent className="pt-4 pb-3 sm:pt-5 sm:pb-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0 pr-2">
                   <p className="text-xs text-slate-400">{k.title}</p>
-                  <p className="text-2xl font-bold text-slate-100 mt-1">{k.value}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p>
+                  <p className="text-lg sm:text-2xl font-bold text-slate-100 mt-1 truncate">{k.value}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{k.sub}</p>
                 </div>
-                <div className={`p-2.5 rounded-xl ${k.bg}`}>
-                  <k.icon className={`h-5 w-5 ${k.color}`} />
+                <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${k.bg}`}>
+                  <k.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${k.color}`} />
                 </div>
               </div>
             </CardContent>
