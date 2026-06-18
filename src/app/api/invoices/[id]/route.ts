@@ -36,9 +36,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    const now = new Date().toISOString()
     const { data, error } = await supabase
       .from('invoices')
-      .update({ status: 'paid', updated_at: new Date().toISOString() })
+      .update({
+        status:          'paid',
+        received_amount: inv.received_amount ?? inv.total,
+        received_at:     inv.received_at ?? now,
+        updated_at:      now,
+      })
       .eq('id', id)
       .select()
       .single()

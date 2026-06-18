@@ -23,23 +23,50 @@ export async function GET() {
   const thisMonth = monthRange(0)
   const lastMonth = monthRange(-1)
 
-  // ── Revenue from invoice_payments ────────────────────────────────────────────
+  // ── Revenue: invoice_payments (installments) ─────────────────────────────────
   const { data: allPayments } = await adminDb
     .from('invoice_payments')
-    .select('amount, received_at')
+    .select('amount, received_at, invoice_id')
     .eq('status', 'paid')
     .not('received_at', 'is', null)
 
-  const sumPayments = (from: string, to: string) =>
-    (allPayments ?? [])
-      .filter(p => p.received_at >= from && p.received_at <= to + 'T23:59:59Z')
-      .reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+  // ── Revenue: paid invoices with no installment records (mark_paid / mark_received) ─
+  const { data: paidInvoicesData } = await adminDb
+    .from('invoices')
+    .select('id, total, received_amount, received_at, updated_at')
+    .eq('status', 'paid')
+    .is('deleted_at', null)
 
-  const revenueThisMonth = sumPayments(thisMonth.from, thisMonth.to)
-  const revenueLastMonth = sumPayments(lastMonth.from, lastMonth.to)
-  const revenueYtd = (allPayments ?? [])
+  // Avoid double-counting invoices that already have invoice_payments records
+  type PaymentRow = { amount: number; received_at: string; invoice_id: string }
+  const invoiceIdsWithPayments = new Set(
+    (allPayments ?? []).map((p: PaymentRow) => p.invoice_id)
+  )
+
+  type PaidInvRow = { id: string; total: number; received_amount?: number; received_at?: string; updated_at: string }
+  const directPaidItems = ((paidInvoicesData ?? []) as PaidInvRow[])
+    .filter(inv => !invoiceIdsWithPayments.has(inv.id))
+    .map(inv => ({
+      amount:      inv.received_amount ?? inv.total,
+      received_at: inv.received_at ?? inv.updated_at,
+    }))
+
+  // Combined — installment payments + directly-paid invoices
+  const allRevenueItems = [
+    ...((allPayments ?? []) as PaymentRow[]).map(p => ({ amount: p.amount, received_at: p.received_at })),
+    ...directPaidItems,
+  ]
+
+  const sumRevenue = (from: string, to: string) =>
+    allRevenueItems
+      .filter(p => p.received_at >= from && p.received_at <= to + 'T23:59:59Z')
+      .reduce((s, p) => s + p.amount, 0)
+
+  const revenueThisMonth = sumRevenue(thisMonth.from, thisMonth.to)
+  const revenueLastMonth = sumRevenue(lastMonth.from, lastMonth.to)
+  const revenueYtd = allRevenueItems
     .filter(p => p.received_at.startsWith(String(now.getFullYear())))
-    .reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+    .reduce((s, p) => s + p.amount, 0)
 
   // ── Expenses ────────────────────────────────────────────────────────────────
   const { data: allExpenses } = await adminDb.from('expenses').select('*')
@@ -124,7 +151,7 @@ export async function GET() {
   // ── 6-month cash flow ────────────────────────────────────────────────────────
   const cashFlow = Array.from({ length: 6 }, (_, i) => {
     const m = monthRange(i - 5)
-    const rev = sumPayments(m.from, m.to)
+    const rev = sumRevenue(m.from, m.to)
     const exp = sumExpenses(m.from, m.to)
     return { month: m.label, revenue: rev, expenses: exp, profit: rev - exp }
   })
