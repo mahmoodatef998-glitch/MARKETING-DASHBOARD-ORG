@@ -616,3 +616,25 @@ ALTER TABLE public.billing_plans
   ADD COLUMN IF NOT EXISTS payment_policy_type  VARCHAR(20)  DEFAULT 'single',
   ADD COLUMN IF NOT EXISTS payment_advance_pct  INTEGER      DEFAULT 50,
   ADD COLUMN IF NOT EXISTS payment_final_days   INTEGER      DEFAULT 30;
+
+-- Invoice pre-due reminders tracking
+ALTER TABLE public.invoices
+  ADD COLUMN IF NOT EXISTS reminder_3d_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS reminder_1d_sent_at timestamptz;
+
+-- Audit log — every significant action
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id          text        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id     uuid,
+  user_email  text,
+  action      text        NOT NULL,
+  table_name  text        NOT NULL,
+  record_id   text,
+  old_value   jsonb,
+  new_value   jsonb,
+  ip_address  text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_table_name ON public.audit_logs(table_name);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON public.audit_logs(user_id);

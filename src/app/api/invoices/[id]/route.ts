@@ -7,6 +7,7 @@ import { dbError } from '@/lib/utils'
 import { nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,6 +23,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const supabase = await createServerClient()
   const authErr  = await requireAdmin(supabase)
   if (authErr) return authErr
+
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
 
   const body = await req.json().catch(() => ({}))
   const { action } = body
@@ -60,6 +63,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .update({ next_invoice_date: toDateStr(next) })
         .eq('id', plan.id)
     }
+
+    try {
+      await logAudit({ userId: currentUser?.id, userEmail: currentUser?.email, action: 'mark_paid', tableName: 'invoices', recordId: id, newValue: { status: 'paid' } })
+    } catch {}
 
     return NextResponse.json({
       ...data,
@@ -118,6 +125,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    try {
+      await logAudit({ userId: currentUser?.id, userEmail: currentUser?.email, action: 'mark_overdue', tableName: 'invoices', recordId: id, newValue: { status: 'overdue' } })
+    } catch {}
+
     return NextResponse.json(data)
   }
 
@@ -164,6 +175,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         nextInvoiceDateResult = toDateStr(next)
       }
     }
+
+    try {
+      await logAudit({ userId: currentUser?.id, userEmail: currentUser?.email, action: 'mark_received', tableName: 'invoices', recordId: id, newValue: { status: newStatus, received_amount: receivedAmount } })
+    } catch {}
 
     return NextResponse.json({ ...data, nextInvoiceDate: nextInvoiceDateResult })
   }

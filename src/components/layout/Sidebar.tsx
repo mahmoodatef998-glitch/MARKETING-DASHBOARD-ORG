@@ -32,6 +32,8 @@ import {
   PieChart,
   Megaphone,
   LayoutList,
+  Shield,
+  User,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -39,6 +41,7 @@ import { useEffect, useRef, useState } from 'react'
 //        string[] = visible only to users whose role is in the list
 // sectionLabel: renders a section header above this item (shown only when item is visible)
 const nav: { href: string; label: string; icon: React.ElementType; roles: string[] | null; sectionLabel?: string }[] = [
+  { href: '/client-portal',    label: 'My Portal',        icon: User,            roles: ['client'] },
   { href: '/dashboard',        label: 'Dashboard',        icon: LayoutDashboard, roles: null },
   { href: '/reports',          label: 'Reports',          icon: BarChart2,       roles: ['admin'] },
   { href: '/clients',          label: 'Clients',          icon: Users,           roles: ['admin'] },
@@ -62,6 +65,7 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/media-library',    label: 'Media Library',    icon: ImageIcon,       roles: null },
   // ── Admin ────────────────────────────────────────────────────────────────────
   { href: '/activity-logs',    label: 'Activity Log',     icon: Activity,        roles: ['admin'],                        sectionLabel: 'Admin' },
+  { href: '/audit-log',        label: 'Audit Log',        icon: Shield,          roles: ['admin'] },
   { href: '/users',            label: 'Users',            icon: ShieldCheck,     roles: ['admin'] },
   { href: '/settings',         label: 'Social Media',     icon: Settings,        roles: ['admin', 'media_buyer'] },
 ]

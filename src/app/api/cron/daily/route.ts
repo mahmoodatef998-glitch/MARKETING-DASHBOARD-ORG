@@ -207,6 +207,76 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── 2b. 3-day invoice due reminder ───────────────────────────────────────
+  const d3days = new Date(now); d3days.setDate(d3days.getDate() + 3)
+  const date3d = toDateStr(d3days)
+
+  const { data: invoicesDue3d } = await supabase
+    .from('invoices')
+    .select('*, client:clients(name, email)')
+    .eq('status', 'sent')
+    .eq('due_date', date3d)
+    .is('reminder_3d_sent_at', null)
+    .is('deleted_at', null)
+
+  for (const invoice of invoicesDue3d ?? []) {
+    const client = invoice.client as { name: string; email: string } | null
+    if (!client?.email) continue
+    try {
+      const { subject, body } = await generateEmailContent({
+        type: 'payment_reminder',
+        recipientName: client.name,
+        details: `Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'USD'} ${invoice.total} is due in 3 days on ${invoice.due_date}. Please arrange payment to avoid any service interruptions.`,
+      })
+      await sendEmail({ to: client.email, subject: `[3 Days Left] ${subject}`, body })
+      await supabase.from('invoices').update({ reminder_3d_sent_at: now.toISOString() }).eq('id', invoice.id)
+      await supabase.from('automation_logs').insert({
+        type: 'invoice_reminder_3d', recipient_email: client.email, subject, status: 'sent', created_at: now.toISOString(),
+      })
+      results.push({ type: 'invoice_reminder_3d', recipient: client.email, status: 'sent' })
+    } catch (err: any) {
+      await supabase.from('automation_logs').insert({
+        type: 'invoice_reminder_3d', recipient_email: client.email, subject: '3-day invoice reminder', status: 'failed', error: err.message, created_at: now.toISOString(),
+      })
+      results.push({ type: 'invoice_reminder_3d', recipient: client.email, status: 'failed' })
+    }
+  }
+
+  // ── 2c. 1-day invoice due reminder ───────────────────────────────────────
+  const d1day = new Date(now); d1day.setDate(d1day.getDate() + 1)
+  const date1d = toDateStr(d1day)
+
+  const { data: invoicesDue1d } = await supabase
+    .from('invoices')
+    .select('*, client:clients(name, email)')
+    .eq('status', 'sent')
+    .eq('due_date', date1d)
+    .is('reminder_1d_sent_at', null)
+    .is('deleted_at', null)
+
+  for (const invoice of invoicesDue1d ?? []) {
+    const client = invoice.client as { name: string; email: string } | null
+    if (!client?.email) continue
+    try {
+      const { subject, body } = await generateEmailContent({
+        type: 'payment_reminder',
+        recipientName: client.name,
+        details: `URGENT: Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'USD'} ${invoice.total} is due TOMORROW on ${invoice.due_date}.`,
+      })
+      await sendEmail({ to: client.email, subject: `[Due Tomorrow] ${subject}`, body })
+      await supabase.from('invoices').update({ reminder_1d_sent_at: now.toISOString() }).eq('id', invoice.id)
+      await supabase.from('automation_logs').insert({
+        type: 'invoice_reminder_1d', recipient_email: client.email, subject, status: 'sent', created_at: now.toISOString(),
+      })
+      results.push({ type: 'invoice_reminder_1d', recipient: client.email, status: 'sent' })
+    } catch (err: any) {
+      await supabase.from('automation_logs').insert({
+        type: 'invoice_reminder_1d', recipient_email: client.email, subject: '1-day invoice reminder', status: 'failed', error: err.message, created_at: now.toISOString(),
+      })
+      results.push({ type: 'invoice_reminder_1d', recipient: client.email, status: 'failed' })
+    }
+  }
+
   // ── 3. Overdue task status update ─────────────────────────────────────────
   const { data: overdueTasks } = await supabase
     .from('tasks')
@@ -389,6 +459,61 @@ export async function GET(req: NextRequest) {
           created_at:      now.toISOString(),
         })
         results.push({ type: 'weekly_report', recipient: client.email, status: 'failed' })
+      }
+    }
+  }
+
+  // ── 7b. Monthly client report (1st of each month) ────────────────────────
+  if (now.getDate() === 1) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const monthEnd   = new Date(now.getFullYear(), now.getMonth(), 0)
+    const monthStartStr = toDateStr(monthStart)
+    const monthEndStr   = toDateStr(monthEnd)
+    const monthLabel    = monthStart.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+
+    const { data: activeClientsM } = await supabase
+      .from('clients')
+      .select('id, name, email')
+      .eq('status', 'active')
+      .is('deleted_at', null)
+
+    for (const client of activeClientsM ?? []) {
+      try {
+        const [doneTasks, paidInvoices, totalInvoices] = await Promise.all([
+          supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'done').is('deleted_at', null).gte('updated_at', monthStartStr).lte('updated_at', monthEndStr + 'T23:59:59Z'),
+          supabase.from('invoices').select('invoice_number, total, received_amount').eq('client_id', client.id).eq('status', 'paid').is('deleted_at', null).gte('received_at', monthStartStr).lte('received_at', monthEndStr + 'T23:59:59Z'),
+          supabase.from('invoices').select('invoice_number, total, status').eq('client_id', client.id).in('status', ['sent', 'overdue', 'paid']).is('deleted_at', null).gte('issued_date', monthStartStr).lte('issued_date', monthEndStr),
+        ])
+
+        const completedList = (doneTasks.data ?? []).map(t => `• ${t.title}`).join('\n') || 'No tasks completed'
+        const totalPaid = (paidInvoices.data ?? []).reduce((s, i) => s + (i.received_amount ?? i.total), 0)
+        const unpaidCount = (totalInvoices.data ?? []).filter(i => i.status !== 'paid').length
+
+        const details = [
+          `Monthly Report: ${monthLabel}`,
+          ``,
+          `✅ Completed Tasks (${doneTasks.data?.length ?? 0}):\n${completedList}`,
+          ``,
+          `💰 Payments: ${totalPaid > 0 ? `${totalPaid.toLocaleString()} paid this month` : 'No payments recorded'}`,
+          unpaidCount > 0 ? `⚠️ Outstanding invoices: ${unpaidCount}` : '',
+        ].filter(Boolean).join('\n')
+
+        const { subject, body } = await generateEmailContent({
+          type: 'weekly_report',
+          recipientName: client.name,
+          details,
+        })
+
+        await sendEmail({ to: client.email, subject: `Monthly Report — ${monthLabel}`, body })
+        await supabase.from('automation_logs').insert({
+          type: 'monthly_report', recipient_email: client.email, subject: `Monthly Report — ${monthLabel}`, status: 'sent', created_at: now.toISOString(),
+        })
+        results.push({ type: 'monthly_report', recipient: client.email, status: 'sent' })
+      } catch (err: any) {
+        await supabase.from('automation_logs').insert({
+          type: 'monthly_report', recipient_email: client.email, subject: `Monthly Report — ${monthLabel}`, status: 'failed', error: err.message, created_at: now.toISOString(),
+        })
+        results.push({ type: 'monthly_report', recipient: client.email, status: 'failed' })
       }
     }
   }

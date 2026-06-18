@@ -4,7 +4,7 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
-  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed' | 'pending_approval'
+  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed' | 'pending_approval' | 'invoice_due_soon'
   title: string
   message: string
   severity: 'error' | 'warning' | 'info'
@@ -138,6 +138,44 @@ export async function GET() {
       link:     '/invoices',
       count:    overdueInvoices.length,
     })
+  }
+
+  // ── Invoices due soon (admin only) ────────────────────────────────────────
+  if (isAdmin) {
+    const in3days = new Date()
+    in3days.setDate(in3days.getDate() + 3)
+    const due3dStr = in3days.toISOString().split('T')[0]
+    const { data: dueSoonInvoices } = await admin
+      .from('invoices')
+      .select('id, invoice_number, total, due_date, client:clients(name)')
+      .eq('status', 'sent')
+      .gte('due_date', today)
+      .lte('due_date', due3dStr)
+      .is('deleted_at', null)
+
+    if ((dueSoonInvoices ?? []).length === 1) {
+      const inv = dueSoonInvoices![0]
+      const clientName = (Array.isArray(inv.client) ? inv.client[0]?.name : (inv.client as any)?.name) ?? ''
+      notifications.push({
+        id:       `invoice-due-soon-${inv.id}`,
+        type:     'invoice_due_soon',
+        title:    'Invoice Due Soon',
+        message:  `#${inv.invoice_number}${clientName ? ` — ${clientName}` : ''} due ${inv.due_date}`,
+        severity: 'warning',
+        link:     '/invoices',
+      })
+    } else if ((dueSoonInvoices ?? []).length > 1) {
+      const total = (dueSoonInvoices ?? []).reduce((s, i) => s + (i.total ?? 0), 0)
+      notifications.push({
+        id:       'invoices-due-soon-group',
+        type:     'invoice_due_soon',
+        title:    `${dueSoonInvoices!.length} Invoices Due in 3 Days`,
+        message:  `Total: $${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        severity: 'warning',
+        link:     '/invoices',
+        count:    dueSoonInvoices!.length,
+      })
+    }
   }
 
   // ── Automation failures → individual (already capped at 3) ────────────────
