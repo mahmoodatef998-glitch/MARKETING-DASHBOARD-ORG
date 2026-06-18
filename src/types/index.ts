@@ -270,6 +270,10 @@ export interface BillingPlan {
   custom_days?: number
   next_invoice_date: string
   is_active: boolean
+  // Payment policy — applied to auto-generated invoices
+  payment_policy_type?: 'single' | 'split'
+  payment_advance_pct?: number   // e.g. 50 = 50% advance
+  payment_final_days?: number    // days after invoice creation for final payment
   created_at: string
   updated_at: string
 }

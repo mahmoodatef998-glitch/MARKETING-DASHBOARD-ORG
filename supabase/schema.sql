@@ -610,3 +610,9 @@ CREATE TABLE IF NOT EXISTS public.financial_settings (
   updated_at                 timestamptz DEFAULT now()
 );
 INSERT INTO public.financial_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- ── Payment policy on billing plans ──────────────────────────────────────────
+ALTER TABLE public.billing_plans
+  ADD COLUMN IF NOT EXISTS payment_policy_type  VARCHAR(20)  DEFAULT 'single',
+  ADD COLUMN IF NOT EXISTS payment_advance_pct  INTEGER      DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS payment_final_days   INTEGER      DEFAULT 30;

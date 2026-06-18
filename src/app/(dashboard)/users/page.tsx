@@ -70,6 +70,13 @@ const EMPTY_FORM = {
   billing_amount:      '',
   billing_currency:    'USD',
   billing_custom_days: '',
+  billing_start_date:    new Date().toISOString().split('T')[0],
+  payment_policy_type:   'single' as 'single' | 'split',
+  payment_advance_pct:   50,
+  payment_final_days:    30,
+  advance_amount:        '',
+  advance_method:        '' as string,
+  advance_date:          new Date().toISOString().split('T')[0],
 }
 
 const EMPTY_PKG = {
@@ -214,7 +221,14 @@ export default function UsersPage() {
       body: JSON.stringify({
         ...form,
         billing_custom_days: form.billing_custom_days ? Number(form.billing_custom_days) : undefined,
-        package: pkgPayload,
+        billing_start_date:  form.billing_start_date || undefined,
+        payment_policy_type: form.payment_policy_type,
+        payment_advance_pct: form.payment_advance_pct,
+        payment_final_days:  form.payment_final_days,
+        advance_amount:      Number(form.advance_amount) > 0 ? Number(form.advance_amount) : undefined,
+        advance_method:      form.advance_method || undefined,
+        advance_date:        form.advance_date || undefined,
+        package:             pkgPayload,
       }),
     })
     const data = await res.json()
@@ -592,9 +606,9 @@ export default function UsersPage() {
                       <Zap className="h-4 w-4 text-yellow-400" />
                       <span className="text-sm font-semibold text-white">Auto-Billing</span>
                       {editingBillId && <span className="text-xs text-emerald-400 ml-1">— editing existing plan</span>}
-                      {!editingBillId && <span className="text-xs text-slate-400 ml-1">— invoices sent automatically</span>}
                     </div>
 
+                    {/* Billing cycle */}
                     <div className="space-y-1.5">
                       <Label>Billing Cycle</Label>
                       <select
@@ -609,48 +623,153 @@ export default function UsersPage() {
                     </div>
 
                     {hasAutoBill && (
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="col-span-2 space-y-1.5">
-                          <Label>Amount</Label>
-                          <Input type="number" min="1" step="0.01" placeholder="1500"
-                            value={form.billing_amount}
-                            onChange={e => setForm(p => ({ ...p, billing_amount: e.target.value }))}
-                            required={hasAutoBill}
-                          />
+                      <>
+                        {/* Amount + Currency + Start Date */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2 space-y-1.5">
+                            <Label>Amount</Label>
+                            <Input type="number" min="1" step="0.01" placeholder="3000"
+                              value={form.billing_amount}
+                              onChange={e => setForm(p => ({ ...p, billing_amount: e.target.value }))}
+                              required={hasAutoBill}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Currency</Label>
+                            <select
+                              value={form.billing_currency}
+                              onChange={e => setForm(p => ({ ...p, billing_currency: e.target.value }))}
+                              className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                            >
+                              <option value="USD">USD $</option>
+                              <option value="EGP">EGP</option>
+                              <option value="EUR">EUR €</option>
+                              <option value="GBP">GBP £</option>
+                              <option value="AED">AED</option>
+                            </select>
+                          </div>
                         </div>
+
+                        {form.billing_cycle === 'custom_days' && (
+                          <div className="space-y-1.5">
+                            <Label>Every how many days?</Label>
+                            <Input type="number" min="1" max="365" placeholder="e.g. 21"
+                              value={form.billing_custom_days}
+                              onChange={e => setForm(p => ({ ...p, billing_custom_days: e.target.value }))}
+                              required
+                            />
+                          </div>
+                        )}
+
+                        {/* Billing Start Date */}
                         <div className="space-y-1.5">
-                          <Label>Currency</Label>
-                          <select
-                            value={form.billing_currency}
-                            onChange={e => setForm(p => ({ ...p, billing_currency: e.target.value }))}
-                            className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                          >
-                            <option value="USD">USD $</option>
-                            <option value="EGP">EGP</option>
-                            <option value="EUR">EUR €</option>
-                            <option value="GBP">GBP £</option>
-                            <option value="AED">AED</option>
-                          </select>
+                          <Label>Billing Start Date <span className="text-slate-500 font-normal text-xs">— when to generate the first invoice</span></Label>
+                          <Input type="date" value={form.billing_start_date} className="text-slate-300"
+                            onChange={e => setForm(p => ({ ...p, billing_start_date: e.target.value }))}
+                          />
+                          <p className="text-xs text-slate-500">First invoice will be created on this date. Leave as today to bill immediately.</p>
                         </div>
-                      </div>
+
+                        {/* ── Payment Policy ── */}
+                        <div className="space-y-3 pt-1 border-t border-slate-800">
+                          <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Policy — per billing cycle</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {([
+                              { value: 'single', label: '💳 Single Payment', desc: 'Full amount at once' },
+                              { value: 'split',  label: '✂️ Split Advance + Final', desc: 'e.g. 50% now + 50% later' },
+                            ] as { value: 'single' | 'split'; label: string; desc: string }[]).map(opt => (
+                              <button key={opt.value} type="button"
+                                onClick={() => setForm(p => ({ ...p, payment_policy_type: opt.value }))}
+                                className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                                  form.payment_policy_type === opt.value
+                                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
+                                    : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                                }`}>
+                                <p className="font-semibold">{opt.label}</p>
+                                <p className="opacity-60 mt-0.5">{opt.desc}</p>
+                              </button>
+                            ))}
+                          </div>
+
+                          {form.payment_policy_type === 'split' && (
+                            <div className="grid grid-cols-2 gap-3 bg-slate-800/40 rounded-xl p-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Advance %</Label>
+                                <Input type="number" min={1} max={99} value={form.payment_advance_pct}
+                                  onChange={e => setForm(p => ({ ...p, payment_advance_pct: Number(e.target.value) }))} />
+                                {form.billing_amount && (
+                                  <p className="text-xs text-indigo-300 font-medium">
+                                    = {form.billing_currency} {Math.round(Number(form.billing_amount) * form.payment_advance_pct / 100).toLocaleString()} advance
+                                  </p>
+                                )}
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Final payment after (days)</Label>
+                                <Input type="number" min={1} max={365} value={form.payment_final_days}
+                                  onChange={e => setForm(p => ({ ...p, payment_final_days: Number(e.target.value) }))} />
+                                <p className="text-xs text-slate-500">Days after invoice creation</p>
+                              </div>
+                              <div className="col-span-2 text-xs text-slate-400 bg-slate-700/30 rounded-lg px-3 py-2">
+                                📋 Each invoice will auto-create 2 installments:
+                                <br />• <span className="text-green-400">Installment 1:</span> {form.payment_advance_pct}% — due on invoice date
+                                <br />• <span className="text-amber-400">Installment 2:</span> {100 - form.payment_advance_pct}% — due {form.payment_final_days} days later
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ── Advance Payment at Signup ── */}
+                        {!editing && (
+                          <div className="space-y-3 pt-1 border-t border-slate-800">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-slate-400 uppercase tracking-wider">Advance Payment at Signup</Label>
+                              <span className="text-xs text-slate-500">optional</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Amount Received <span className="text-slate-500">(0 to skip)</span></Label>
+                                <Input type="number" min={0} step="0.01" placeholder="0"
+                                  value={form.advance_amount}
+                                  onChange={e => setForm(p => ({ ...p, advance_amount: e.target.value }))} />
+                                {form.billing_amount && form.payment_policy_type === 'split' && (
+                                  <button type="button" className="text-xs text-indigo-400 hover:text-indigo-300"
+                                    onClick={() => setForm(p => ({ ...p, advance_amount: String(Math.round(Number(p.billing_amount) * p.payment_advance_pct / 100)) }))}>
+                                    ↖ Fill {form.payment_advance_pct}% = {form.billing_currency} {Math.round(Number(form.billing_amount) * form.payment_advance_pct / 100).toLocaleString()}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Payment Date</Label>
+                                <Input type="date" value={form.advance_date} className="text-slate-300"
+                                  onChange={e => setForm(p => ({ ...p, advance_date: e.target.value }))} />
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Payment Method</Label>
+                              <select
+                                value={form.advance_method}
+                                onChange={e => setForm(p => ({ ...p, advance_method: e.target.value }))}
+                                className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                              >
+                                <option value="">— Select method —</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="instapay">InstaPay</option>
+                                <option value="vodafone_cash">Vodafone Cash</option>
+                                <option value="cash">Cash</option>
+                                <option value="credit_card">Credit Card</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+                            {Number(form.advance_amount) > 0 && (
+                              <div className="text-xs text-green-400/80 bg-green-500/5 border border-green-500/20 rounded-lg px-3 py-2">
+                                ✓ A paid invoice for {form.billing_currency} {Number(form.advance_amount).toLocaleString()} will be created immediately and recorded as received.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
 
-                    {form.billing_cycle === 'custom_days' && (
-                      <div className="space-y-1.5">
-                        <Label>Every how many days?</Label>
-                        <Input type="number" min="1" max="365" placeholder="e.g. 21"
-                          value={form.billing_custom_days}
-                          onChange={e => setForm(p => ({ ...p, billing_custom_days: e.target.value }))}
-                          required
-                        />
-                      </div>
-                    )}
-
-                    {hasAutoBill && !editing && (
-                      <p className="text-xs text-yellow-400/80">
-                        ⚡ First invoice will be sent to the client immediately upon account creation.
-                      </p>
-                    )}
                     {!hasAutoBill && (
                       <p className="text-xs text-slate-500">
                         Set to manual — you can send invoices from the Billing section at any time.

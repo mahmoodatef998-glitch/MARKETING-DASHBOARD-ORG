@@ -48,6 +48,10 @@ export async function POST(req: NextRequest) {
     email, password, role, display_name, phone, country, notes,
     // billing (clients only)
     billing_cycle, billing_amount, billing_currency, billing_custom_days,
+    billing_start_date,
+    payment_policy_type, payment_advance_pct, payment_final_days,
+    // advance payment at signup
+    advance_amount, advance_method, advance_date,
     // package (clients only)
     package: packageData,
   } = await req.json()
@@ -142,17 +146,22 @@ export async function POST(req: NextRequest) {
       const customDays = billing_custom_days ? Number(billing_custom_days) : undefined
       const today = new Date()
 
+      const billingStartDate = billing_start_date || toDateStr(today)
+
       const billingPlanRecord = {
-        id:                  generateId(),
-        client_id:           resolvedClientId,
-        cycle_type:          cycle,
+        id:                   generateId(),
+        client_id:            resolvedClientId,
+        cycle_type:           cycle,
         amount,
         currency,
-        custom_days:         customDays ?? null,
-        next_invoice_date:   toDateStr(today),   // first invoice today
-        is_active:           true,
-        created_at:          today.toISOString(),
-        updated_at:          today.toISOString(),
+        custom_days:          customDays ?? null,
+        next_invoice_date:    billingStartDate,   // use billing_start_date, not today
+        payment_policy_type:  payment_policy_type ?? 'single',
+        payment_advance_pct:  payment_advance_pct ?? 50,
+        payment_final_days:   payment_final_days ?? 30,
+        is_active:            true,
+        created_at:           today.toISOString(),
+        updated_at:           today.toISOString(),
       }
 
       const { data: billingPlan, error: billingErr } = await admin
@@ -162,21 +171,78 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (!billingErr && billingPlan) {
-        try {
-          await generateAndSendInvoice({
-            supabase:      admin,
-            clientId:      resolvedClientId!,
-            clientEmail:   email,
-            clientName:    display_name,
-            amount,
-            currency,
-            billingPlanId: billingPlan.id,
-            cycleType:     cycle,
-            customDays,
-          })
-        } catch (err) {
-          console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
+        // Only auto-generate first invoice if billing starts today or in the past
+        const startDate = new Date(billingStartDate)
+        startDate.setHours(0, 0, 0, 0)
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        if (startDate <= todayStart) {
+          try {
+            const newInvoice = await generateAndSendInvoice({
+              supabase:      admin,
+              clientId:      resolvedClientId!,
+              clientEmail:   email,
+              clientName:    display_name,
+              amount,
+              currency,
+              billingPlanId: billingPlan.id,
+              cycleType:     cycle,
+              customDays,
+            })
+            // If payment policy is split, auto-create installment schedule
+            if (payment_policy_type === 'split' && newInvoice?.id) {
+              const advPct = payment_advance_pct ?? 50
+              const finalDays = payment_final_days ?? 30
+              const advAmount = Math.round(amount * advPct) / 100
+              const finalAmount = Math.round((amount - advAmount) * 100) / 100
+              const invoiceDate = toDateStr(today)
+              const finalDate = new Date(today)
+              finalDate.setDate(finalDate.getDate() + finalDays)
+              await admin.from('invoice_payments').insert([
+                { invoice_id: newInvoice.id, installment_no: 1, amount: advAmount,   due_date: invoiceDate,          status: 'pending' },
+                { invoice_id: newInvoice.id, installment_no: 2, amount: finalAmount, due_date: toDateStr(finalDate), status: 'pending' },
+              ])
+            }
+          } catch (err) {
+            console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
+          }
         }
+      }
+    }
+
+    // ── Advance payment at signup ──────────────────────────────────────────────
+    if (advance_amount && Number(advance_amount) > 0 && resolvedClientId) {
+      try {
+        const advanceTotal = Number(advance_amount)
+        const advInvoiceId = generateId()
+        const now = new Date()
+        const invoiceNumber = `ADV-${Date.now().toString(36).toUpperCase()}`
+        await admin.from('invoices').insert({
+          id:               advInvoiceId,
+          invoice_number:   invoiceNumber,
+          client_id:        resolvedClientId,
+          items:            [{ description: 'Advance Payment', quantity: 1, unit_price: advanceTotal, total: advanceTotal }],
+          subtotal:         advanceTotal,
+          tax:              0,
+          total:            advanceTotal,
+          status:           'paid',
+          issued_date:      advance_date ?? now.toISOString().split('T')[0],
+          received_amount:  advanceTotal,
+          received_at:      advance_date ? new Date(advance_date).toISOString() : now.toISOString(),
+          notes:            'Advance payment recorded at account creation',
+          created_at:       now.toISOString(),
+          updated_at:       now.toISOString(),
+        })
+        // Record in invoice_payments for proper tracking
+        await admin.from('invoice_payments').insert({
+          invoice_id:     advInvoiceId,
+          amount:         advanceTotal,
+          payment_method: advance_method || null,
+          status:         'paid',
+          received_at:    advance_date ? new Date(advance_date).toISOString() : now.toISOString(),
+          installment_no: null,
+        })
+      } catch (advErr) {
+        console.error('[advance] failed to create advance invoice:', advErr instanceof Error ? advErr.message : String(advErr))
       }
     }
   }

@@ -16,7 +16,7 @@ export async function POST(_req: NextRequest) {
 
   const { data: duePlans } = await adminDb
     .from('billing_plans')
-    .select('*, client:clients(id, name, deleted_at)')
+    .select('id, client_id, amount, currency, cycle_type, custom_days, next_invoice_date, payment_policy_type, payment_advance_pct, payment_final_days, clients(id, name, email)')
     .eq('is_active', true)
     .neq('cycle_type', 'manual')
     .lte('next_invoice_date', today)
@@ -27,8 +27,8 @@ export async function POST(_req: NextRequest) {
   for (let i = 0; i < duePlans.length; i++) {
     const plan = duePlans[i]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = plan.client as any
-    if (!client || client.deleted_at) continue
+    const client = (plan as any).clients as { id: string; name: string; email: string; deleted_at?: string } | null
+    if (!client || (client as { deleted_at?: string }).deleted_at) continue
 
     const { data: inv } = await adminDb.from('invoices').insert({
       invoice_number: `INV-AUTO-${Date.now()}-${i}`,
@@ -48,6 +48,27 @@ export async function POST(_req: NextRequest) {
       created.push(inv)
       const next = nextInvoiceDate(new Date(), plan.cycle_type as CycleType, plan.custom_days ?? undefined)
       await adminDb.from('billing_plans').update({ next_invoice_date: toDateStr(next) }).eq('id', plan.id)
+
+      // Auto-create installment schedule if billing plan has split policy
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const planAny = plan as any
+      if (planAny.payment_policy_type === 'split' && inv?.id) {
+        const advPct = planAny.payment_advance_pct ?? 50
+        const finalDays = planAny.payment_final_days ?? 30
+        const advAmount = Math.round(plan.amount * advPct) / 100
+        const finalAmount = Math.round((plan.amount - advAmount) * 100) / 100
+        const invoiceDate = toDateStr(new Date())
+        const finalDate = new Date()
+        finalDate.setDate(finalDate.getDate() + finalDays)
+        try {
+          await adminDb.from('invoice_payments').insert([
+            { invoice_id: inv.id, installment_no: 1, amount: advAmount,   due_date: invoiceDate,          status: 'pending' },
+            { invoice_id: inv.id, installment_no: 2, amount: finalAmount, due_date: toDateStr(finalDate), status: 'pending' },
+          ])
+        } catch (schErr) {
+          console.error('[auto-generate] schedule insert failed:', schErr)
+        }
+      }
     }
   }
 

@@ -466,10 +466,10 @@ export default function FinancePage() {
         />
         <KpiCard
           label="Net Profit"
-          value={formatCurrency(d.profit.thisMonth)}
-          sub={`Margin: ${d.profit.margin}%`}
-          color={d.profit.thisMonth >= 0 ? 'border-green-500/20' : 'border-red-500/20'}
-          icon={<DollarSign className={`h-4 w-4 ${d.profit.thisMonth >= 0 ? 'text-green-400' : 'text-red-400'}`} />}
+          value={formatCurrency(d.pnl.netProfit)}
+          sub={`Margin: ${d.pnl.revenue > 0 ? Math.round((d.pnl.netProfit / d.pnl.revenue) * 100) : 0}%`}
+          color={d.pnl.netProfit >= 0 ? 'border-green-500/20' : 'border-red-500/20'}
+          icon={<DollarSign className={`h-4 w-4 ${d.pnl.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`} />}
         />
         <KpiCard
           label="Outstanding"
@@ -668,7 +668,14 @@ export default function FinancePage() {
 
         {/* Expenses list */}
         <div className="space-y-1.5">
-          {expenses.slice(0, 10).map(exp => {
+          {expenses
+            .filter(exp => {
+              const now = new Date()
+              const d = new Date(exp.date)
+              return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+            })
+            .slice(0, 15)
+            .map(exp => {
             const meta = catMeta(exp.category)
             return (
               <div key={exp.id} className="flex items-center gap-3 bg-slate-800/30 border border-slate-700/50 rounded-xl px-3 py-2.5">
@@ -687,9 +694,13 @@ export default function FinancePage() {
               </div>
             )
           })}
-          {expenses.length === 0 && (
+          {expenses.filter(exp => {
+            const now = new Date()
+            const d = new Date(exp.date)
+            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+          }).length === 0 && (
             <div className="text-center py-8 text-sm text-slate-600 border border-dashed border-slate-800 rounded-xl">
-              No expenses recorded yet. Add your first expense above.
+              No expenses recorded this month yet.
             </div>
           )}
         </div>
