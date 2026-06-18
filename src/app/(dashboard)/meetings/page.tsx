@@ -250,11 +250,12 @@ function MeetingDetailModal({
   const [deleting,       setDeleting]       = useState(false)
 
   const now          = new Date()
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const meetingDt    = new Date(meeting.scheduled_at)
+  const meetingDay   = new Date(meetingDt.getFullYear(), meetingDt.getMonth(), meetingDt.getDate())
   const isPast       = meetingDt < startOfToday
   const isDone       = meeting.status === 'done'
-  const diffDays     = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
+  const diffDays     = Math.round((meetingDay.getTime() - startOfToday.getTime()) / 86_400_000)
   const displayName  = meeting.client?.name ?? meeting.client_name
 
   let timeLabel = ''
@@ -495,11 +496,12 @@ function MeetingCard({
   const [deleting,    setDeleting]    = useState(false)
 
   const now          = new Date()
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const meetingDt    = new Date(meeting.scheduled_at)
+  const meetingDay   = new Date(meetingDt.getFullYear(), meetingDt.getMonth(), meetingDt.getDate())
   const isPast       = meetingDt < startOfToday
   const isDone       = meeting.status === 'done'
-  const diffDays     = Math.ceil((meetingDt.getTime() - now.getTime()) / 86_400_000)
+  const diffDays     = Math.round((meetingDay.getTime() - startOfToday.getTime()) / 86_400_000)
 
   const displayName = meeting.client?.name ?? meeting.client_name
 
