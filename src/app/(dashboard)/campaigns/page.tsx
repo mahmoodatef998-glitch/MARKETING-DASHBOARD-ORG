@@ -383,7 +383,7 @@ function CampaignDetail({ id, onClose, onEdit, onDelete }: {
 
         <div className="p-5 space-y-5">
           {/* Stats row */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Total Posts', value: posts.length, icon: Send,         color: 'text-indigo-400' },
               { label: 'Published',   value: published,    icon: CheckCircle2, color: 'text-green-400' },
@@ -681,7 +681,7 @@ export default function CampaignsPage() {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(Object.entries(statusCounts) as [Campaign['status'], number][]).map(([key, count]) => {
           const cfg  = STATUS_CFG[key]
           const Icon = cfg.icon

@@ -571,7 +571,8 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
       </div>
 
       {/* Grid */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className="overflow-x-auto">
+      <div className="min-w-[560px] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-slate-800">
           {DAY_LABELS.map(d => (
@@ -623,6 +624,7 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
             })}
           </div>
         ))}
+      </div>
       </div>
 
       {/* Legend */}
@@ -729,7 +731,7 @@ export default function PublishingHubPage() {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-indigo-500/10"><Send className="h-4 w-4 text-indigo-400" /></div>

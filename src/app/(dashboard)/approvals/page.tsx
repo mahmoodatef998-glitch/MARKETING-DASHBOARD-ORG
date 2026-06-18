@@ -437,7 +437,7 @@ export default function ApprovalsPage() {
         )}
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl bg-slate-800 border border-slate-700 p-5">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="h-4 w-4 text-amber-400" />
