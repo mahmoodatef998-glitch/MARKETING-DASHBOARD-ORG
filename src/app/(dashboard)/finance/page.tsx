@@ -36,14 +36,14 @@ function KpiCard({ label, value, sub, growth, color, icon }: {
   label: string; value: string; sub?: string; growth?: number; color: string; icon: React.ReactNode
 }) {
   return (
-    <div className={`rounded-2xl border p-4 space-y-3 bg-slate-900 ${color}`}>
+    <div className={`rounded-2xl border p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-900 ${color}`}>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
-        <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-slate-800/80">{icon}</div>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider leading-tight">{label}</span>
+        <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl flex items-center justify-center bg-slate-800/80 shrink-0">{icon}</div>
       </div>
-      <div>
-        <p className="text-2xl font-bold text-slate-100">{value}</p>
-        {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+      <div className="min-w-0">
+        <p className="text-lg sm:text-2xl font-bold text-slate-100 truncate">{value}</p>
+        {sub && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{sub}</p>}
       </div>
       {growth !== undefined && (
         <div className={`flex items-center gap-1 text-xs font-medium ${growth >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -243,7 +243,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md" aria-describedby={undefined}>
+      <DialogContent className="max-w-md w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-4 w-4 text-slate-400" /> Financial Settings
@@ -420,13 +420,19 @@ export default function FinancePage() {
     <div className="space-y-6 max-w-6xl mx-auto">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Financial Intelligence</h1>
-          <p className="text-sm text-slate-500 mt-0.5">MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span> · ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span> · Collection rate <span className="text-green-400 font-semibold">{d.collectionRate}%</span></p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-100">Financial Intelligence</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
+            <span>MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span></span>
+            <span className="text-slate-700">·</span>
+            <span>ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span></span>
+            <span className="text-slate-700">·</span>
+            <span>Collection <span className="text-green-400 font-semibold">{d.collectionRate}%</span></span>
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={generateDueInvoices} disabled={generating} variant="outline" size="sm" className="gap-1.5 text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={generateDueInvoices} disabled={generating} variant="outline" size="sm" className="gap-1.5 text-xs flex-1 sm:flex-none">
             {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-amber-400" />}
             Generate Invoices
           </Button>
@@ -559,17 +565,17 @@ export default function FinancePage() {
 
           {/* Cost rows */}
           <div className="border-l-2 border-red-500/30 ml-2 pl-3 space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})</span>
-              <span className="text-red-400">− {formatCurrency(d.pnl.designCost)}</span>
+            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
+              <span className="min-w-0">Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})</span>
+              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.designCost)}</span>
             </div>
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})</span>
-              <span className="text-red-400">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
+            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
+              <span className="min-w-0">Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})</span>
+              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
             </div>
-            <div className="flex justify-between text-xs text-slate-500">
+            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
               <span>Operational expenses</span>
-              <span className="text-red-400">− {formatCurrency(d.pnl.operationalExpenses)}</span>
+              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.operationalExpenses)}</span>
             </div>
           </div>
 
@@ -603,18 +609,20 @@ export default function FinancePage() {
           <p className="text-sm font-semibold text-slate-300">Recommended Actions</p>
           <div className="space-y-2">
             {analysis.recommendations.map((rec, i) => (
-              <div key={i} className="flex items-start gap-3 bg-slate-800/40 border border-slate-700/60 rounded-xl px-4 py-3">
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold shrink-0 mt-0.5 ${PRIORITY_STYLE[rec.priority]}`}>
-                  {rec.priority.toUpperCase()}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-200">{rec.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{rec.detail}</p>
+              <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 bg-slate-800/40 border border-slate-700/60 rounded-xl px-3 sm:px-4 py-3">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold shrink-0 mt-0.5 ${PRIORITY_STYLE[rec.priority]}`}>
+                    {rec.priority.toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200">{rec.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{rec.detail}</p>
+                  </div>
                 </div>
                 {rec.action_type !== 'none' && rec.action_label && (
                   <Button size="sm" disabled={actionLoading === String(i)}
                     onClick={() => handleAction(rec, i)}
-                    className="h-7 text-xs shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white">
+                    className="h-7 text-xs shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white self-start sm:self-auto">
                     {actionLoading === String(i)
                       ? <Loader2 className="h-3 w-3 animate-spin" />
                       : rec.action_label}

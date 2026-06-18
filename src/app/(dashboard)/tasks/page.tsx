@@ -160,7 +160,7 @@ function TaskForm({
         <Label>Description</Label>
         <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Task details…" rows={2} />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Status</Label>
           <Select value={form.status} onValueChange={(v) => set('status', v)}>
@@ -180,7 +180,7 @@ function TaskForm({
           </Select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Task Type</Label>
           <Select value={form.task_type} onValueChange={(v) => set('task_type', v)}>
@@ -215,7 +215,7 @@ function TaskForm({
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Due Date</Label>
           <Input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} className="text-slate-300" />
@@ -782,45 +782,46 @@ export default function TasksPage() {
   return (
     <div className="space-y-5">
       {/* Top bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-          <Input className="pl-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9 w-full" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* View toggle */}
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
+            <button
+              onClick={() => setGridView(true)}
+              className={`p-1.5 rounded-md transition-all ${gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setGridView(false)}
+              className={`p-1.5 rounded-md transition-all ${!gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
 
-        {/* View toggle */}
-        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-0.5 gap-0.5">
-          <button
-            onClick={() => setGridView(true)}
-            className={`p-1.5 rounded-md transition-all ${gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setGridView(false)}
-            className={`p-1.5 rounded-md transition-all ${!gridView ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
-          <Download className="h-4 w-4" /> Export
-        </Button>
-        {isAdmin && (
-          <Button onClick={() => { setEditing(null); setOpen(true) }}>
-            <Plus className="h-4 w-4" /> New Task
+          <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1.5 text-slate-400 hover:text-slate-100">
+            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export</span>
           </Button>
-        )}
+          {isAdmin && (
+            <Button onClick={() => { setEditing(null); setOpen(true) }} className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
+              <Plus className="h-4 w-4" /> New Task
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Bulk action toolbar — admin only */}
       {isAdmin && selected.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
           <span className="text-sm font-medium text-indigo-300">{selected.size} selected</span>
           <div className="flex-1" />
           <Select onValueChange={bulkSetStatus}>
-            <SelectTrigger className="w-36 h-8 text-xs border-indigo-500/40 bg-slate-800">
+            <SelectTrigger className="w-32 sm:w-36 h-8 text-xs border-indigo-500/40 bg-slate-800">
               <SelectValue placeholder="Set status…" />
             </SelectTrigger>
             <SelectContent>
@@ -830,7 +831,7 @@ export default function TasksPage() {
             </SelectContent>
           </Select>
           <Select onValueChange={bulkReassign}>
-            <SelectTrigger className="w-40 h-8 text-xs border-indigo-500/40 bg-slate-800">
+            <SelectTrigger className="w-36 sm:w-40 h-8 text-xs border-indigo-500/40 bg-slate-800">
               <SelectValue placeholder="Reassign to…" />
             </SelectTrigger>
             <SelectContent>
@@ -849,7 +850,7 @@ export default function TasksPage() {
       )}
 
       {/* Filter row: Assignee | Client | Due date */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap overflow-x-auto pb-1">
         <Filter className="h-3.5 w-3.5 text-slate-500 shrink-0" />
 
         {/* Assignee */}
@@ -1046,7 +1047,7 @@ export default function TasksPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg" aria-describedby={undefined}>
+        <DialogContent className="max-w-lg w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Task' : 'New Task'}</DialogTitle>
           </DialogHeader>
