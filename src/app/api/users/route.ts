@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create billing plan if billing settings provided
+    // Create billing plan if auto-billing configured (not manual)
     if (billing_cycle && billing_amount && billing_cycle !== 'manual') {
       const cycle = billing_cycle as CycleType
       const amount = Number(billing_amount)
@@ -154,16 +154,15 @@ export async function POST(req: NextRequest) {
       const todayStr = toDateStr(today)
       const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
 
-      // firstInvoiceDate = when client should settle remaining balance
       const firstInvoiceDate = billing_start_date || todayStr
       const firstInvoiceDateObj = new Date(firstInvoiceDate)
       firstInvoiceDateObj.setHours(0, 0, 0, 0)
 
-      const hasAdvance = payment_policy_type === 'split' && advance_amount && Number(advance_amount) > 0
+      const hasAdvanceForBilling = advance_amount && Number(advance_amount) > 0
 
-      // If we create first invoice now (advance case): next billing date = firstInvoiceDate + 1 cycle
-      // Otherwise: cron creates first invoice on firstInvoiceDate, then advances itself
-      const nextBillingDate = hasAdvance
+      // If advance was taken, first regular invoice date is one cycle after the start date
+      // Otherwise, cron creates the first invoice on the start date
+      const nextBillingDate = hasAdvanceForBilling
         ? toDateStr(nextInvoiceDate(firstInvoiceDateObj, cycle, customDays))
         : firstInvoiceDate
 
@@ -176,7 +175,7 @@ export async function POST(req: NextRequest) {
         custom_days:          customDays ?? null,
         next_invoice_date:    nextBillingDate,
         payment_policy_type:  payment_policy_type ?? 'single',
-        payment_advance_pct:  hasAdvance && amount > 0
+        payment_advance_pct:  hasAdvanceForBilling && amount > 0
           ? Math.round((Number(advance_amount) / amount) * 100)
           : (payment_advance_pct ?? 50),
         payment_final_days:   payment_final_days ?? 30,
@@ -193,134 +192,100 @@ export async function POST(req: NextRequest) {
 
       if (billingErr) {
         console.error('[billing] plan creation failed:', billingErr.message)
-      } else if (billingPlan) {
+      } else if (billingPlan && !hasAdvanceForBilling && firstInvoiceDateObj <= todayStart) {
+        // No advance and start date is today or past → create first invoice immediately
         try {
-          if (hasAdvance) {
-            // ── Split + Advance: two separate invoices ─────────────────────────
-            // Invoice 1 (ADV): advance received → status=paid → counts as revenue immediately
-            // Invoice 2 (INV): remaining balance → status=sent → open in Invoices section
-            const advAmt   = Number(advance_amount)
-            const finalAmt = Math.round((amount - advAmt) * 100) / 100
-            const advReceivedAt = advance_date
-              ? new Date(advance_date).toISOString()
-              : today.toISOString()
-
-            // ADV invoice — recorded as paid income
-            const advInvoiceId     = generateId()
-            const advInvoiceNumber = `ADV-${Date.now().toString(36).toUpperCase()}`
-            await admin.from('invoices').insert({
-              id:              advInvoiceId,
-              invoice_number:  advInvoiceNumber,
-              client_id:       resolvedClientId,
-              items: [{ description: 'Advance Payment', quantity: 1, unit_price: advAmt, total: advAmt }],
-              subtotal:        advAmt,
-              tax:             0,
-              total:           advAmt,
-              currency,
-              status:          'paid',
-              issued_date:     todayStr,
-              due_date:        todayStr,
-              received_amount: advAmt,
-              received_at:     advReceivedAt,
-              notes:           `Advance payment received. Remaining ${finalAmt} ${currency} due ${firstInvoiceDate}.`,
-              created_at:      today.toISOString(),
-              updated_at:      today.toISOString(),
-            })
-            await admin.from('invoice_payments').insert({
-              invoice_id:     advInvoiceId,
-              amount:         advAmt,
-              payment_method: advance_method || null,
-              status:         'paid',
-              received_at:    advReceivedAt,
-              installment_no: null,
-            })
-
-            // Remaining invoice — open, due on firstInvoiceDate
-            if (finalAmt > 0) {
-              const remainingInvoiceNumber = await nextInvoiceNumber(admin)
-              await admin.from('invoices').insert({
-                id:              generateId(),
-                invoice_number:  remainingInvoiceNumber,
-                client_id:       resolvedClientId,
-                items: [{ description: 'Marketing Services (Remaining Balance)', quantity: 1, unit_price: finalAmt, total: finalAmt }],
-                subtotal:        finalAmt,
-                tax:             0,
-                total:           finalAmt,
-                currency,
-                status:          'sent',
-                issued_date:     todayStr,
-                due_date:        firstInvoiceDate,
-                received_amount: 0,
-                notes:           `Remaining balance after ${advAmt} ${currency} advance payment on ${todayStr}.`,
-                created_at:      today.toISOString(),
-                updated_at:      today.toISOString(),
-              })
-            }
-
-            await admin.from('automation_logs').insert({
-              type:            'payment_reminder',
-              recipient_email: email,
-              subject:         `ADV ${advInvoiceNumber} — ${advAmt} ${currency} received; remaining ${finalAmt} ${currency} due ${firstInvoiceDate}`,
-              status:          'sent',
-              created_at:      today.toISOString(),
-            })
-
-          } else if (firstInvoiceDateObj <= todayStart) {
-            // ── No advance, billing starts today or earlier: create invoice now ──
-            await generateAndSendInvoice({
-              supabase:      admin,
-              clientId:      resolvedClientId!,
-              clientEmail:   email,
-              clientName:    display_name,
-              amount,
-              currency,
-              billingPlanId: billingPlan.id,
-              cycleType:     cycle,
-              customDays,
-            })
-          }
-          // else: future start date, no advance → cron will create first invoice
+          await generateAndSendInvoice({
+            supabase:      admin,
+            clientId:      resolvedClientId!,
+            clientEmail:   email,
+            clientName:    display_name,
+            amount,
+            currency,
+            billingPlanId: billingPlan.id,
+            cycleType:     cycle,
+            customDays,
+          })
         } catch (err) {
           console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
         }
       }
+      // else: future start date or has advance → cron handles next invoice
     }
 
-    // ── Standalone ADV invoice (non-split policies only) ──────────────────────────
-    // For split policy, advance is tracked as installment 1 above.
-    // For single/manual billing with an upfront advance, record it as a standalone invoice.
-    if (advance_amount && Number(advance_amount) > 0 && resolvedClientId && payment_policy_type !== 'split') {
+    // Advance tracking — always runs when advance_amount provided, independent of billing cycle
+    if (advance_amount && Number(advance_amount) > 0 && resolvedClientId) {
       try {
-        const advanceTotal = Number(advance_amount)
-        const advInvoiceId = generateId()
+        const advAmt = Number(advance_amount)
+        const totalBilling = billing_amount ? Number(billing_amount) : advAmt
+        const finalAmt = Math.max(0, Math.round((totalBilling - advAmt) * 100) / 100)
+        const currency = billing_currency ?? 'USD'
         const now = new Date()
-        const invoiceNumber = `ADV-${Date.now().toString(36).toUpperCase()}`
+        const todayStr = toDateStr(now)
+        const firstInvoiceDate = billing_start_date || todayStr
+        const advReceivedAt = advance_date ? new Date(advance_date).toISOString() : now.toISOString()
+
+        // ADV invoice — paid immediately, shows as income in Finance
+        const advInvoiceId     = generateId()
+        const advInvoiceNumber = `ADV-${Date.now().toString(36).toUpperCase()}`
         await admin.from('invoices').insert({
-          id:               advInvoiceId,
-          invoice_number:   invoiceNumber,
-          client_id:        resolvedClientId,
-          items:            [{ description: 'Advance Payment', quantity: 1, unit_price: advanceTotal, total: advanceTotal }],
-          subtotal:         advanceTotal,
-          tax:              0,
-          total:            advanceTotal,
-          status:           'paid',
-          issued_date:      advance_date ?? now.toISOString().split('T')[0],
-          received_amount:  advanceTotal,
-          received_at:      advance_date ? new Date(advance_date).toISOString() : now.toISOString(),
-          notes:            'Advance payment recorded at account creation',
-          created_at:       now.toISOString(),
-          updated_at:       now.toISOString(),
+          id:              advInvoiceId,
+          invoice_number:  advInvoiceNumber,
+          client_id:       resolvedClientId,
+          items:           [{ description: 'Advance Payment', quantity: 1, unit_price: advAmt, total: advAmt }],
+          subtotal:        advAmt,
+          tax:             0,
+          total:           advAmt,
+          currency,
+          status:          'paid',
+          issued_date:     advance_date ?? todayStr,
+          due_date:        advance_date ?? todayStr,
+          received_amount: advAmt,
+          received_at:     advReceivedAt,
+          notes:           `Advance payment received${finalAmt > 0 ? `. Remaining ${finalAmt} ${currency} due ${firstInvoiceDate}` : ''}.`,
+          created_at:      now.toISOString(),
+          updated_at:      now.toISOString(),
         })
         await admin.from('invoice_payments').insert({
           invoice_id:     advInvoiceId,
-          amount:         advanceTotal,
+          amount:         advAmt,
           payment_method: advance_method || null,
           status:         'paid',
-          received_at:    advance_date ? new Date(advance_date).toISOString() : now.toISOString(),
+          received_at:    advReceivedAt,
           installment_no: null,
         })
+
+        // Remaining balance invoice — open in Invoices section, triggers reminders
+        if (finalAmt > 0) {
+          const remainingNumber = await nextInvoiceNumber(admin)
+          await admin.from('invoices').insert({
+            id:              generateId(),
+            invoice_number:  remainingNumber,
+            client_id:       resolvedClientId,
+            items:           [{ description: 'Marketing Services (Remaining Balance)', quantity: 1, unit_price: finalAmt, total: finalAmt }],
+            subtotal:        finalAmt,
+            tax:             0,
+            total:           finalAmt,
+            currency,
+            status:          'sent',
+            issued_date:     todayStr,
+            due_date:        firstInvoiceDate,
+            received_amount: 0,
+            notes:           `Remaining balance after ${advAmt} ${currency} advance on ${todayStr}.`,
+            created_at:      now.toISOString(),
+            updated_at:      now.toISOString(),
+          })
+        }
+
+        await admin.from('automation_logs').insert({
+          type:            'payment_reminder',
+          recipient_email: email,
+          subject:         `ADV ${advInvoiceNumber} — ${advAmt} ${currency} received${finalAmt > 0 ? `; remaining ${finalAmt} ${currency} due ${firstInvoiceDate}` : ''}`,
+          status:          'sent',
+          created_at:      now.toISOString(),
+        })
       } catch (advErr) {
-        console.error('[advance] failed to create advance invoice:', advErr instanceof Error ? advErr.message : String(advErr))
+        console.error('[advance] tracking failed:', advErr instanceof Error ? advErr.message : String(advErr))
       }
     }
   }

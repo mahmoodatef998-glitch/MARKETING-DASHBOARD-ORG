@@ -235,7 +235,7 @@ export default function UsersPage() {
           ? Math.round((Number(form.advance_amount) / Number(form.billing_amount)) * 100)
           : 50,
         payment_final_days:  form.payment_final_days,
-        advance_amount:      form.payment_policy_type === 'split' && Number(form.advance_amount) > 0 ? Number(form.advance_amount) : undefined,
+        advance_amount:      Number(form.advance_amount) > 0 ? Number(form.advance_amount) : undefined,
         advance_method:      form.advance_method || undefined,
         advance_date:        form.advance_date || undefined,
         package:             pkgPayload,
@@ -634,7 +634,7 @@ export default function UsersPage() {
 
                     {hasAutoBill && (
                       <>
-                        {/* Amount + Currency + Start Date */}
+                        {/* Amount + Currency */}
                         <div className="grid grid-cols-3 gap-3">
                           <div className="col-span-2 space-y-1.5">
                             <Label>Amount</Label>
@@ -670,110 +670,85 @@ export default function UsersPage() {
                             />
                           </div>
                         )}
-
-                        {/* First Invoice Date */}
-                        <div className="space-y-1.5">
-                          <Label>First Invoice Date <span className="text-slate-500 font-normal text-xs">— when the client should pay (remaining balance due on this date)</span></Label>
-                          <Input type="date" value={form.billing_start_date} className="text-slate-300"
-                            onChange={e => setForm(p => ({ ...p, billing_start_date: e.target.value }))}
-                          />
-                          <p className="text-xs text-slate-500">
-                            {form.payment_policy_type === 'split'
-                              ? 'Advance is recorded immediately. Remaining balance will be due on this date.'
-                              : 'Invoice will be generated on this date.'}
-                          </p>
-                        </div>
-
-                        {/* ── Payment Terms ── */}
-                        {(() => {
-                          const advAmt   = Number(form.advance_amount) || 0
-                          const total    = Number(form.billing_amount) || 0
-                          const remaining = Math.max(0, total - advAmt)
-                          return (
-                            <div className="space-y-3 pt-1 border-t border-slate-800">
-                              <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Terms</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                {([
-                                  { value: 'single', label: '💳 Full Amount', desc: 'Collect everything at once' },
-                                  { value: 'split',  label: '🔀 Advance + Remaining', desc: 'Part now, rest later' },
-                                ] as { value: 'single' | 'split'; label: string; desc: string }[]).map(opt => (
-                                  <button key={opt.value} type="button"
-                                    onClick={() => setForm(p => ({ ...p, payment_policy_type: opt.value }))}
-                                    className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
-                                      form.payment_policy_type === opt.value
-                                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
-                                        : 'border-slate-700 text-slate-400 hover:border-slate-600'
-                                    }`}>
-                                    <p className="font-semibold">{opt.label}</p>
-                                    <p className="opacity-60 mt-0.5">{opt.desc}</p>
-                                  </button>
-                                ))}
-                              </div>
-
-                              {form.payment_policy_type === 'split' && (
-                                <div className="space-y-3 bg-slate-800/40 rounded-xl p-3">
-                                  {/* Advance + Remaining row */}
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs">Advance Received</Label>
-                                      <Input type="number" min={0} step="0.01" placeholder="0"
-                                        value={form.advance_amount}
-                                        onChange={e => setForm(p => ({ ...p, advance_amount: e.target.value }))} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs">Remaining (auto)</Label>
-                                      <div className="h-9 flex items-center px-3 bg-slate-900 border border-slate-700 rounded-lg">
-                                        <span className={`text-sm font-bold ${remaining > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                                          {form.billing_currency} {total > 0 ? remaining.toLocaleString() : '—'}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Info: remaining due on First Invoice Date */}
-                                  {remaining > 0 && form.billing_start_date && (
-                                    <div className="text-xs text-slate-400 bg-slate-900/60 rounded-lg px-3 py-2">
-                                      💡 Remaining <strong className="text-amber-300">{form.billing_currency} {remaining.toLocaleString()}</strong> will be due on <strong className="text-white">{form.billing_start_date}</strong>
-                                    </div>
-                                  )}
-
-                                  {/* Date + Method (only for new users) */}
-                                  {!editing && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1.5">
-                                        <Label className="text-xs">Payment Date</Label>
-                                        <Input type="date" value={form.advance_date} className="text-slate-300"
-                                          onChange={e => setForm(p => ({ ...p, advance_date: e.target.value }))} />
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        <Label className="text-xs">Payment Method</Label>
-                                        <select value={form.advance_method}
-                                          onChange={e => setForm(p => ({ ...p, advance_method: e.target.value }))}
-                                          className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
-                                          <option value="">— Select —</option>
-                                          <option value="bank_transfer">Bank Transfer</option>
-                                          <option value="instapay">InstaPay</option>
-                                          <option value="vodafone_cash">Vodafone Cash</option>
-                                          <option value="cash">Cash</option>
-                                          <option value="credit_card">Credit Card</option>
-                                          <option value="other">Other</option>
-                                        </select>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
                       </>
                     )}
 
+                    {/* Manual billing note */}
                     {!hasAutoBill && (
                       <p className="text-xs text-slate-500">
                         Set to manual — you can send invoices from the Billing section at any time.
                       </p>
                     )}
+
+                    {/* ── Advance Payment — always visible for clients ── */}
+                    {(() => {
+                      const advAmt    = Number(form.advance_amount) || 0
+                      const total     = Number(form.billing_amount) || 0
+                      const remaining = Math.max(0, total - advAmt)
+                      return (
+                        <div className="space-y-3 pt-1 border-t border-slate-800">
+                          <Label className="text-xs text-slate-400 uppercase tracking-wider">Advance Payment (عربون)</Label>
+
+                          {/* Due date for remaining — when manual billing, show it here */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Remaining Balance Due Date</Label>
+                            <Input type="date" value={form.billing_start_date} className="text-slate-300"
+                              onChange={e => setForm(p => ({ ...p, billing_start_date: e.target.value }))}
+                            />
+                            <p className="text-xs text-slate-500">Advance recorded immediately; remaining due on this date.</p>
+                          </div>
+
+                          <div className="space-y-3 bg-slate-800/40 rounded-xl p-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Advance Received</Label>
+                                <Input type="number" min={0} step="0.01" placeholder="0"
+                                  value={form.advance_amount}
+                                  onChange={e => setForm(p => ({ ...p, advance_amount: e.target.value }))} />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Remaining (auto)</Label>
+                                <div className="h-9 flex items-center px-3 bg-slate-900 border border-slate-700 rounded-lg">
+                                  <span className={`text-sm font-bold ${remaining > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                    {form.billing_currency} {total > 0 ? remaining.toLocaleString() : '—'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {remaining > 0 && form.billing_start_date && (
+                              <div className="text-xs text-slate-400 bg-slate-900/60 rounded-lg px-3 py-2">
+                                💡 Remaining <strong className="text-amber-300">{form.billing_currency} {remaining.toLocaleString()}</strong> will be due on <strong className="text-white">{form.billing_start_date}</strong>
+                              </div>
+                            )}
+
+                            {!editing && (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Payment Date</Label>
+                                  <Input type="date" value={form.advance_date} className="text-slate-300"
+                                    onChange={e => setForm(p => ({ ...p, advance_date: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Payment Method</Label>
+                                  <select value={form.advance_method}
+                                    onChange={e => setForm(p => ({ ...p, advance_method: e.target.value }))}
+                                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                    <option value="">— Select —</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="instapay">InstaPay</option>
+                                    <option value="vodafone_cash">Vodafone Cash</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="credit_card">Credit Card</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
 
