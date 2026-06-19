@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 // ─── GET /api/packages?clientId=X ────────────────────────────────────────────
 // Returns all packages for a client with computed usage per item
@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: packages, error } = await supabase
+  // Use admin client for admins to bypass RLS and see all packages regardless of how they were created
+  const db = callerProfile?.role === 'admin' ? createAdminClient() : supabase
+
+  const { data: packages, error } = await db
     .from('client_packages')
     .select('*, items:package_items(*)')
     .eq('client_id', clientId)
