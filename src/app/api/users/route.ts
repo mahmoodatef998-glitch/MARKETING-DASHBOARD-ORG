@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { generateId } from '@/lib/utils'
-import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { generateAndSendInvoice, toDateStr, nextInvoiceDate, type CycleType } from '@/lib/invoice-automation'
+import { nextInvoiceNumber } from '@/lib/invoice-number'
 
 // GET all team/client users
 export async function GET() {
@@ -150,8 +151,21 @@ export async function POST(req: NextRequest) {
       const currency = billing_currency ?? 'USD'
       const customDays = billing_custom_days ? Number(billing_custom_days) : undefined
       const today = new Date()
+      const todayStr = toDateStr(today)
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
 
-      const billingStartDate = billing_start_date || toDateStr(today)
+      // firstInvoiceDate = when client should settle remaining balance
+      const firstInvoiceDate = billing_start_date || todayStr
+      const firstInvoiceDateObj = new Date(firstInvoiceDate)
+      firstInvoiceDateObj.setHours(0, 0, 0, 0)
+
+      const hasAdvance = payment_policy_type === 'split' && advance_amount && Number(advance_amount) > 0
+
+      // If we create first invoice now (advance case): next billing date = firstInvoiceDate + 1 cycle
+      // Otherwise: cron creates first invoice on firstInvoiceDate, then advances itself
+      const nextBillingDate = hasAdvance
+        ? toDateStr(nextInvoiceDate(firstInvoiceDateObj, cycle, customDays))
+        : firstInvoiceDate
 
       const billingPlanRecord = {
         id:                   generateId(),
@@ -160,9 +174,11 @@ export async function POST(req: NextRequest) {
         amount,
         currency,
         custom_days:          customDays ?? null,
-        next_invoice_date:    billingStartDate,   // use billing_start_date, not today
+        next_invoice_date:    nextBillingDate,
         payment_policy_type:  payment_policy_type ?? 'single',
-        payment_advance_pct:  payment_advance_pct ?? 50,
+        payment_advance_pct:  hasAdvance && amount > 0
+          ? Math.round((Number(advance_amount) / amount) * 100)
+          : (payment_advance_pct ?? 50),
         payment_final_days:   payment_final_days ?? 30,
         is_active:            true,
         created_at:           today.toISOString(),
@@ -175,14 +191,76 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
-      if (!billingErr && billingPlan) {
-        // Only auto-generate first invoice if billing starts today or in the past
-        const startDate = new Date(billingStartDate)
-        startDate.setHours(0, 0, 0, 0)
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-        if (startDate <= todayStart) {
-          try {
-            const newInvoice = await generateAndSendInvoice({
+      if (billingErr) {
+        console.error('[billing] plan creation failed:', billingErr.message)
+      } else if (billingPlan) {
+        try {
+          if (hasAdvance) {
+            // ── Split + Advance: create first invoice immediately ──────────────
+            const advAmt = Number(advance_amount)
+            const finalAmt = Math.round((amount - advAmt) * 100) / 100
+            const advReceivedAt = advance_date
+              ? new Date(advance_date).toISOString()
+              : today.toISOString()
+
+            const invoiceNumber = await nextInvoiceNumber(admin)
+            const invoiceId = generateId()
+
+            await admin.from('invoices').insert({
+              id:              invoiceId,
+              invoice_number:  invoiceNumber,
+              client_id:       resolvedClientId,
+              items: [{
+                id:          generateId(),
+                description: 'Marketing Services',
+                quantity:    1,
+                unit_price:  amount,
+                total:       amount,
+              }],
+              subtotal:        amount,
+              tax:             0,
+              total:           amount,
+              currency,
+              status:          'sent',
+              issued_date:     todayStr,
+              due_date:        firstInvoiceDate,
+              received_amount: advAmt,
+              received_at:     advReceivedAt,
+              notes:           `Advance ${advAmt} ${currency} received ${todayStr}. Remaining ${finalAmt} ${currency} due ${firstInvoiceDate}.`,
+              created_at:      today.toISOString(),
+              updated_at:      today.toISOString(),
+            })
+
+            await admin.from('invoice_payments').insert([
+              {
+                invoice_id:     invoiceId,
+                installment_no: 1,
+                amount:         advAmt,
+                due_date:       todayStr,
+                status:         'paid',
+                received_at:    advReceivedAt,
+                payment_method: advance_method || null,
+              },
+              {
+                invoice_id:     invoiceId,
+                installment_no: 2,
+                amount:         finalAmt,
+                due_date:       firstInvoiceDate,
+                status:         'pending',
+              },
+            ])
+
+            await admin.from('automation_logs').insert({
+              type:            'payment_reminder',
+              recipient_email: email,
+              subject:         `Invoice ${invoiceNumber} — advance ${advAmt} ${currency} received`,
+              status:          'sent',
+              created_at:      today.toISOString(),
+            })
+
+          } else if (firstInvoiceDateObj <= todayStart) {
+            // ── No advance, billing starts today or earlier: create invoice now ──
+            await generateAndSendInvoice({
               supabase:      admin,
               clientId:      resolvedClientId!,
               clientEmail:   email,
@@ -193,57 +271,17 @@ export async function POST(req: NextRequest) {
               cycleType:     cycle,
               customDays,
             })
-            // If payment policy is split, auto-create installment schedule
-            if (payment_policy_type === 'split' && newInvoice?.id) {
-              const finalDays  = payment_final_days ?? 30
-              // Use absolute advance_amount if given; fall back to pct-based
-              const advAmt     = advance_amount && Number(advance_amount) > 0
-                ? Number(advance_amount)
-                : Math.round(amount * (payment_advance_pct ?? 50)) / 100
-              const finalAmt   = Math.round((amount - advAmt) * 100) / 100
-              const advPaid    = advance_amount && Number(advance_amount) > 0
-              const advReceivedAt = advance_date
-                ? new Date(advance_date).toISOString()
-                : today.toISOString()
-              const finalDate  = new Date(today)
-              finalDate.setDate(finalDate.getDate() + finalDays)
-
-              await admin.from('invoice_payments').insert([
-                {
-                  invoice_id:     newInvoice.id,
-                  installment_no: 1,
-                  amount:         advAmt,
-                  due_date:       toDateStr(today),
-                  status:         advPaid ? 'paid' : 'pending',
-                  received_at:    advPaid ? advReceivedAt : null,
-                  payment_method: advPaid ? (advance_method || null) : null,
-                },
-                {
-                  invoice_id:     newInvoice.id,
-                  installment_no: 2,
-                  amount:         finalAmt,
-                  due_date:       toDateStr(finalDate),
-                  status:         'pending',
-                },
-              ])
-
-              // Update invoice received_amount if advance was already paid
-              if (advPaid) {
-                await admin.from('invoices')
-                  .update({ received_amount: advAmt, received_at: advReceivedAt })
-                  .eq('id', newInvoice.id)
-              }
-            }
-          } catch (err) {
-            console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
           }
+          // else: future start date, no advance → cron will create first invoice
+        } catch (err) {
+          console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
         }
       }
     }
 
-    // ── Advance payment at signup (only when NOT using split billing) ──────────
-    // When split billing is active, the advance is already tracked as installment 1.
-    // Only create a standalone ADV invoice when billing cycle is manual or single-payment.
+    // ── Standalone ADV invoice (non-split policies only) ──────────────────────────
+    // For split policy, advance is tracked as installment 1 above.
+    // For single/manual billing with an upfront advance, record it as a standalone invoice.
     if (advance_amount && Number(advance_amount) > 0 && resolvedClientId && payment_policy_type !== 'split') {
       try {
         const advanceTotal = Number(advance_amount)

@@ -196,7 +196,14 @@ export default function UsersPage() {
   const totalSteps = isClient ? 3 : 1
   const hasAutoBill = isClient && form.billing_cycle !== 'manual'
 
-  function nextStep() { setError(''); setStep(s => Math.min(s + 1, totalSteps)) }
+  function nextStep() {
+    setError('')
+    // Auto-fill billing amount from package price when entering billing step
+    if (step === 2 && !form.billing_amount && pkg.price) {
+      setForm(p => ({ ...p, billing_amount: pkg.price }))
+    }
+    setStep(s => Math.min(s + 1, totalSteps))
+  }
   function prevStep() { setError(''); setStep(s => Math.max(s - 1, 1)) }
 
   // ── Create ──────────────────────────────────────────────────────────────────
@@ -664,13 +671,17 @@ export default function UsersPage() {
                           </div>
                         )}
 
-                        {/* Billing Start Date */}
+                        {/* First Invoice Date */}
                         <div className="space-y-1.5">
-                          <Label>Billing Start Date <span className="text-slate-500 font-normal text-xs">— when to generate the first invoice</span></Label>
+                          <Label>First Invoice Date <span className="text-slate-500 font-normal text-xs">— when the client should pay (remaining balance due on this date)</span></Label>
                           <Input type="date" value={form.billing_start_date} className="text-slate-300"
                             onChange={e => setForm(p => ({ ...p, billing_start_date: e.target.value }))}
                           />
-                          <p className="text-xs text-slate-500">First invoice will be created on this date. Leave as today to bill immediately.</p>
+                          <p className="text-xs text-slate-500">
+                            {form.payment_policy_type === 'split'
+                              ? 'Advance is recorded immediately. Remaining balance will be due on this date.'
+                              : 'Invoice will be generated on this date.'}
+                          </p>
                         </div>
 
                         {/* ── Payment Terms ── */}
@@ -678,8 +689,6 @@ export default function UsersPage() {
                           const advAmt   = Number(form.advance_amount) || 0
                           const total    = Number(form.billing_amount) || 0
                           const remaining = Math.max(0, total - advAmt)
-                          const dueDate  = new Date(Date.now() + form.payment_final_days * 86_400_000)
-                          const dueDateStr = dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
                           return (
                             <div className="space-y-3 pt-1 border-t border-slate-800">
                               <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Terms</Label>
@@ -721,32 +730,14 @@ export default function UsersPage() {
                                     </div>
                                   </div>
 
-                                  {/* Remaining due in */}
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs">Remaining due in</Label>
-                                    <div className="flex flex-wrap gap-2 items-center">
-                                      {[10, 14, 30].map(d => (
-                                        <button key={d} type="button"
-                                          onClick={() => setForm(p => ({ ...p, payment_final_days: d }))}
-                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                            form.payment_final_days === d
-                                              ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
-                                              : 'border-slate-700 text-slate-400 hover:border-slate-600'
-                                          }`}>
-                                          {d === 14 ? '2 weeks' : d === 30 ? '1 month' : `${d} days`}
-                                        </button>
-                                      ))}
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs text-slate-500">Custom:</span>
-                                        <Input type="number" min={1} max={365} className="w-16 h-8 text-xs"
-                                          placeholder="days"
-                                          value={![10, 14, 30].includes(form.payment_final_days) ? String(form.payment_final_days) : ''}
-                                          onChange={e => { if (e.target.value) setForm(p => ({ ...p, payment_final_days: Number(e.target.value) })) }} />
-                                      </div>
+                                  {/* Info: remaining due on First Invoice Date */}
+                                  {remaining > 0 && form.billing_start_date && (
+                                    <div className="text-xs text-slate-400 bg-slate-900/60 rounded-lg px-3 py-2">
+                                      💡 Remaining <strong className="text-amber-300">{form.billing_currency} {remaining.toLocaleString()}</strong> will be due on <strong className="text-white">{form.billing_start_date}</strong>
                                     </div>
-                                  </div>
+                                  )}
 
-                                  {/* Date + Method */}
+                                  {/* Date + Method (only for new users) */}
                                   {!editing && (
                                     <div className="grid grid-cols-2 gap-3">
                                       <div className="space-y-1.5">
@@ -768,20 +759,6 @@ export default function UsersPage() {
                                           <option value="other">Other</option>
                                         </select>
                                       </div>
-                                    </div>
-                                  )}
-
-                                  {/* Schedule preview */}
-                                  {total > 0 && (
-                                    <div className="text-xs bg-slate-700/30 rounded-lg px-3 py-2.5 space-y-1">
-                                      <p className="font-semibold text-slate-300 mb-1.5">📋 Payment Schedule:</p>
-                                      <p className="text-green-400">
-                                        ✓ Installment 1 — {form.billing_currency} {advAmt > 0 ? advAmt.toLocaleString() : '?'}
-                                        {advAmt > 0 ? ` — Paid on ${form.advance_date}` : ' — due on invoice date'}
-                                      </p>
-                                      <p className="text-amber-400">
-                                        ⏳ Installment 2 — {form.billing_currency} {remaining.toLocaleString()} — Due in {form.payment_final_days} days ({dueDateStr})
-                                      </p>
                                     </div>
                                   )}
                                 </div>
