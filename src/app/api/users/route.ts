@@ -190,17 +190,44 @@ export async function POST(req: NextRequest) {
             })
             // If payment policy is split, auto-create installment schedule
             if (payment_policy_type === 'split' && newInvoice?.id) {
-              const advPct = payment_advance_pct ?? 50
-              const finalDays = payment_final_days ?? 30
-              const advAmount = Math.round(amount * advPct) / 100
-              const finalAmount = Math.round((amount - advAmount) * 100) / 100
-              const invoiceDate = toDateStr(today)
-              const finalDate = new Date(today)
+              const finalDays  = payment_final_days ?? 30
+              // Use absolute advance_amount if given; fall back to pct-based
+              const advAmt     = advance_amount && Number(advance_amount) > 0
+                ? Number(advance_amount)
+                : Math.round(amount * (payment_advance_pct ?? 50)) / 100
+              const finalAmt   = Math.round((amount - advAmt) * 100) / 100
+              const advPaid    = advance_amount && Number(advance_amount) > 0
+              const advReceivedAt = advance_date
+                ? new Date(advance_date).toISOString()
+                : today.toISOString()
+              const finalDate  = new Date(today)
               finalDate.setDate(finalDate.getDate() + finalDays)
+
               await admin.from('invoice_payments').insert([
-                { invoice_id: newInvoice.id, installment_no: 1, amount: advAmount,   due_date: invoiceDate,          status: 'pending' },
-                { invoice_id: newInvoice.id, installment_no: 2, amount: finalAmount, due_date: toDateStr(finalDate), status: 'pending' },
+                {
+                  invoice_id:     newInvoice.id,
+                  installment_no: 1,
+                  amount:         advAmt,
+                  due_date:       toDateStr(today),
+                  status:         advPaid ? 'paid' : 'pending',
+                  received_at:    advPaid ? advReceivedAt : null,
+                  payment_method: advPaid ? (advance_method || null) : null,
+                },
+                {
+                  invoice_id:     newInvoice.id,
+                  installment_no: 2,
+                  amount:         finalAmt,
+                  due_date:       toDateStr(finalDate),
+                  status:         'pending',
+                },
               ])
+
+              // Update invoice received_amount if advance was already paid
+              if (advPaid) {
+                await admin.from('invoices')
+                  .update({ received_amount: advAmt, received_at: advReceivedAt })
+                  .eq('id', newInvoice.id)
+              }
             }
           } catch (err) {
             console.error('[billing] first invoice failed:', err instanceof Error ? err.message : String(err))
@@ -209,8 +236,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Advance payment at signup ──────────────────────────────────────────────
-    if (advance_amount && Number(advance_amount) > 0 && resolvedClientId) {
+    // ── Advance payment at signup (only when NOT using split billing) ──────────
+    // When split billing is active, the advance is already tracked as installment 1.
+    // Only create a standalone ADV invoice when billing cycle is manual or single-payment.
+    if (advance_amount && Number(advance_amount) > 0 && resolvedClientId && payment_policy_type !== 'split') {
       try {
         const advanceTotal = Number(advance_amount)
         const advInvoiceId = generateId()
@@ -232,7 +261,6 @@ export async function POST(req: NextRequest) {
           created_at:       now.toISOString(),
           updated_at:       now.toISOString(),
         })
-        // Record in invoice_payments for proper tracking
         await admin.from('invoice_payments').insert({
           invoice_id:     advInvoiceId,
           amount:         advanceTotal,

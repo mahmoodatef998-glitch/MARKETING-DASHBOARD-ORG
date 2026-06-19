@@ -72,7 +72,6 @@ const EMPTY_FORM = {
   billing_custom_days: '',
   billing_start_date:    new Date().toISOString().split('T')[0],
   payment_policy_type:   'single' as 'single' | 'split',
-  payment_advance_pct:   50,
   payment_final_days:    30,
   advance_amount:        '',
   advance_method:        '' as string,
@@ -223,9 +222,11 @@ export default function UsersPage() {
         billing_custom_days: form.billing_custom_days ? Number(form.billing_custom_days) : undefined,
         billing_start_date:  form.billing_start_date || undefined,
         payment_policy_type: form.payment_policy_type,
-        payment_advance_pct: form.payment_advance_pct,
+        payment_advance_pct: form.billing_amount && form.advance_amount && Number(form.billing_amount) > 0
+          ? Math.round((Number(form.advance_amount) / Number(form.billing_amount)) * 100)
+          : 50,
         payment_final_days:  form.payment_final_days,
-        advance_amount:      Number(form.advance_amount) > 0 ? Number(form.advance_amount) : undefined,
+        advance_amount:      form.payment_policy_type === 'split' && Number(form.advance_amount) > 0 ? Number(form.advance_amount) : undefined,
         advance_method:      form.advance_method || undefined,
         advance_date:        form.advance_date || undefined,
         package:             pkgPayload,
@@ -670,103 +671,122 @@ export default function UsersPage() {
                           <p className="text-xs text-slate-500">First invoice will be created on this date. Leave as today to bill immediately.</p>
                         </div>
 
-                        {/* ── Payment Policy ── */}
-                        <div className="space-y-3 pt-1 border-t border-slate-800">
-                          <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Policy — per billing cycle</Label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {([
-                              { value: 'single', label: '💳 Single Payment', desc: 'Full amount at once' },
-                              { value: 'split',  label: '✂️ Split Advance + Final', desc: 'e.g. 50% now + 50% later' },
-                            ] as { value: 'single' | 'split'; label: string; desc: string }[]).map(opt => (
-                              <button key={opt.value} type="button"
-                                onClick={() => setForm(p => ({ ...p, payment_policy_type: opt.value }))}
-                                className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
-                                  form.payment_policy_type === opt.value
-                                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
-                                    : 'border-slate-700 text-slate-400 hover:border-slate-600'
-                                }`}>
-                                <p className="font-semibold">{opt.label}</p>
-                                <p className="opacity-60 mt-0.5">{opt.desc}</p>
-                              </button>
-                            ))}
-                          </div>
-
-                          {form.payment_policy_type === 'split' && (
-                            <div className="grid grid-cols-2 gap-3 bg-slate-800/40 rounded-xl p-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs">Advance %</Label>
-                                <Input type="number" min={1} max={99} value={form.payment_advance_pct}
-                                  onChange={e => setForm(p => ({ ...p, payment_advance_pct: Number(e.target.value) }))} />
-                                {form.billing_amount && (
-                                  <p className="text-xs text-indigo-300 font-medium">
-                                    = {form.billing_currency} {Math.round(Number(form.billing_amount) * form.payment_advance_pct / 100).toLocaleString()} advance
-                                  </p>
-                                )}
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs">Final payment after (days)</Label>
-                                <Input type="number" min={1} max={365} value={form.payment_final_days}
-                                  onChange={e => setForm(p => ({ ...p, payment_final_days: Number(e.target.value) }))} />
-                                <p className="text-xs text-slate-500">Days after invoice creation</p>
-                              </div>
-                              <div className="col-span-2 text-xs text-slate-400 bg-slate-700/30 rounded-lg px-3 py-2">
-                                📋 Each invoice will auto-create 2 installments:
-                                <br />• <span className="text-green-400">Installment 1:</span> {form.payment_advance_pct}% — due on invoice date
-                                <br />• <span className="text-amber-400">Installment 2:</span> {100 - form.payment_advance_pct}% — due {form.payment_final_days} days later
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ── Advance Payment at Signup ── */}
-                        {!editing && (
-                          <div className="space-y-3 pt-1 border-t border-slate-800">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs text-slate-400 uppercase tracking-wider">Advance Payment at Signup</Label>
-                              <span className="text-xs text-slate-500">optional</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs">Amount Received <span className="text-slate-500">(0 to skip)</span></Label>
-                                <Input type="number" min={0} step="0.01" placeholder="0"
-                                  value={form.advance_amount}
-                                  onChange={e => setForm(p => ({ ...p, advance_amount: e.target.value }))} />
-                                {form.billing_amount && form.payment_policy_type === 'split' && (
-                                  <button type="button" className="text-xs text-indigo-400 hover:text-indigo-300"
-                                    onClick={() => setForm(p => ({ ...p, advance_amount: String(Math.round(Number(p.billing_amount) * p.payment_advance_pct / 100)) }))}>
-                                    ↖ Fill {form.payment_advance_pct}% = {form.billing_currency} {Math.round(Number(form.billing_amount) * form.payment_advance_pct / 100).toLocaleString()}
+                        {/* ── Payment Terms ── */}
+                        {(() => {
+                          const advAmt   = Number(form.advance_amount) || 0
+                          const total    = Number(form.billing_amount) || 0
+                          const remaining = Math.max(0, total - advAmt)
+                          const dueDate  = new Date(Date.now() + form.payment_final_days * 86_400_000)
+                          const dueDateStr = dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                          return (
+                            <div className="space-y-3 pt-1 border-t border-slate-800">
+                              <Label className="text-xs text-slate-400 uppercase tracking-wider">Payment Terms</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {([
+                                  { value: 'single', label: '💳 Full Amount', desc: 'Collect everything at once' },
+                                  { value: 'split',  label: '🔀 Advance + Remaining', desc: 'Part now, rest later' },
+                                ] as { value: 'single' | 'split'; label: string; desc: string }[]).map(opt => (
+                                  <button key={opt.value} type="button"
+                                    onClick={() => setForm(p => ({ ...p, payment_policy_type: opt.value }))}
+                                    className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                                      form.payment_policy_type === opt.value
+                                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
+                                        : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                                    }`}>
+                                    <p className="font-semibold">{opt.label}</p>
+                                    <p className="opacity-60 mt-0.5">{opt.desc}</p>
                                   </button>
-                                )}
+                                ))}
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs">Payment Date</Label>
-                                <Input type="date" value={form.advance_date} className="text-slate-300"
-                                  onChange={e => setForm(p => ({ ...p, advance_date: e.target.value }))} />
-                              </div>
+
+                              {form.payment_policy_type === 'split' && (
+                                <div className="space-y-3 bg-slate-800/40 rounded-xl p-3">
+                                  {/* Advance + Remaining row */}
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs">Advance Received</Label>
+                                      <Input type="number" min={0} step="0.01" placeholder="0"
+                                        value={form.advance_amount}
+                                        onChange={e => setForm(p => ({ ...p, advance_amount: e.target.value }))} />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs">Remaining (auto)</Label>
+                                      <div className="h-9 flex items-center px-3 bg-slate-900 border border-slate-700 rounded-lg">
+                                        <span className={`text-sm font-bold ${remaining > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                          {form.billing_currency} {total > 0 ? remaining.toLocaleString() : '—'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Remaining due in */}
+                                  <div className="space-y-1.5">
+                                    <Label className="text-xs">Remaining due in</Label>
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                      {[10, 14, 30].map(d => (
+                                        <button key={d} type="button"
+                                          onClick={() => setForm(p => ({ ...p, payment_final_days: d }))}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                            form.payment_final_days === d
+                                              ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
+                                              : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                                          }`}>
+                                          {d === 14 ? '2 weeks' : d === 30 ? '1 month' : `${d} days`}
+                                        </button>
+                                      ))}
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-slate-500">Custom:</span>
+                                        <Input type="number" min={1} max={365} className="w-16 h-8 text-xs"
+                                          placeholder="days"
+                                          value={![10, 14, 30].includes(form.payment_final_days) ? String(form.payment_final_days) : ''}
+                                          onChange={e => { if (e.target.value) setForm(p => ({ ...p, payment_final_days: Number(e.target.value) })) }} />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Date + Method */}
+                                  {!editing && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs">Payment Date</Label>
+                                        <Input type="date" value={form.advance_date} className="text-slate-300"
+                                          onChange={e => setForm(p => ({ ...p, advance_date: e.target.value }))} />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs">Payment Method</Label>
+                                        <select value={form.advance_method}
+                                          onChange={e => setForm(p => ({ ...p, advance_method: e.target.value }))}
+                                          className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                                          <option value="">— Select —</option>
+                                          <option value="bank_transfer">Bank Transfer</option>
+                                          <option value="instapay">InstaPay</option>
+                                          <option value="vodafone_cash">Vodafone Cash</option>
+                                          <option value="cash">Cash</option>
+                                          <option value="credit_card">Credit Card</option>
+                                          <option value="other">Other</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Schedule preview */}
+                                  {total > 0 && (
+                                    <div className="text-xs bg-slate-700/30 rounded-lg px-3 py-2.5 space-y-1">
+                                      <p className="font-semibold text-slate-300 mb-1.5">📋 Payment Schedule:</p>
+                                      <p className="text-green-400">
+                                        ✓ Installment 1 — {form.billing_currency} {advAmt > 0 ? advAmt.toLocaleString() : '?'}
+                                        {advAmt > 0 ? ` — Paid on ${form.advance_date}` : ' — due on invoice date'}
+                                      </p>
+                                      <p className="text-amber-400">
+                                        ⏳ Installment 2 — {form.billing_currency} {remaining.toLocaleString()} — Due in {form.payment_final_days} days ({dueDateStr})
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Payment Method</Label>
-                              <select
-                                value={form.advance_method}
-                                onChange={e => setForm(p => ({ ...p, advance_method: e.target.value }))}
-                                className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                              >
-                                <option value="">— Select method —</option>
-                                <option value="bank_transfer">Bank Transfer</option>
-                                <option value="instapay">InstaPay</option>
-                                <option value="vodafone_cash">Vodafone Cash</option>
-                                <option value="cash">Cash</option>
-                                <option value="credit_card">Credit Card</option>
-                                <option value="other">Other</option>
-                              </select>
-                            </div>
-                            {Number(form.advance_amount) > 0 && (
-                              <div className="text-xs text-green-400/80 bg-green-500/5 border border-green-500/20 rounded-lg px-3 py-2">
-                                ✓ A paid invoice for {form.billing_currency} {Number(form.advance_amount).toLocaleString()} will be created immediately and recorded as received.
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          )
+                        })()}
                       </>
                     )}
 
