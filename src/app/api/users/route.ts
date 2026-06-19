@@ -196,64 +196,71 @@ export async function POST(req: NextRequest) {
       } else if (billingPlan) {
         try {
           if (hasAdvance) {
-            // ── Split + Advance: create first invoice immediately ──────────────
-            const advAmt = Number(advance_amount)
+            // ── Split + Advance: two separate invoices ─────────────────────────
+            // Invoice 1 (ADV): advance received → status=paid → counts as revenue immediately
+            // Invoice 2 (INV): remaining balance → status=sent → open in Invoices section
+            const advAmt   = Number(advance_amount)
             const finalAmt = Math.round((amount - advAmt) * 100) / 100
             const advReceivedAt = advance_date
               ? new Date(advance_date).toISOString()
               : today.toISOString()
 
-            const invoiceNumber = await nextInvoiceNumber(admin)
-            const invoiceId = generateId()
-
+            // ADV invoice — recorded as paid income
+            const advInvoiceId     = generateId()
+            const advInvoiceNumber = `ADV-${Date.now().toString(36).toUpperCase()}`
             await admin.from('invoices').insert({
-              id:              invoiceId,
-              invoice_number:  invoiceNumber,
+              id:              advInvoiceId,
+              invoice_number:  advInvoiceNumber,
               client_id:       resolvedClientId,
-              items: [{
-                id:          generateId(),
-                description: 'Marketing Services',
-                quantity:    1,
-                unit_price:  amount,
-                total:       amount,
-              }],
-              subtotal:        amount,
+              items: [{ description: 'Advance Payment', quantity: 1, unit_price: advAmt, total: advAmt }],
+              subtotal:        advAmt,
               tax:             0,
-              total:           amount,
+              total:           advAmt,
               currency,
-              status:          'sent',
+              status:          'paid',
               issued_date:     todayStr,
-              due_date:        firstInvoiceDate,
+              due_date:        todayStr,
               received_amount: advAmt,
               received_at:     advReceivedAt,
-              notes:           `Advance ${advAmt} ${currency} received ${todayStr}. Remaining ${finalAmt} ${currency} due ${firstInvoiceDate}.`,
+              notes:           `Advance payment received. Remaining ${finalAmt} ${currency} due ${firstInvoiceDate}.`,
               created_at:      today.toISOString(),
               updated_at:      today.toISOString(),
             })
+            await admin.from('invoice_payments').insert({
+              invoice_id:     advInvoiceId,
+              amount:         advAmt,
+              payment_method: advance_method || null,
+              status:         'paid',
+              received_at:    advReceivedAt,
+              installment_no: null,
+            })
 
-            await admin.from('invoice_payments').insert([
-              {
-                invoice_id:     invoiceId,
-                installment_no: 1,
-                amount:         advAmt,
-                due_date:       todayStr,
-                status:         'paid',
-                received_at:    advReceivedAt,
-                payment_method: advance_method || null,
-              },
-              {
-                invoice_id:     invoiceId,
-                installment_no: 2,
-                amount:         finalAmt,
-                due_date:       firstInvoiceDate,
-                status:         'pending',
-              },
-            ])
+            // Remaining invoice — open, due on firstInvoiceDate
+            if (finalAmt > 0) {
+              const remainingInvoiceNumber = await nextInvoiceNumber(admin)
+              await admin.from('invoices').insert({
+                id:              generateId(),
+                invoice_number:  remainingInvoiceNumber,
+                client_id:       resolvedClientId,
+                items: [{ description: 'Marketing Services (Remaining Balance)', quantity: 1, unit_price: finalAmt, total: finalAmt }],
+                subtotal:        finalAmt,
+                tax:             0,
+                total:           finalAmt,
+                currency,
+                status:          'sent',
+                issued_date:     todayStr,
+                due_date:        firstInvoiceDate,
+                received_amount: 0,
+                notes:           `Remaining balance after ${advAmt} ${currency} advance payment on ${todayStr}.`,
+                created_at:      today.toISOString(),
+                updated_at:      today.toISOString(),
+              })
+            }
 
             await admin.from('automation_logs').insert({
               type:            'payment_reminder',
               recipient_email: email,
-              subject:         `Invoice ${invoiceNumber} — advance ${advAmt} ${currency} received`,
+              subject:         `ADV ${advInvoiceNumber} — ${advAmt} ${currency} received; remaining ${finalAmt} ${currency} due ${firstInvoiceDate}`,
               status:          'sent',
               created_at:      today.toISOString(),
             })
