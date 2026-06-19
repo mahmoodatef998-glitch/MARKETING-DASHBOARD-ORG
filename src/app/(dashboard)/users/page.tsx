@@ -202,15 +202,17 @@ export default function UsersPage() {
   // ── Create ──────────────────────────────────────────────────────────────────
   async function createUser() {
     setSaving(true); setError('')
-    const pkgPayload = pkg.name.trim()
+    const filteredItems = pkg.items
+      .filter(i => Number(i.total_quantity) > 0)
+      .map(i => ({ task_type: i.task_type, label: i.label, total_quantity: Number(i.total_quantity) }))
+    // Send package payload if name provided OR if any item has a quantity
+    const pkgPayload = (pkg.name.trim() || filteredItems.length > 0)
       ? {
-          name:         pkg.name.trim(),
+          name:         pkg.name.trim() || 'Custom Package',
           renewal_type: pkg.renewal_type,
           price:        pkg.price ? Number(pkg.price) : 0,
           notes:        pkg.notes || undefined,
-          items: pkg.items
-            .filter(i => Number(i.total_quantity) > 0)
-            .map(i => ({ task_type: i.task_type, label: i.label, total_quantity: Number(i.total_quantity) })),
+          items:        filteredItems,
         }
       : undefined
 

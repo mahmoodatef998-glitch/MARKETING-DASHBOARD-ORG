@@ -101,12 +101,14 @@ export async function POST(req: NextRequest) {
     }
     resolvedClientId = newClient.id
 
-    // Create package if package data provided
-    if (packageData && packageData.name) {
+    // Create package if package data provided (name required, or items with quantities)
+    const hasItems = Array.isArray(packageData?.items) &&
+      packageData.items.some((i: { total_quantity?: number }) => Number(i.total_quantity) > 0)
+    if (packageData && (packageData.name || hasItems)) {
       const pkgRecord = {
         id:           generateId(),
         client_id:    resolvedClientId,
-        name:         packageData.name,
+        name:         packageData.name || 'Custom Package',
         price:        Number(packageData.price ?? 0),
         renewal_type: packageData.renewal_type ?? 'monthly',
         start_date:   new Date().toISOString().split('T')[0],
@@ -122,7 +124,9 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
-      if (!pkgErr && newPkg && Array.isArray(packageData.items)) {
+      if (pkgErr) {
+        console.error('[users/create] package creation failed:', pkgErr.message)
+      } else if (newPkg && Array.isArray(packageData.items)) {
         const itemRows = (packageData.items as Array<{ task_type: string; label: string; total_quantity: number }>)
           .filter(i => Number(i.total_quantity) > 0)
           .map((i, idx) => ({
@@ -133,7 +137,8 @@ export async function POST(req: NextRequest) {
             sort_order:     idx,
           }))
         if (itemRows.length > 0) {
-          await admin.from('package_items').insert(itemRows)
+          const { error: itemErr } = await admin.from('package_items').insert(itemRows)
+          if (itemErr) console.error('[users/create] package items creation failed:', itemErr.message)
         }
       }
     }
