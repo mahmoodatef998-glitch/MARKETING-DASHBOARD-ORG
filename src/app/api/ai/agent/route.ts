@@ -364,6 +364,35 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: 'update_client_package',
+    description: 'تعديل باقة عميل موجودة — تغيير السعر، المواعيد، عدد القطع، أو تعطيل الباقة. يُنفَّذ فقط بطلب صريح من المدير.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        package_id:   { type: str, description: 'ID الباقة المراد تعديلها' },
+        name:         { type: str, description: 'اسم جديد للباقة' },
+        price:        { type: num, description: 'سعر جديد' },
+        end_date:     { type: str, description: 'تاريخ انتهاء جديد YYYY-MM-DD' },
+        notes:        { type: str, description: 'ملاحظات جديدة' },
+        is_active:    { type: str, description: '"true" لتفعيل أو "false" لتعطيل الباقة' },
+        items: {
+          type: arr,
+          description: 'تعديل كميات عناصر الباقة — كل عنصر يُحدَّث حسب task_type',
+          items: {
+            type: obj,
+            properties: {
+              task_type:      enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom']),
+              total_quantity: { type: num, description: 'الكمية الجديدة' },
+              label:          { type: str, description: 'اسم العنصر (مطلوب لو عنصر جديد)' },
+            },
+            required: ['task_type', 'total_quantity'],
+          },
+        },
+      },
+      required: ['package_id'],
+    }),
+  },
+  {
     name: 'create_invoice',
     description: 'إنشاء فاتورة جديدة لعميل مع بنود تفصيلية',
     parameters: schema({
@@ -1419,6 +1448,79 @@ async function executeTool(
       }
     }
 
+    case 'update_client_package': {
+      const packageId = String(args.package_id)
+
+      // Fetch existing package
+      const { data: pkg } = await admin
+        .from('client_packages')
+        .select('id, name, price, client_id, items:package_items(id, task_type, label, total_quantity, sort_order)')
+        .eq('id', packageId)
+        .single()
+
+      if (!pkg) return { error: 'الباقة مش موجودة' }
+
+      // Update package header fields
+      const pkgUpdates: Record<string, unknown> = { updated_at: now.toISOString() }
+      if (args.name     !== undefined) pkgUpdates.name     = String(args.name)
+      if (args.price    !== undefined) pkgUpdates.price    = Number(args.price)
+      if (args.end_date !== undefined) pkgUpdates.end_date = String(args.end_date)
+      if (args.notes    !== undefined) pkgUpdates.notes    = String(args.notes)
+      if (args.is_active !== undefined) pkgUpdates.is_active = String(args.is_active) === 'true'
+
+      if (Object.keys(pkgUpdates).length > 1) {
+        const { error } = await admin.from('client_packages').update(pkgUpdates).eq('id', packageId)
+        if (error) return { error: error.message }
+      }
+
+      // Update items if provided
+      const changedItems: string[] = []
+      if (Array.isArray(args.items) && args.items.length > 0) {
+        const rawItems = args.items as Array<{ task_type: string; total_quantity: number; label?: string }>
+
+        for (const item of rawItems) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = (pkg.items as any[]).find(i => i.task_type === item.task_type)
+
+          if (existing) {
+            const { error } = await admin.from('package_items')
+              .update({ total_quantity: Number(item.total_quantity) })
+              .eq('id', existing.id)
+            if (error) return { error: error.message }
+            changedItems.push(`${item.task_type}: ${existing.total_quantity} → ${item.total_quantity}`)
+          } else {
+            // New item type — insert
+            const { error } = await admin.from('package_items').insert({
+              id:             generateId(),
+              package_id:     packageId,
+              label:          item.label ?? item.task_type,
+              task_type:      item.task_type,
+              total_quantity: Number(item.total_quantity),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              sort_order:     (pkg.items as any[]).length,
+              created_at:     now.toISOString(),
+            })
+            if (error) return { error: error.message }
+            changedItems.push(`${item.task_type}: جديد (${item.total_quantity} قطعة)`)
+          }
+        }
+      }
+
+      const updatedFields = Object.keys(pkgUpdates).filter(k => k !== 'updated_at')
+
+      return {
+        success: true,
+        package_id: packageId,
+        package_name: args.name ?? pkg.name,
+        updated_fields: updatedFields,
+        item_changes: changedItems,
+        summary: [
+          updatedFields.length > 0 ? `تم تحديث: ${updatedFields.join(', ')}` : null,
+          changedItems.length > 0 ? `تعديل الكميات: ${changedItems.join(' | ')}` : null,
+        ].filter(Boolean).join(' — '),
+      }
+    }
+
     // ── Billing & Campaigns ───────────────────────────────────────────────────
     case 'create_invoice': {
       const clientId = String(args.client_id)
@@ -1973,7 +2075,7 @@ get_client_health دوري:
 ✅ نفّذ مباشرة:
    - create_task, update_task, approve_task, add_task_comment
    - create_content_plan, import_content_plan, create_campaign
-   - create_meeting, create_client_package, create_invoice
+   - create_meeting, create_client_package, update_client_package, create_invoice
    - update_invoice_status("sent" أو "overdue")
    - update_client (status, notes, phone, email)
    - notify_user, notify_all_team, send_smart_email
