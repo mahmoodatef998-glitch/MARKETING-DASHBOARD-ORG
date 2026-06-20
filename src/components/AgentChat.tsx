@@ -215,8 +215,8 @@ export default function AgentChat() {
         throw new Error(`خطأ في الخادم (${res.status}) — حاول مرة تانية`)
       }
       if (!res.ok) throw new Error((data.error as string) ?? 'خطأ غير معروف')
-      setHistory(data.messages ?? [...newHistory, { role: 'model', text: data.reply }])
-      setChat(prev => [...prev, { role: 'assistant', text: data.reply }])
+      setHistory((data.messages as HistoryMessage[]) ?? [...newHistory, { role: 'model', text: data.reply as string }])
+      setChat(prev => [...prev, { role: 'assistant', text: data.reply as string }])
     } catch (err) {
       setChat(prev => [...prev, { role: 'assistant', text: `❌ ${err instanceof Error ? err.message : 'خطأ غير متوقع'}` }])
     } finally {
