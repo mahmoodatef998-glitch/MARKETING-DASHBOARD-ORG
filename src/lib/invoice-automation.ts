@@ -204,6 +204,93 @@ function buildInvoiceHtml(opts: {
 </html>`
 }
 
+export function buildReceiptHtml(opts: {
+  clientName: string
+  invoiceNumber: string
+  currencySymbol: string
+  amountReceived: number
+  totalPaid: number
+  invoiceTotal: number
+  receivedAt: string
+  isFullyPaid: boolean
+}): string {
+  const { clientName, invoiceNumber, currencySymbol, amountReceived, totalPaid, invoiceTotal, receivedAt, isFullyPaid } = opts
+  const remaining = Math.max(0, invoiceTotal - totalPaid)
+  const dateStr = new Date(receivedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0fdf4;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background:linear-gradient(135deg,#064e3b 0%,#065f46 100%);padding:32px 40px;border-radius:12px 12px 0 0;text-align:center;">
+            <div style="font-size:28px;font-weight:900;color:#ffffff;letter-spacing:1px;">
+              ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}
+            </div>
+            <div style="font-size:13px;color:#6ee7b7;margin-top:6px;letter-spacing:2px;text-transform:uppercase;">
+              Payment Confirmation
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#059669;padding:16px 40px;text-align:center;">
+            <div style="color:#ffffff;font-size:18px;font-weight:700;">&#10003; Payment Received</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;padding:36px 40px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 20px;color:#374151;font-size:15px;">Dear <strong>${clientName}</strong>,</p>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
+              Thank you! We have received your payment for invoice <strong>${invoiceNumber}</strong>.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
+              <tr style="background:#f0fdf4;">
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#6b7280;font-size:13px;width:40%;">Invoice Number</td>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#064e3b;font-size:13px;font-weight:600;">${invoiceNumber}</td>
+              </tr>
+              <tr>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#6b7280;font-size:13px;">Payment Date</td>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#374151;font-size:13px;">${dateStr}</td>
+              </tr>
+              <tr style="background:#f0fdf4;">
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#6b7280;font-size:13px;">Amount Received</td>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#059669;font-size:14px;font-weight:700;">${currencySymbol}${amountReceived.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#6b7280;font-size:13px;">Total Paid</td>
+                <td style="padding:13px 16px;border:1px solid #d1fae5;color:#374151;font-size:13px;">${currencySymbol}${totalPaid.toLocaleString()} of ${currencySymbol}${invoiceTotal.toLocaleString()}</td>
+              </tr>
+              ${isFullyPaid
+                ? `<tr style="background:#059669;">
+                    <td style="padding:16px;border:1px solid #047857;color:#d1fae5;font-size:14px;font-weight:700;">Status</td>
+                    <td style="padding:16px;border:1px solid #047857;color:#ffffff;font-size:16px;font-weight:900;">&#10003; FULLY PAID</td>
+                  </tr>`
+                : `<tr style="background:#fef3c7;">
+                    <td style="padding:13px 16px;border:1px solid #fde68a;color:#92400e;font-size:13px;">Remaining Balance</td>
+                    <td style="padding:13px 16px;border:1px solid #fde68a;color:#d97706;font-size:14px;font-weight:700;">${currencySymbol}${remaining.toLocaleString()}</td>
+                  </tr>`}
+            </table>
+            <p style="margin:0 0 4px;color:#374151;font-size:14px;">Thank you for your business.</p>
+            <p style="margin:0;color:#059669;font-size:14px;font-weight:700;">— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:11px;">
+              © ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'} · All rights reserved
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
 export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
   const {
     supabase, clientId, clientEmail, clientName,

@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { dbError } from '@/lib/utils'
-import { nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { nextInvoiceDate, toDateStr, buildReceiptHtml, type CycleType } from '@/lib/invoice-automation'
+import { sendEmail } from '@/lib/gmail'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const adminDb = createAdminClient()
   const { data: inv } = await adminDb
     .from('invoices')
-    .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
+    .select('*, client:clients(id, name, email, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -107,6 +108,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await adminDb.from('billing_plans').update({ next_invoice_date: toDateStr(next) }).eq('id', plan.id)
       nextInvoiceDateResult = toDateStr(next)
     }
+  }
+
+  // Send receipt email
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invClient = inv.client as any
+  if (invClient?.email) {
+    const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+    const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
+    const receiptHtml = buildReceiptHtml({
+      clientName:     invClient.name ?? 'Valued Client',
+      invoiceNumber:  inv.invoice_number,
+      currencySymbol: currSym,
+      amountReceived: amount,
+      totalPaid:      totalReceived,
+      invoiceTotal:   inv.total,
+      receivedAt:     new Date().toISOString(),
+      isFullyPaid:    fullyPaid,
+    })
+    const receiptText = [
+      `Dear ${invClient.name ?? 'Valued Client'},`,
+      '',
+      `Payment received for invoice ${inv.invoice_number}.`,
+      `Amount received: ${currSym}${amount.toLocaleString()}`,
+      `Total paid: ${currSym}${totalReceived.toLocaleString()} of ${currSym}${inv.total.toLocaleString()}`,
+      fullyPaid ? 'Status: FULLY PAID' : `Remaining balance: ${currSym}${Math.max(0, inv.total - totalReceived).toLocaleString()}`,
+      '',
+      `Thank you for your business.`,
+      `— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`,
+    ].join('\n')
+
+    let emailStatus: 'sent' | 'failed' = 'sent'
+    let emailError: string | undefined
+    try {
+      await sendEmail({ to: invClient.email, subject: receiptSubject, body: receiptText, html: receiptHtml })
+    } catch (err: unknown) {
+      emailStatus = 'failed'
+      emailError = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[payments] receipt email failed:', emailError)
+    }
+
+    await adminDb.from('automation_logs').insert({
+      type:            'payment_receipt',
+      recipient_email: invClient.email,
+      subject:         receiptSubject,
+      status:          emailStatus,
+      ...(emailError ? { error: emailError } : {}),
+      created_at:      new Date().toISOString(),
+    })
   }
 
   return NextResponse.json({ payment, invoice: updatedInv, nextInvoiceDate: nextInvoiceDateResult }, { status: 201 })

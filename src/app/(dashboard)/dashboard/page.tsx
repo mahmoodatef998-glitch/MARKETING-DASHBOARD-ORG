@@ -12,7 +12,7 @@ import {
   Send, Film, ImageIcon,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
-import type { Task, Client, BillingPlan } from '@/types'
+import type { Task, Client, BillingPlan, Invoice } from '@/types'
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -370,6 +370,84 @@ function BillingOverviewCard({ client, tasks }: { client: Client; tasks: Task[] 
   )
 }
 
+// ── Cash Flow Projection ──────────────────────────────────────────────────────
+
+function CashFlowProjection({ billingClients, openInvoices }: { billingClients: Client[]; openInvoices: Invoice[] }) {
+  const todayMs = new Date().setHours(0, 0, 0, 0)
+
+  function windowTotals(days: number) {
+    const cutoff = new Date(todayMs)
+    cutoff.setDate(cutoff.getDate() + days)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+    const todayStr  = new Date(todayMs).toISOString().split('T')[0]
+
+    // Outstanding invoices (overdue + upcoming) due within window
+    const fromInvoices = openInvoices
+      .filter(inv => inv.due_date && inv.due_date <= cutoffStr)
+      .reduce((sum, inv) => sum + Math.max(0, inv.total - (inv.received_amount ?? 0)), 0)
+
+    // Active billing plans with next invoice due within window
+    const fromPlans = billingClients.reduce((sum, client) => {
+      const plan = client.billing_plans?.find((p: BillingPlan) => p.is_active && p.cycle_type !== 'manual')
+      if (!plan?.next_invoice_date) return sum
+      // Only count plans not already counted as open invoice (next_invoice_date > today means not yet invoiced)
+      if (plan.next_invoice_date > todayStr && plan.next_invoice_date <= cutoffStr) {
+        return sum + (plan.amount ?? 0)
+      }
+      return sum
+    }, 0)
+
+    return { fromInvoices, fromPlans, total: fromInvoices + fromPlans }
+  }
+
+  const w30 = windowTotals(30)
+  const w60 = windowTotals(60)
+  const w90 = windowTotals(90)
+
+  const periods = [
+    { label: 'Next 30 Days', ...w30, color: 'text-emerald-400', bg: 'bg-emerald-400/8', border: 'border-emerald-500/20', barColor: 'bg-emerald-500' },
+    { label: 'Next 60 Days', ...w60, color: 'text-blue-400',    bg: 'bg-blue-400/8',    border: 'border-blue-500/20',    barColor: 'bg-blue-500'    },
+    { label: 'Next 90 Days', ...w90, color: 'text-violet-400',  bg: 'bg-violet-400/8',  border: 'border-violet-500/20',  barColor: 'bg-violet-500'  },
+  ]
+
+  const maxTotal = Math.max(w90.total, 1)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-emerald-400" />
+          Cash Flow Projection
+        </h2>
+        <span className="text-xs text-slate-500">Outstanding invoices + upcoming billing</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {periods.map(({ label, fromInvoices, fromPlans, total, color, bg, border, barColor }) => (
+          <Card key={label} className={`border ${border} ${bg}`}>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-slate-400 mb-1">{label}</p>
+              <p className={`text-2xl font-bold ${color}`}>{total.toLocaleString()}</p>
+              <div className="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.round((total / maxTotal) * 100)}%` }} />
+              </div>
+              <div className="mt-3 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Open invoices</span>
+                  <span className="text-slate-300">{fromInvoices.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Upcoming billing</span>
+                  <span className="text-slate-300">{fromPlans.toLocaleString()}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
@@ -395,6 +473,7 @@ export default function DashboardPage() {
   const [reviewTasks,    setReviewTasks]   = useState<Task[]>([])
   const [billingClients, setBillingClients] = useState<Client[]>([])
   const [allTasks,       setAllTasks]      = useState<Task[]>([])
+  const [openInvoices,   setOpenInvoices]  = useState<Invoice[]>([])
   const [loading,        setLoading]       = useState(true)
 
   // Detect role first — redirect team-only roles back to their portal
@@ -421,7 +500,8 @@ export default function DashboardPage() {
         fetch('/api/tasks?status=review').then(r => r.ok ? r.json() : []).catch(() => []),
         fetch('/api/clients').then(r => r.ok ? r.json() : []).catch(() => []),
         fetch('/api/tasks').then(r => r.ok ? r.json() : []).catch(() => []),
-      ]).then(([reportData, reviewT, clients, allT]) => {
+        fetch('/api/invoices').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([reportData, reviewT, clients, allT, invs]) => {
         setData(reportData)
         setReviewTasks(Array.isArray(reviewT) ? reviewT : [])
         const clientList: Client[] = Array.isArray(clients) ? clients : (clients?.data ?? [])
@@ -429,6 +509,8 @@ export default function DashboardPage() {
           c.billing_plans?.some((p: BillingPlan) => p.is_active && p.cycle_type !== 'manual')
         ))
         setAllTasks(Array.isArray(allT) ? allT : [])
+        const invList: Invoice[] = Array.isArray(invs) ? invs : []
+        setOpenInvoices(invList.filter((i: Invoice) => i.status !== 'paid' && i.status !== 'draft'))
         setLoading(false)
       }).catch(() => setLoading(false))
 
@@ -603,6 +685,11 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Cash Flow Projection */}
+      {(billingClients.length > 0 || openInvoices.length > 0) && (
+        <CashFlowProjection billingClients={billingClients} openInvoices={openInvoices} />
+      )}
 
       {/* Billing Overview */}
       {billingClients.length > 0 && (

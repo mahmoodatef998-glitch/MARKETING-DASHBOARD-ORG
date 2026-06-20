@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { updateNotionInvoice, deleteNotionPage } from '@/lib/notion'
 import { dbError } from '@/lib/utils'
-import { nextInvoiceDate, toDateStr, type CycleType } from '@/lib/invoice-automation'
+import { nextInvoiceDate, toDateStr, buildReceiptHtml, type CycleType } from '@/lib/invoice-automation'
 import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { logAudit } from '@/lib/audit'
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (action === 'mark_paid') {
     const { data: inv } = await supabase
       .from('invoices')
-      .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
+      .select('*, client:clients(id, name, email, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
       .eq('id', id)
       .is('deleted_at', null)
       .single()
@@ -40,11 +40,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const now = new Date().toISOString()
+    const paidAmount = inv.total
     const { data, error } = await supabase
       .from('invoices')
       .update({
         status:          'paid',
-        received_amount: inv.received_amount ?? inv.total,
+        received_amount: paidAmount,
         received_at:     inv.received_at ?? now,
         updated_at:      now,
       })
@@ -62,6 +63,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .from('billing_plans')
         .update({ next_invoice_date: toDateStr(next) })
         .eq('id', plan.id)
+    }
+
+    // Send receipt email
+    if (client?.email) {
+      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+      const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
+      const receiptHtml = buildReceiptHtml({
+        clientName:     client.name ?? 'Valued Client',
+        invoiceNumber:  inv.invoice_number,
+        currencySymbol: currSym,
+        amountReceived: paidAmount,
+        totalPaid:      paidAmount,
+        invoiceTotal:   inv.total,
+        receivedAt:     now,
+        isFullyPaid:    true,
+      })
+      const receiptText = `Dear ${client.name ?? 'Valued Client'},\n\nPayment confirmed for invoice ${inv.invoice_number}.\nAmount: ${currSym}${paidAmount.toLocaleString()}\nStatus: FULLY PAID\n\nThank you for your business.\n— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
+      try {
+        await sendEmail({ to: client.email, subject: receiptSubject, body: receiptText, html: receiptHtml })
+        await supabase.from('automation_logs').insert({ type: 'payment_receipt', recipient_email: client.email, subject: receiptSubject, status: 'sent', created_at: now })
+      } catch (emailErr: any) {
+        console.error('[mark_paid] receipt email failed:', emailErr.message)
+        try { await supabase.from('automation_logs').insert({ type: 'payment_receipt', recipient_email: client.email, subject: receiptSubject, status: 'failed', error: emailErr.message, created_at: now }) } catch {}
+      }
     }
 
     try {
@@ -133,37 +158,52 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (action === 'mark_received') {
-    const receivedAmount   = Number(body.received_amount ?? 0)
+    const newPaymentAmount = Number(body.received_amount ?? 0)
     const paymentReference = body.payment_reference ?? null
     const paymentNotes     = body.payment_notes ?? null
 
     const { data: inv } = await supabase
       .from('invoices')
-      .select('*, client:clients(id, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
+      .select('*, client:clients(id, name, email, billing_plans(id, is_active, cycle_type, custom_days, next_invoice_date))')
       .eq('id', id)
       .is('deleted_at', null)
       .single()
 
     if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const fullyPaid = receivedAmount >= inv.total
+    // Accumulate: add to existing received_amount instead of overwriting
+    const totalReceived = (inv.received_amount ?? 0) + newPaymentAmount
+    const fullyPaid = totalReceived >= inv.total
     const newStatus = fullyPaid ? 'paid' : inv.status
+    const now = new Date().toISOString()
 
     const { data, error } = await supabase
       .from('invoices')
       .update({
-        received_amount:   receivedAmount,
-        received_at:       new Date().toISOString(),
+        received_amount:   totalReceived,
+        received_at:       now,
         payment_reference: paymentReference,
         payment_notes:     paymentNotes,
         status:            newStatus,
-        updated_at:        new Date().toISOString(),
+        updated_at:        now,
       })
       .eq('id', id)
       .select()
       .single()
 
     if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+
+    // Insert payment record for audit trail
+    try {
+      await supabase.from('invoice_payments').insert({
+        invoice_id:  id,
+        amount:      newPaymentAmount,
+        reference:   paymentReference,
+        notes:       paymentNotes,
+        received_at: now,
+        status:      'paid',
+      })
+    } catch {}
 
     let nextInvoiceDateResult: string | null = null
     if (fullyPaid) {
@@ -176,8 +216,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    // Send receipt email
+    const client = inv.client as any
+    if (client?.email) {
+      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+      const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
+      const receiptHtml = buildReceiptHtml({
+        clientName:     client.name ?? 'Valued Client',
+        invoiceNumber:  inv.invoice_number,
+        currencySymbol: currSym,
+        amountReceived: newPaymentAmount,
+        totalPaid:      totalReceived,
+        invoiceTotal:   inv.total,
+        receivedAt:     now,
+        isFullyPaid:    fullyPaid,
+      })
+      const receiptText = `Dear ${client.name ?? 'Valued Client'},\n\nPayment received for invoice ${inv.invoice_number}.\nAmount received: ${currSym}${newPaymentAmount.toLocaleString()}\nTotal paid: ${currSym}${totalReceived.toLocaleString()} of ${currSym}${inv.total.toLocaleString()}\n${fullyPaid ? 'Status: FULLY PAID' : `Remaining: ${currSym}${Math.max(0, inv.total - totalReceived).toLocaleString()}`}\n\nThank you for your business.\n— ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
+      try {
+        await sendEmail({ to: client.email, subject: receiptSubject, body: receiptText, html: receiptHtml })
+        await supabase.from('automation_logs').insert({ type: 'payment_receipt', recipient_email: client.email, subject: receiptSubject, status: 'sent', created_at: now })
+      } catch (emailErr: any) {
+        console.error('[mark_received] receipt email failed:', emailErr.message)
+        try { await supabase.from('automation_logs').insert({ type: 'payment_receipt', recipient_email: client.email, subject: receiptSubject, status: 'failed', error: emailErr.message, created_at: now }) } catch {}
+      }
+    }
+
     try {
-      await logAudit({ userId: currentUser?.id, userEmail: currentUser?.email, action: 'mark_received', tableName: 'invoices', recordId: id, newValue: { status: newStatus, received_amount: receivedAmount } })
+      await logAudit({ userId: currentUser?.id, userEmail: currentUser?.email, action: 'mark_received', tableName: 'invoices', recordId: id, newValue: { status: newStatus, received_amount: totalReceived } })
     } catch {}
 
     return NextResponse.json({ ...data, nextInvoiceDate: nextInvoiceDateResult })
