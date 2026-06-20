@@ -363,6 +363,102 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       required: ['client_id', 'name', 'price', 'start_date', 'items'],
     }),
   },
+  {
+    name: 'create_invoice',
+    description: 'إنشاء فاتورة جديدة لعميل مع بنود تفصيلية',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id:  { type: str, description: 'ID العميل' },
+        due_date:   { type: str, description: 'موعد السداد YYYY-MM-DD' },
+        notes:      { type: str, description: 'ملاحظات على الفاتورة' },
+        tax:        { type: num, description: 'نسبة الضريبة % (افتراضي 0)' },
+        items: {
+          type: arr,
+          description: 'بنود الفاتورة',
+          items: {
+            type: obj,
+            properties: {
+              description: { type: str, description: 'وصف البند' },
+              quantity:    { type: num, description: 'الكمية' },
+              unit_price:  { type: num, description: 'سعر الوحدة' },
+            },
+            required: ['description', 'quantity', 'unit_price'],
+          },
+        },
+      },
+      required: ['client_id', 'due_date', 'items'],
+    }),
+  },
+  {
+    name: 'create_campaign',
+    description: 'إنشاء كمبانيا تسويقية — يُستخدم عند استيراد خطة ميديا باير',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id:   { type: str, description: 'ID العميل' },
+        name:        { type: str, description: 'اسم الكمبانيا' },
+        description: { type: str, description: 'وصف الكمبانيا والهدف التفصيلي' },
+        goal:        enumStr(['awareness', 'engagement', 'leads', 'sales', 'retention', 'custom'], 'هدف الكمبانيا'),
+        platforms:   { type: arr, items: { type: str }, description: 'المنصات: instagram, facebook, tiktok' },
+        start_date:  { type: str, description: 'تاريخ البداية YYYY-MM-DD' },
+        end_date:    { type: str, description: 'تاريخ النهاية YYYY-MM-DD' },
+        budget:      { type: num, description: 'الميزانية الإجمالية' },
+        currency:    { type: str, description: 'العملة (افتراضي AED)' },
+        status:      enumStr(['draft', 'active', 'paused'], 'حالة الكمبانيا'),
+      },
+      required: ['client_id', 'name', 'start_date', 'end_date'],
+    }),
+  },
+  {
+    name: 'get_billing_plans',
+    description: 'جلب خطط الفوترة للعملاء: دورة الفوترة، المبلغ، تاريخ الفاتورة القادمة',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id: { type: str, description: 'ID عميل معين (اختياري)' },
+      },
+    }),
+  },
+  {
+    name: 'send_client_email',
+    description: 'يكتب ويبعت إيميل ذكي مخصص لعميل بالـ ID — لأي موقف: تحديث، تهنئة، طلب، تذكير غير مالي',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id: { type: str, description: 'ID العميل' },
+        situation: { type: str, description: 'وصف كامل للموقف والغرض من الإيميل' },
+        tone:      enumStr(['gentle', 'firm', 'urgent'], 'أسلوب الإيميل'),
+      },
+      required: ['client_id', 'situation', 'tone'],
+    }),
+  },
+  {
+    name: 'update_client',
+    description: 'تحديث بيانات عميل: الحالة، الملاحظات، الإيميل، التليفون',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id: { type: str, description: 'ID العميل' },
+        status:    enumStr(['active', 'pending', 'inactive'], 'الحالة الجديدة'),
+        email:     { type: str, description: 'إيميل جديد' },
+        phone:     { type: str, description: 'تليفون جديد' },
+        notes:     { type: str, description: 'ملاحظات على العميل' },
+      },
+      required: ['client_id'],
+    }),
+  },
+  {
+    name: 'get_activity_logs',
+    description: 'جلب سجل النشاط الأخير في السيستم — مين عمل إيه ومتى',
+    parameters: schema({
+      type: obj,
+      properties: {
+        entity_type: { type: str, description: 'نوع الكيان: task, invoice, client, campaign (اختياري)' },
+        limit:       { type: num, description: 'عدد النتائج (افتراضي 20)' },
+      },
+    }),
+  },
 
   // ── Communication ─────────────────────────────────────────────────────────
   {
@@ -931,14 +1027,15 @@ async function executeTool(
     case 'get_client_full_profile': {
       const clientId = String(args.client_id)
 
-      const [client, allTasks, invoices, meetings, campaigns, scheduledPosts, packages] = await Promise.all([
-        admin.from('clients').select('id, name, email, status, country, phone').eq('id', clientId).single(),
+      const [client, allTasks, invoices, meetings, campaigns, scheduledPosts, packages, billingPlan] = await Promise.all([
+        admin.from('clients').select('id, name, email, status, country, phone, notes').eq('id', clientId).single(),
         admin.from('tasks').select('id, title, status, priority, task_type, due_date, updated_at').eq('client_id', clientId).is('deleted_at', null).order('due_date', { ascending: true }),
         admin.from('invoices').select('id, invoice_number, total, status, due_date, issued_date').eq('client_id', clientId).is('deleted_at', null).order('issued_date', { ascending: false }).limit(10),
         admin.from('meetings').select('id, title, scheduled_at, status, notes').eq('client_id', clientId).order('scheduled_at', { ascending: false }).limit(5),
         admin.from('campaigns').select('id, name, goal, status, budget, start_date, end_date, platforms').eq('client_id', clientId).order('created_at', { ascending: false }).limit(5),
         admin.from('scheduled_posts').select('id, platform, scheduled_at, status, content_type').eq('client_id', clientId).order('scheduled_at', { ascending: true }).limit(10),
         admin.from('client_packages').select('*, items:package_items(*)').eq('client_id', clientId).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
+        admin.from('billing_plans').select('id, cycle_type, amount, currency, next_invoice_date, is_active').eq('client_id', clientId).eq('is_active', true).single(),
       ])
 
       if (!client.data) return { error: 'العميل مش موجود' }
@@ -1021,6 +1118,7 @@ async function executeTool(
         upcoming_meetings: meetings.data ?? [],
         active_campaigns: campaigns.data ?? [],
         scheduled_posts: scheduledPosts.data ?? [],
+        billing_plan: billingPlan.data ?? null,
       }
     }
 
@@ -1319,6 +1417,176 @@ async function executeTool(
         items_created: itemRows.length,
         total_quantity: itemRows.reduce((s, i) => s + i.total_quantity, 0),
       }
+    }
+
+    // ── Billing & Campaigns ───────────────────────────────────────────────────
+    case 'create_invoice': {
+      const clientId = String(args.client_id)
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      if (!client) return { error: 'العميل مش موجود' }
+
+      const rawItems = args.items as Array<{ description: string; quantity: number; unit_price: number }>
+      const invoiceItems = rawItems.map(i => ({
+        id:          generateId(),
+        description: i.description,
+        quantity:    Number(i.quantity),
+        unit_price:  Number(i.unit_price),
+        total:       Number(i.quantity) * Number(i.unit_price),
+      }))
+
+      const subtotal = invoiceItems.reduce((s, i) => s + i.total, 0)
+      const tax      = Number(args.tax ?? 0)
+      const total    = subtotal + (subtotal * tax) / 100
+
+      // Generate next invoice number
+      const { data: lastInv } = await admin.from('invoices').select('invoice_number').order('created_at', { ascending: false }).limit(1).single()
+      const lastNum = lastInv?.invoice_number?.replace(/[^0-9]/g, '') ?? '0'
+      const invoiceNumber = `INV-${String(Number(lastNum) + 1).padStart(4, '0')}`
+
+      const { data: inv, error } = await admin.from('invoices').insert({
+        id:             generateId(),
+        invoice_number: invoiceNumber,
+        client_id:      clientId,
+        items:          invoiceItems,
+        subtotal,
+        tax,
+        total,
+        status:         'draft',
+        due_date:       String(args.due_date),
+        issued_date:    now.toISOString(),
+        notes:          args.notes ? String(args.notes) : null,
+        created_at:     now.toISOString(),
+        updated_at:     now.toISOString(),
+      }).select('id, invoice_number, total').single()
+
+      if (error) return { error: error.message }
+      return {
+        success: true,
+        client: client.name,
+        invoice_number: inv.invoice_number,
+        total,
+        status: 'draft',
+        next_step: 'استخدم update_invoice_status("sent") لإرساله للعميل',
+      }
+    }
+
+    case 'create_campaign': {
+      const clientId = String(args.client_id)
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      if (!client) return { error: 'العميل مش موجود' }
+
+      const { data, error } = await admin.from('campaigns').insert({
+        id:          generateId(),
+        client_id:   clientId,
+        name:        String(args.name),
+        description: args.description ? String(args.description) : null,
+        goal:        args.goal ? String(args.goal) : null,
+        platforms:   Array.isArray(args.platforms) ? args.platforms : [],
+        start_date:  String(args.start_date),
+        end_date:    String(args.end_date),
+        budget:      args.budget ? Number(args.budget) : null,
+        currency:    args.currency ? String(args.currency) : 'AED',
+        status:      args.status ? String(args.status) : 'draft',
+        created_by:  ctx.adminUserId,
+        created_at:  now.toISOString(),
+        updated_at:  now.toISOString(),
+      }).select('id, name, status').single()
+
+      if (error) return { error: error.message }
+      return {
+        success: true,
+        client: client.name,
+        campaign_id: data.id,
+        name: data.name,
+        link: '/campaigns',
+      }
+    }
+
+    case 'get_billing_plans': {
+      let query = admin.from('billing_plans')
+        .select('id, cycle_type, amount, currency, next_invoice_date, is_active, custom_days, client:clients(id, name, email)')
+        .order('next_invoice_date', { ascending: true })
+
+      if (args.client_id) query = query.eq('client_id', String(args.client_id))
+
+      const { data, error } = await query
+      if (error) return { error: error.message }
+
+      const activePlans = (data ?? []).filter(p => p.is_active)
+      const dueSoon     = activePlans.filter(p => {
+        const days = Math.ceil((new Date(p.next_invoice_date).getTime() - now.getTime()) / 86400000)
+        return days <= 7
+      })
+
+      return {
+        billing_plans: data ?? [],
+        active_count: activePlans.length,
+        due_soon: dueSoon.map(p => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          client: (p.client as any)?.name,
+          amount: p.amount,
+          currency: p.currency,
+          due: p.next_invoice_date,
+          days_until_due: Math.ceil((new Date(p.next_invoice_date).getTime() - now.getTime()) / 86400000),
+        })),
+        alert: dueSoon.length > 0 ? `⚠️ ${dueSoon.length} عملاء فواتيرهم مستحقة خلال أسبوع` : null,
+      }
+    }
+
+    case 'send_client_email': {
+      const clientId  = String(args.client_id)
+      const situation = String(args.situation)
+      const tone      = (args.tone as 'gentle' | 'firm' | 'urgent') ?? 'gentle'
+
+      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).single()
+      if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
+
+      const emailContent = await generateSmartAgentEmail({
+        recipientName: client.name,
+        recipientRole: 'client',
+        situation,
+        tone,
+        senderName: 'مدير الحسابات',
+      })
+
+      await sendEmail({ to: client.email, subject: emailContent.subject, body: emailContent.body })
+
+      return {
+        success: true,
+        sent_to: client.name,
+        email: client.email,
+        subject: emailContent.subject,
+      }
+    }
+
+    case 'update_client': {
+      const clientId = String(args.client_id)
+      const { data: existing } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      if (!existing) return { error: 'العميل مش موجود' }
+
+      const updates: Record<string, unknown> = { updated_at: now.toISOString() }
+      if (args.status) updates.status = String(args.status)
+      if (args.email)  updates.email  = String(args.email)
+      if (args.phone)  updates.phone  = String(args.phone)
+      if (args.notes)  updates.notes  = String(args.notes)
+
+      const { error } = await admin.from('clients').update(updates).eq('id', clientId)
+      if (error) return { error: error.message }
+
+      return { success: true, client: existing.name, updated_fields: Object.keys(updates).filter(k => k !== 'updated_at') }
+    }
+
+    case 'get_activity_logs': {
+      let query = admin.from('activity_logs')
+        .select('id, user_name, action, entity_type, entity_name, created_at')
+        .order('created_at', { ascending: false })
+        .limit(Number(args.limit ?? 20))
+
+      if (args.entity_type) query = query.eq('entity_type', String(args.entity_type))
+
+      const { data, error } = await query
+      if (error) return { error: error.message }
+      return { logs: data ?? [], count: data?.length ?? 0 }
     }
 
     // ── Communication ─────────────────────────────────────────────────────────
@@ -1629,106 +1897,103 @@ async function executeTool(
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `أنت مساعد تنفيذي ذكي لوكالة تسويق رقمي — خبرة 15 سنة في إدارة المحتوى، الفريق، العملاء، والعمليات.
-تعمل حصراً مع المدير/الأدمن. تنفذ الأوامر باحترافية كاملة وتفكر كمدير حسابات أول لديه صلاحيات كاملة.
+const SYSTEM_PROMPT = `أنت مساعد تنفيذي ذكي لوكالة تسويق رقمي — خبرة 15 سنة في إدارة الميديا، المحتوى، الفريق، العملاء، والعمليات.
+تعمل حصراً مع المدير/الأدمن. هدفك الأساسي: تفرّغ المدير للسيلز فقط — أنت تدير الباقي.
 
 ═══ مبادئ العمل ═══
 - رد دائماً بالعربية إلا لو الكلام إنجليزي
 - كن موجزاً وعملياً — لا مقدمات، لا حشو، دائماً أكد بأرقام
 - استخدم الأدوات فوراً بدون تردد — لا تسأل قبل ما تجمع البيانات
-- فكّر بشكل شامل: التاسك الواحد ممكن يأثر على عميل + فاتورة + باقة + عضو فريق
+- فكّر شامل: التاسك الواحد ممكن يأثر على عميل + فاتورة + باقة + كمبانيا
 
 ═══ أنواع المحتوى ═══
 reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشور | custom=أي محتوى
+(في content_plans: reel | design | ai_video فقط — post/custom → tasks فقط)
 
-═══ الذكاء الاستباقي ═══
-لما تشوف البيانات، لا تكتفي بالإجابة — دور على الأنماط والمخاطر:
-- عميل عنده +3 تاسكات متأخرة + فاتورة متأخرة = خطر عالي → بلّغ فوراً + send_payment_reminder + send_client_report
-- شخص عنده pressure_score > 85 = مثقّل → اقترح إعادة توزيع تلقائياً
-- نسبة إنجاز < 40% ومعدت نص الشهر = تحذير → اعرض خطة تعافي
-- فاتورة غير مدفوعة > 30 يوم = خطر مالي → send_payment_reminder فوراً
-- باقة اتستهلكت > 80% = يحتاج تجديد → بلّغ المدير + اقترح create_client_package
+═══ خطة الميديا باير — الوركفلو الكامل ═══
+لما تستلم Excel خطة ميديا باير، نفّذ بالترتيب:
 
-═══ إدارة الباقات والاستهلاك ═══
-استخدم get_package_usage لكشف:
-- من خلص باقته (needs_renewal: true) → تدخّل فوري + بلّغ المدير
-- من شارف على الخلاص (pct_used > 80%) → إنذار مبكر للمدير
-- من لديه طاقة فارغة (pct_used < 30%) → تأكد الفريق شغّال
+١. get_clients + get_team_members + get_workload_analysis (معاً في نفس الوقت)
+٢. حلل الخطة: كمبانيات، منصات، ميزانيات، أنواع الكريتيف المطلوب، المواعيد
+٣. اسأل المدير: لأي عميل؟ ومين مسؤول عن كل نوع كريتيف؟ (مع اقتراح بناءً على الأعباء)
+٤. بعد تأكيد المدير، نفّذ تلقائياً كل الخطوات دفعة واحدة:
+   أ. create_campaign لكل كمبانيا في الخطة (بالمنصات والميزانية والهدف)
+   ب. create_content_plan للشهر (الريلز والتصاميم والفيديو)
+   ج. import_content_plan (التاسكات الإنتاجية مع التعيين)
+   د. notify_all_team بالخطة الجديدة والمواعيد
+   هـ. create_meeting لجلسة kick-off مع العميل (اقترح موعداً قريباً)
+٥. "✅ تم تجهيز خطة [اسم الشهر]: X كمبانيا + Y قطعة كريتيف + Z تاسك إنتاجي للعميل [الاسم]"
+٦. احفظ الخطة في الذاكرة: agent_remember("plan_[client]_[month]", "...")
 
-لما عميل يخلص باقته، الإجراء التلقائي:
-١. بلّغ المدير بالأرقام الدقيقة (كام خلص من كل نوع)
-٢. اقترح create_client_package بنفس مواصفات الباقة القديمة أو أفضل
-٣. notify_user للعميل (لو له حساب) بإشعار تجديد الباقة
+═══ إدارة دورة حياة العميل الكاملة ═══
+كل عميل له دورة:
+أونبورد → تشغيل → متابعة → تجديد → (ترقية أو إيقاف)
 
-استخدم get_client_full_profile للحصول على صورة 360° كاملة عن أي عميل قبل أي قرار.
+استخدم get_client_full_profile قبل أي قرار على عميل — تجيب:
+• التاسكات + حالتها + نسبة الإنجاز
+• الباقة + الاستهلاك
+• الفواتير + المالية
+• الكمبانيات النشطة
+• الاجتماعات القادمة
+• المنشورات المجدولة
+• خطة الفوترة (متى الفاتورة القادمة)
+
+═══ إدارة الباقات والفوترة ═══
+get_package_usage دوري → من على وشك الخلاص:
+- pct_used > 80% → بلّغ المدير + اقترح تجديد
+- needs_renewal: true → create_client_package تلقائياً + notify_user للعميل
+
+get_billing_plans → من فاتورته مستحقة:
+- due_soon (أقل من 7 أيام) → create_invoice تلقائياً
+- الفاتورة المُنشأة: status='draft' → update_invoice_status("sent") → ترسل للعميل
+- مدفوعة → انتظر تأكيد المدير قبل update_invoice_status("paid")
 
 ═══ الذاكرة الدائمة ═══
-- في بداية جلسة مهمة، استخدم agent_recall("ALL") لتذكر السياق المحفوظ
-- بعد أي قرار مهم أو ملاحظة مهمة، احفظها:
-  agent_remember("client_X_notes", "يفضل ريلز كوميدية، باقته تجدد كل أول الشهر")
-  agent_remember("team_assignments", "أحمد=ريلز، سارة=تصاميم، كريم=منشورات")
-- الذاكرة تفيدك في الجلسات القادمة — استخدمها باستمرار
+- أول الجلسة: agent_recall("ALL") ← دايماً
+- بعد أي معلومة مهمة، احفظها:
+  agent_remember("client_[اسم]", "تفضيلاته، باقته، ملاحظات مهمة")
+  agent_remember("team_roles", "أحمد=ريلز، سارة=تصاميم، محمود=ميديا باير")
+  agent_remember("monthly_targets", "الهدف X عميل، Y إيراد")
 
-═══ صحة العملاء (360°) ═══
-لما تُسأل عن عميل معين: استخدم get_client_full_profile للصورة الكاملة
-لما تُسأل عن كل العملاء: استخدم get_client_health لكل العملاء
+═══ صحة العملاء ═══
+get_client_health دوري:
+- 75+ ✅ راقب فقط + تأكد الباقة كافية
+- 50–74 ⚠️ send_client_report + تواصل استباقي
+- < 50 ❌ تحرك فوري: send_payment_reminder + add_task_comment + send_client_email + بلّغ المدير
 
-مستويات الخطر وردود الفعل:
-- 75+ = صحي ✅ (راقب الباقة فقط)
-- 50–74 = تحذير ⚠️ (send_client_report + notify_user لو في تأخيرات)
-- أقل من 50 = خطر ❌ (send_payment_reminder + add_task_comment + بلّغ المدير فوراً)
+═══ إدارة الفريق والأعباء ═══
+- قبل أي تعيين: get_workload_analysis → اختر can_take_more: true
+- pressure_score > 80 → لا تُعيّن
+- كل الفريق مثقّل → بلّغ المدير + اقترح تأجيل أو خارجي
 
-═══ إدارة أعباء الفريق ═══
-استخدم get_workload_analysis قبل أي تعيين جديد.
-- can_take_more: true → عيّن عليه
-- pressure_score > 80 → لا تعيّن إلا لو ضرورة قصوى
-- لو كل الفريق مثقّل → بلّغ المدير + اقترح تأجيل أو توظيف خارجي
+تأخيرات: get_team_delay_analysis → send_smart_email (مخصص لكل شخص) + notify_user + add_task_comment
+النبرة: 1-2 يوم="gentle" | 3-4 أيام="firm" | 5+ أيام="urgent"
 
-═══ استيراد خطة المحتوى ═══
-١. get_clients + get_team_members + get_workload_analysis (كلهم معاً في نفس الوقت)
-٢. حلل البيانات: عدد القطع، الأنواع، نطاق المواعيد، المنصات
-٣. اسأل: لأي عميل؟ مين مسؤول عن كل نوع؟
-٤. بعد تأكيد، نفّذ الإجراءين معاً:
-   أ. create_content_plan → ينشئ الخطة الرسمية في صفحة /content-plans مع كل تفاصيل كل قطعة
-   ب. import_content_plan → ينشئ تاسكات مرتبطة في صفحة /tasks لمتابعة الإنتاج
-٥. notify_all_team بالخطة الجديدة
-٦. "✅ خطة [اسم الشهر] — تم إنشاء X قطعة محتوى + X تاسك للعميل Y"
+═══ القرارات التنفيذية الكاملة ═══
+✅ نفّذ مباشرة:
+   - create_task, update_task, approve_task, add_task_comment
+   - create_content_plan, import_content_plan, create_campaign
+   - create_meeting, create_client_package, create_invoice
+   - update_invoice_status("sent" أو "overdue")
+   - update_client (status, notes, phone, email)
+   - notify_user, notify_all_team, send_smart_email
+   - send_client_report, send_client_email, send_payment_reminder
+   - agent_remember, agent_recall
 
-ملاحظة أنواع المحتوى في content_plans: reel | design | ai_video (فقط)
-لو في posts/custom → أنشئها كـ tasks فقط (مش content_plan_items)
+⚠️ يحتاج تأكيد المدير:
+   - update_invoice_status("paid") ← مالي حساس
+   - أي حذف لبيانات
 
-═══ التقارير ═══
-تقرير يومي: get_progress_report → إنجاز% + تأخيرات + مواعيد قادمة + توصيات
-تقرير عميل: send_client_report → إيميل احترافي للعميل مباشرة
-تقرير مالي: get_financial_overview → إيرادات، مستحقات، أرباح
-تقرير باقات: get_package_usage → استهلاك كل عميل
-
-═══ إدارة التأخيرات والتواصل الذكي ═══
-١. get_team_delay_analysis → تحليل دقيق لكل شخص
-٢. قرر الأسلوب:
-   - 1–2 يوم → "gentle" | 3–4 أيام → "firm" | 5+ أيام → "urgent"
-٣. send_smart_email + notify_user + add_task_comment (لكل شخص رسالة مخصصة)
-٤. بلّغ المدير بالأسماء والإجراءات
-
-═══ إدارة الفواتير والمدفوعات ═══
-- فاتورة لم تُرسل بعد → update_invoice_status("sent")
-- فاتورة متأخرة > 7 أيام → send_payment_reminder تلقائياً
-- فاتورة تُدفع → أبلّغ المدير وانتظر تأكيده قبل update_invoice_status("paid")
-
-═══ القرارات التنفيذية الممنوحة ═══
-مسموح لك تنفيذها مباشرة بدون انتظار:
-✅ create_task, update_task, approve_task, add_task_comment
-✅ notify_user, notify_all_team, send_smart_email, send_client_report
-✅ send_payment_reminder, update_invoice_status("sent" أو "overdue")
-✅ create_meeting, create_client_package, create_content_plan
-✅ agent_remember, agent_recall
-⚠️ update_invoice_status("paid") → يحتاج تأكيد المدير
-⚠️ أي حذف لبيانات → يحتاج أمر صريح
+═══ التقارير اليومية ═══
+get_progress_report → إنجاز% + تأخيرات + مواعيد + توصيات
+get_package_usage → استهلاك كل عميل
+get_billing_plans → فواتير مستحقة
+get_financial_overview → إيرادات + أرباح + مخاطر
 
 ═══ قواعد الأمان ═══
-- قبل إرسال +3 إيميلات جماعية، لخّص واطلب تأكيد
-- قبل إنشاء +5 تاسكات دفعة واحدة، لخّص واطلب تأكيد
-- لو في خطأ في أداة، وضّح السبب واقترح البديل`
+- +3 إيميلات جماعية → لخّص واطلب تأكيد
+- +5 تاسكات دفعة واحدة → لخّص واطلب تأكيد
+- خطأ في أداة → وضّح + اقترح بديل`
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
