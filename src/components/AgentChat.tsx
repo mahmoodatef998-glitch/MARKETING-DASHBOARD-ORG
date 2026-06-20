@@ -184,17 +184,21 @@ export default function AgentChat() {
     let displayText = text
 
     if (attached) {
+      const userNote = text ? `\n\nملاحظة من المدير: ${text}` : ''
       const intro =
-        `استلمت ملف Excel خطة محتوى:\n` +
-        `${attached.fullText}\n\n` +
+        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} قطعة\n\n` +
+        `${attached.fullText}` +
+        `${userNote}\n\n` +
         `══════════════════════════\n` +
-        `المطلوب:\n` +
-        `١. افهم أعمدة الملف وطابقها: الموضوع→title | الهوك/الفكرة→description | النوع→task_type | الموعد→due_date | الأولوية→priority\n` +
-        `٢. جلب العملاء وأعضاء الفريق وتحليل الأعباء\n` +
-        `٣. اسأل سؤالاً واحداً فقط: لأي عميل؟ ومين مسؤول عن كل نوع؟\n` +
-        `٤. بعد التأكيد: أنشئ كل التاسكات دفعة واحدة مع الموضوع والهوك والتفاصيل الكاملة`
-      messageText = text ? `${intro}\n\nملاحظة إضافية: ${text}` : intro
-      displayText = text || `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
+        `تعليمات التنفيذ الفوري:\n` +
+        `• ابدأ الآن بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
+        `• طابق الأعمدة: الموضوع→title | الهوك/الفكرة→description | النوع→task_type | الموعد→due_date\n` +
+        `• لو العميل واضح من الملف أو من السياق → نفّذ مباشرة بدون سؤال\n` +
+        `• لو مش واضح → اسأل سؤال واحد مضغوط ثم نفّذ فور الرد\n` +
+        `• IMPORTANT: قاعدة "+5 tasks = اطلب تأكيد" لا تنطبق على Excel imports — نفّذ كل التاسكات دفعة واحدة\n` +
+        `• بعد التنفيذ: notify_all_team + ملخص النتيجة`
+      messageText = intro
+      displayText = text ? `📊 ${attached.name} — ${attached.rowCount} قطعة | ${text}` : `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
     }
 
     setChat(prev => [...prev, { role: 'user', text: displayText, isFile: !!attached && !text }])
