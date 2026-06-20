@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id               uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role             text NOT NULL DEFAULT 'client'
                    CHECK (role IN ('admin','video_maker','designer','ai_video','media_buyer','client')),
-  team_member_id   uuid,
+  team_member_id   uuid,   -- DEPRECATED: use id (auth.users FK) directly; kept for data migration only
   client_id        uuid,
   display_name     text,
   created_at       timestamptz NOT NULL DEFAULT now()
@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS public.clients (
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
 
--- ── Team Members ──────────────────────────────────────────────────────────────
+-- ── Team Members ── DEPRECATED ────────────────────────────────────────────────
+-- This table is kept for backward compatibility only.
+-- All new code MUST use auth.users + profiles instead.
+-- Do NOT add new columns or references to this table.
 CREATE TABLE IF NOT EXISTS public.team_members (
   id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   notion_id    text,
@@ -68,7 +71,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
   task_type             text
                         CHECK (task_type IN ('reel_video','design','ai_video','post','custom')),
   due_date              date,
-  assignee_id           uuid REFERENCES public.team_members(id) ON DELETE SET NULL,
+  assignee_id           uuid REFERENCES public.team_members(id) ON DELETE SET NULL, -- DEPRECATED: use assigned_to
   assigned_to           uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   client_id             uuid REFERENCES public.clients(id) ON DELETE SET NULL,
   delivery_url          text,
@@ -638,3 +641,37 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_table_name ON public.audit_logs(table_name);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON public.audit_logs(user_id);
+
+-- ── Team Payouts (salary / commission payments to team members) ───────────────
+CREATE TABLE IF NOT EXISTS public.team_payouts (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id   uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  amount      numeric(12,2) NOT NULL CHECK (amount > 0),
+  currency    text        NOT NULL DEFAULT 'AED',
+  description text,
+  proof_url   text,
+  paid_at     timestamptz NOT NULL DEFAULT now(),
+  created_by  uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.team_payouts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.team_payouts;
+CREATE POLICY "auth_all" ON public.team_payouts FOR ALL USING (auth.role() = 'authenticated');
+CREATE INDEX IF NOT EXISTS idx_team_payouts_member   ON public.team_payouts(member_id);
+CREATE INDEX IF NOT EXISTS idx_team_payouts_paid_at  ON public.team_payouts(paid_at DESC);
+
+-- ── Expand automation_logs.type CHECK to include all current types ────────────
+-- (cron_health, invoice_reminder_3d/1d, monthly_report, payment_receipt)
+DO $$
+BEGIN
+  ALTER TABLE public.automation_logs DROP CONSTRAINT IF EXISTS automation_logs_type_check;
+  ALTER TABLE public.automation_logs ADD CONSTRAINT automation_logs_type_check
+    CHECK (type IN (
+      'payment_reminder','task_reminder','task_reminder_48h',
+      'task_reminder_24h','task_confirmation','task_completed',
+      'task_in_review','task_assigned','weekly_report','client_welcome',
+      'auto_invoice','package_renewal_alert','cron_health',
+      'invoice_reminder_3d','invoice_reminder_1d','monthly_report',
+      'payment_receipt'
+    ));
+END $$;

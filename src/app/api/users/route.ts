@@ -4,9 +4,17 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { generateId } from '@/lib/utils'
 import { generateAndSendInvoice, toDateStr, nextInvoiceDate, type CycleType } from '@/lib/invoice-automation'
 import { nextInvoiceNumber } from '@/lib/invoice-number'
+import { rateLimit } from '@/lib/rate-limit'
+
+function getIp(req: NextRequest) {
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+}
 
 // GET all team/client users
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 60, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,6 +46,9 @@ export async function GET() {
 
 // POST create new user (team member or client)
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 20, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

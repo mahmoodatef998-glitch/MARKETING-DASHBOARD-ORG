@@ -8,6 +8,7 @@ import { dbError } from '@/lib/utils'
 import { sendSlack } from '@/lib/slack'
 import { parseBody, TaskUpdateSchema } from '@/lib/validation'
 import { logActivity } from '@/lib/activity-log'
+import { logAudit } from '@/lib/audit'
 import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -274,6 +275,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       console.error('[tasks] publish date notification failed:', err)
     }
   }
+
+  // Audit log — record what changed with before/after snapshot
+  await logAudit({
+    userId:    user?.id,
+    userEmail: user?.email,
+    action:    'update',
+    tableName: 'tasks',
+    recordId:  id,
+    oldValue:  oldTask as Record<string, unknown> ?? undefined,
+    newValue:  { title: data?.title, status: data?.status, priority: data?.priority, assigned_to: data?.assigned_to, due_date: data?.due_date, client_id: data?.client_id },
+  })
 
   // Log activity
   if (body.status && oldTask?.status !== body.status) {

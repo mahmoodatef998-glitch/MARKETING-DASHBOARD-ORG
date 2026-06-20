@@ -2,6 +2,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { dbError } from '@/lib/utils'
+import { rateLimit } from '@/lib/rate-limit'
+
+function getIp(req: NextRequest) {
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+}
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -12,6 +17,9 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
 }
 
 export async function GET(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 60, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const supabase = await createServerClient()
   const { err } = await requireAdmin(supabase)
   if (err) return err
@@ -30,6 +38,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(getIp(req), { limit: 30, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const supabase = await createServerClient()
   const { err } = await requireAdmin(supabase)
   if (err) return err

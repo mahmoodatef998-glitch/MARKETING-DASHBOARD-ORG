@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { rateLimit } from '@/lib/rate-limit'
 
 async function requireAdmin() {
   const supabase = await createServerClient()
@@ -11,7 +12,10 @@ async function requireAdmin() {
   return user
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rl = rateLimit(req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown', { limit: 60, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const user = await requireAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
@@ -26,6 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown', { limit: 30, window: 60_000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   const user = await requireAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 

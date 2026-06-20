@@ -4,6 +4,7 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { updateNotionClient, deleteNotionPage } from '@/lib/notion'
 import { generateId, dbError } from '@/lib/utils'
 import { logActivity } from '@/lib/activity-log'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -31,6 +32,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     notion_id:  body.notion_id ?? null,
     updated_at: new Date().toISOString(),
   }
+
+  // Fetch current state for audit log
+  const { data: oldClient } = await supabase
+    .from('clients')
+    .select('name, email, phone, status, country, notes')
+    .eq('id', id)
+    .single()
 
   const { data, error } = await supabase
     .from('clients')
@@ -97,6 +105,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     entityId:   id,
     entityName: data?.name,
   })
+  await logAudit({
+    userId:    user?.id,
+    userEmail: user?.email,
+    action:    'update',
+    tableName: 'clients',
+    recordId:  id,
+    oldValue:  oldClient as Record<string, unknown> ?? undefined,
+    newValue:  { name: updated.name, email: updated.email, phone: updated.phone, status: updated.status, country: updated.country },
+  })
 
   return NextResponse.json(data)
 }
@@ -123,6 +140,14 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     entityType: 'client',
     entityId:   id,
     entityName: data?.name,
+  })
+  await logAudit({
+    userId:    user?.id,
+    userEmail: user?.email,
+    action:    'delete',
+    tableName: 'clients',
+    recordId:  id,
+    oldValue:  { name: data?.name } as Record<string, unknown>,
   })
 
   return NextResponse.json({ success: true })

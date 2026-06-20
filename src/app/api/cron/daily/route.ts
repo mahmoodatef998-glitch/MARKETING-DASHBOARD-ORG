@@ -34,6 +34,9 @@ export async function GET(req: NextRequest) {
   const now     = new Date()
   const today   = toDateStr(now)
 
+  // ── Wrap entire cron in try/catch so failures trigger an admin alert ─────────
+  try {
+
   const d48h = new Date(now); d48h.setDate(d48h.getDate() + 2)
   const d24h = new Date(now); d24h.setDate(d24h.getDate() + 1)
   const date48h = toDateStr(d48h)
@@ -575,5 +578,89 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, processed: results.length, results })
+  // ── 9. Data Retention Policy ─────────────────────────────────────────────
+  try {
+    const twoYearsAgo = new Date(now); twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+    const oneYearAgo  = new Date(now); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    const ninetyDaysAgo = new Date(now); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const twoYearsAgoStr  = twoYearsAgo.toISOString()
+    const oneYearAgoStr   = oneYearAgo.toISOString()
+    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString()
+
+    // Soft-delete paid invoices older than 2 years
+    await supabase
+      .from('invoices')
+      .update({ deleted_at: now.toISOString() })
+      .eq('status', 'paid')
+      .is('deleted_at', null)
+      .lt('updated_at', twoYearsAgoStr)
+
+    // Soft-delete done/overdue tasks older than 1 year
+    await supabase
+      .from('tasks')
+      .update({ deleted_at: now.toISOString() })
+      .in('status', ['done', 'overdue'])
+      .is('deleted_at', null)
+      .lt('updated_at', oneYearAgoStr)
+
+    // Hard-delete automation_logs older than 90 days
+    await supabase
+      .from('automation_logs')
+      .delete()
+      .lt('created_at', ninetyDaysAgoStr)
+
+    // Hard-delete audit_logs older than 365 days
+    await supabase
+      .from('audit_logs')
+      .delete()
+      .lt('created_at', oneYearAgoStr)
+  } catch (retentionErr: unknown) {
+    console.error('[cron] data retention failed:', retentionErr instanceof Error ? retentionErr.message : String(retentionErr))
+  }
+
+    // ── Log successful run + ping external monitor ─────────────────────────────
+    try {
+      await supabase.from('automation_logs').insert({
+        type:    'cron_health',
+        subject: `Daily cron completed: ${results.length} actions`,
+        status:  'success',
+        created_at: now.toISOString(),
+      })
+    } catch {}
+
+    if (process.env.CRON_MONITOR_URL) {
+      try { await fetch(process.env.CRON_MONITOR_URL) } catch {}
+    }
+
+    return NextResponse.json({ success: true, processed: results.length, results })
+
+  } catch (cronErr: unknown) {
+    const errMsg = cronErr instanceof Error ? cronErr.message : String(cronErr)
+    console.error('[cron/daily] FATAL ERROR:', errMsg)
+
+    // Log failure
+    try {
+      await supabase.from('automation_logs').insert({
+        type:    'cron_health',
+        subject: 'Daily cron FAILED',
+        status:  'failed',
+        error:   errMsg,
+        created_at: now.toISOString(),
+      })
+    } catch {}
+
+    // Alert admin via email
+    const adminEmail = process.env.GMAIL_SENDER_EMAIL
+    if (adminEmail) {
+      try {
+        await sendEmail({
+          to:      adminEmail,
+          subject: `⚠️ URGENT: Daily Cron Failed — ${today}`,
+          body:    `The daily automation cron job failed with the following error:\n\n${errMsg}\n\nPlease check the server logs and fix immediately to avoid missed invoices and reminders.`,
+        })
+      } catch {}
+    }
+
+    return NextResponse.json({ success: false, error: errMsg }, { status: 500 })
+  }
 }
