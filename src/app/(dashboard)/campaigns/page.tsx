@@ -67,7 +67,7 @@ const STATUS_CFG: Record<string, { label: string; color: string; icon: React.Ele
   completed: { label: 'Completed', color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/25', icon: CheckCircle2 },
 }
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'AED', 'SAR', 'EGP']
+const CURRENCIES = ['AED', 'EGP', 'USD', 'EUR', 'GBP', 'SAR']
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ function CampaignModal({
     start_date:  initial?.start_date  ?? '',
     end_date:    initial?.end_date    ?? '',
     budget:      initial?.budget?.toString() ?? '',
-    currency:    initial?.currency    ?? 'USD',
+    currency:    initial?.currency    ?? 'AED',
     status:      initial?.status      ?? 'draft' as Campaign['status'],
   })
   const [saving, setSaving] = useState(false)

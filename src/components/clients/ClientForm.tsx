@@ -36,16 +36,16 @@ const CYCLE_OPTIONS = [
   { value: 'custom_days',   label: 'Custom (every N days)' },
 ]
 
-const CURRENCIES = ['USD', 'EGP', 'EUR', 'GBP', 'SAR', 'AED']
+const CURRENCIES = ['AED', 'EGP', 'USD', 'EUR', 'GBP', 'SAR']
 
 function getInitialBilling(p?: BillingPlan) {
-  if (!p) return { cycle: '', amount: '', currency: 'USD', custom_days: '30', first_date: new Date().toISOString().split('T')[0] }
+  if (!p) return { cycle: '', amount: '', currency: 'AED', custom_days: '30', first_date: new Date().toISOString().split('T')[0] }
   // Map custom_days=15 back to the "every_15_days" UI value
   const cycle = (p.cycle_type === 'custom_days' && p.custom_days === 15) ? 'every_15_days' : p.cycle_type
   return {
     cycle,
     amount:      String(p.amount ?? ''),
-    currency:    p.currency ?? 'USD',
+    currency:    p.currency ?? 'AED',
     custom_days: String(p.custom_days ?? '30'),
     first_date:  p.next_invoice_date ?? new Date().toISOString().split('T')[0],
   }

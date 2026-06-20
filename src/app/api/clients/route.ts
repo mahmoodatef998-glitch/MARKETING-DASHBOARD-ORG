@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       client_id:         client.id,
       cycle_type:        billing_plan.cycle_type,
       amount:            Number(billing_plan.amount),
-      currency:          billing_plan.currency ?? 'USD',
+      currency:          billing_plan.currency ?? 'AED',
       custom_days:       billing_plan.cycle_type === 'custom_days' ? Number(billing_plan.custom_days) : null,
       next_invoice_date: billing_plan.next_invoice_date,
       is_active:         true,

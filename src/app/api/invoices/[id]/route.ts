@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Send receipt email
     if (client?.email) {
-      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : inv.currency === 'USD' ? '$' : 'AED '
       const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
       const receiptHtml = buildReceiptHtml({
         clientName:     client.name ?? 'Valued Client',
@@ -219,7 +219,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Send receipt email
     const client = inv.client as any
     if (client?.email) {
-      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+      const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : inv.currency === 'USD' ? '$' : 'AED '
       const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
       const receiptHtml = buildReceiptHtml({
         clientName:     client.name ?? 'Valued Client',

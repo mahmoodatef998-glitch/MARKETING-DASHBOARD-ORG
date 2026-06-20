@@ -302,7 +302,7 @@ function cycleLabel(plan: BillingPlan): string {
 }
 
 function currSym(c?: string) {
-  return c === 'EGP' ? 'EGP ' : c === 'EUR' ? '€' : c === 'GBP' ? '£' : c === 'AED' ? 'AED ' : '$'
+  return c === 'EGP' ? 'EGP ' : c === 'EUR' ? '€' : c === 'GBP' ? '£' : c === 'USD' ? '$' : 'AED '
 }
 
 function BillingOverviewCard({ client, tasks }: { client: Client; tasks: Task[] }) {
@@ -426,7 +426,7 @@ function CashFlowProjection({ billingClients, openInvoices }: { billingClients: 
           <Card key={label} className={`border ${border} ${bg}`}>
             <CardContent className="pt-4 pb-4">
               <p className="text-xs text-slate-400 mb-1">{label}</p>
-              <p className={`text-2xl font-bold ${color}`}>{total.toLocaleString()}</p>
+              <p className={`text-2xl font-bold ${color}`}>AED {total.toLocaleString()}</p>
               <div className="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.round((total / maxTotal) * 100)}%` }} />
               </div>

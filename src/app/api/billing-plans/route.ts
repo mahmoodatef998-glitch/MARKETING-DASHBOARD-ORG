@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { client_id, cycle_type, amount, currency = 'USD', custom_days, next_invoice_date } = body
+  const { client_id, cycle_type, amount, currency = 'AED', custom_days, next_invoice_date } = body
 
   if (!client_id || !cycle_type || !amount || !next_invoice_date) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })

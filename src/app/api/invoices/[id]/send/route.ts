@@ -353,7 +353,7 @@ export async function POST(
     return inv.notes?.match(/Every (\d+) Days/)?.[0] ?? labels[inv.billing_cycle ?? ''] ?? 'Service'
   })()
 
-  const currencySymbol = currSym(inv.currency ?? 'USD')
+  const currencySymbol = currSym(inv.currency ?? 'AED')
   const issuedDate = fmtDate(inv.issued_date)
   const dueDate    = inv.due_date ? fmtDate(inv.due_date) : '—'
 

@@ -346,7 +346,7 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
   if (insertErr) throw new Error(`Invoice insert failed: ${insertErr.message}`)
 
   // Send email
-  const currencySymbol = currency === 'EGP' ? 'EGP ' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$'
+  const currencySymbol = currency === 'EGP' ? 'EGP ' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'USD' ? '$' : 'AED '
   const dueDateFormatted = new Date(due).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const cycleLabel = cycleType === 'custom_days' && customDays
     ? `Every ${customDays} Days`

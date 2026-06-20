@@ -96,7 +96,7 @@ export async function GET(
 
   function fmt(n: number) {
     const sym: Record<string, string> = { EGP: 'EGP ', EUR: '€', GBP: '£', AED: 'AED ', USD: '$' }
-    const s = sym[inv.currency ?? 'USD'] ?? '$'
+    const s = sym[inv.currency ?? 'AED'] ?? 'AED '
     return `${s}${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 

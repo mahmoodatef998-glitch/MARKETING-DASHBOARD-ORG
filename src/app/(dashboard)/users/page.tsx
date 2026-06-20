@@ -68,7 +68,7 @@ const EMPTY_FORM = {
   phone: '', country: '', notes: '',
   billing_cycle:       'manual' as BillingCycle,
   billing_amount:      '',
-  billing_currency:    'USD',
+  billing_currency:    'AED',
   billing_custom_days: '',
   billing_start_date:    new Date().toISOString().split('T')[0],
   payment_policy_type:   'single' as 'single' | 'split',
@@ -175,7 +175,7 @@ export default function UsersPage() {
               ...prev,
               billing_cycle:       activeBill.cycle_type as BillingCycle,
               billing_amount:      String(activeBill.amount ?? ''),
-              billing_currency:    activeBill.currency ?? 'USD',
+              billing_currency:    activeBill.currency ?? 'AED',
               billing_custom_days: activeBill.cycle_type === 'custom_days' ? String(activeBill.custom_days ?? '') : '',
             }))
           }

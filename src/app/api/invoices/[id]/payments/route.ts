@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const invClient = inv.client as any
   if (invClient?.email) {
-    const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : '$'
+    const currSym = inv.currency === 'EGP' ? 'EGP ' : inv.currency === 'EUR' ? '€' : inv.currency === 'GBP' ? '£' : inv.currency === 'USD' ? '$' : 'AED '
     const receiptSubject = `Payment Receipt — ${inv.invoice_number} | ${process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Agency'}`
     const receiptHtml = buildReceiptHtml({
       clientName:     invClient.name ?? 'Valued Client',

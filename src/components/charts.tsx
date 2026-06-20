@@ -121,7 +121,7 @@ export function HorizontalBars({ data }: { data: { name: string; revenue: number
           <div className="flex items-center justify-between mb-1">
             <span className="text-sm text-slate-300 truncate max-w-[60%]">{d.name}</span>
             <span className="text-sm font-semibold text-slate-200">
-              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(d.revenue)}
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'AED' }).format(d.revenue)}
             </span>
           </div>
           <div className="h-2 bg-slate-800 rounded-full overflow-hidden">

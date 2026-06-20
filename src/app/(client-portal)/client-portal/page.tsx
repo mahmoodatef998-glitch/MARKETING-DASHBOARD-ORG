@@ -385,7 +385,7 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <p className="font-bold text-white text-sm">{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
+            <p className="font-bold text-white text-sm">{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED</p>
             <span className={`inline-flex items-center gap-1 text-xs font-medium ${col.text}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />
               {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
@@ -423,7 +423,7 @@ function InvoiceRow({ inv }: { inv: Invoice }) {
               )}
               <div className="flex justify-between text-sm font-bold text-white pt-1">
                 <span>Total</span>
-                <span>{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD</span>
+                <span>{inv.total.toLocaleString(undefined, { minimumFractionDigits: 2 })} AED</span>
               </div>
             </>
           ) : (
@@ -616,7 +616,7 @@ function InvoicesTab({
             <span className="font-semibold">{pendingInvoices.length} pending invoice{pendingInvoices.length > 1 ? 's' : ''}</span>
             {' '}totalling{' '}
             <span className="font-semibold">
-              {pendingInvoices.reduce((s, i) => s + i.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {billingPlan?.currency ?? 'USD'}
+              {pendingInvoices.reduce((s, i) => s + i.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {billingPlan?.currency ?? 'AED'}
             </span>
           </p>
         </div>

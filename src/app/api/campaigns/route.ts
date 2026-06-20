@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     start_date:  body.start_date,
     end_date:    body.end_date,
     budget:      body.budget ? Number(body.budget) : null,
-    currency:    body.currency ?? 'USD',
+    currency:    body.currency ?? 'AED',
     status:      body.status ?? 'draft',
     created_by:  user.id,
     created_at:  now,

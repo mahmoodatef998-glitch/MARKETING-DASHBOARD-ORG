@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     if (billing_cycle && billing_amount && billing_cycle !== 'manual') {
       const cycle = billing_cycle as CycleType
       const amount = Number(billing_amount)
-      const currency = billing_currency ?? 'USD'
+      const currency = billing_currency ?? 'AED'
       const customDays = billing_custom_days ? Number(billing_custom_days) : undefined
       const today = new Date()
       const todayStr = toDateStr(today)
@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
         const advAmt = Number(advance_amount)
         const totalBilling = billing_amount ? Number(billing_amount) : advAmt
         const finalAmt = Math.max(0, Math.round((totalBilling - advAmt) * 100) / 100)
-        const currency = billing_currency ?? 'USD'
+        const currency = billing_currency ?? 'AED'
         const now = new Date()
         const todayStr = toDateStr(now)
         const firstInvoiceDate = billing_start_date || todayStr

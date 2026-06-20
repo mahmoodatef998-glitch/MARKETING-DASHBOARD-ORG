@@ -232,7 +232,7 @@ export async function GET(req: NextRequest) {
       const { subject, body } = await generateEmailContent({
         type: 'payment_reminder',
         recipientName: client.name,
-        details: `Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'USD'} ${invoice.total} is due in 3 days on ${invoice.due_date}. Please arrange payment to avoid any service interruptions.`,
+        details: `Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'AED'} ${invoice.total} is due in 3 days on ${invoice.due_date}. Please arrange payment to avoid any service interruptions.`,
       })
       await sendEmail({ to: client.email, subject: `[3 Days Left] ${subject}`, body })
       await supabase.from('invoices').update({ reminder_3d_sent_at: now.toISOString() }).eq('id', invoice.id)
@@ -267,7 +267,7 @@ export async function GET(req: NextRequest) {
       const { subject, body } = await generateEmailContent({
         type: 'payment_reminder',
         recipientName: client.name,
-        details: `URGENT: Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'USD'} ${invoice.total} is due TOMORROW on ${invoice.due_date}.`,
+        details: `URGENT: Invoice #${invoice.invoice_number} for ${invoice.currency ?? 'AED'} ${invoice.total} is due TOMORROW on ${invoice.due_date}.`,
       })
       await sendEmail({ to: client.email, subject: `[Due Tomorrow] ${subject}`, body })
       await supabase.from('invoices').update({ reminder_1d_sent_at: now.toISOString() }).eq('id', invoice.id)
