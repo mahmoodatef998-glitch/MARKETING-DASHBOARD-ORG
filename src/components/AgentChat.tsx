@@ -116,11 +116,19 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   if (rows.length === 0) throw new Error('الملف فاضي')
 
   const headers = Object.keys(rows[0])
-  const allRows = rows.map(r => headers.map(h => String(r[h] ?? '')).join(' | ')).join('\n')
+
+  // Format each row as labeled key→value pairs so the agent can clearly map columns
+  const formattedRows = rows.map((row, idx) => {
+    const pairs = headers
+      .filter(h => String(row[h] ?? '').trim() !== '')
+      .map(h => `  ${h}: ${String(row[h]).trim()}`)
+    return `◆ قطعة ${idx + 1}:\n${pairs.join('\n')}`
+  }).join('\n\n')
+
   const fullText =
-    `الأعمدة: ${headers.join(' | ')}\n` +
-    `إجمالي الصفوف: ${rows.length}\n\n` +
-    `البيانات:\n${allRows}`
+    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى\n` +
+    `الأعمدة المتاحة: ${headers.join(' | ')}\n\n` +
+    `═══ البيانات الكاملة ═══\n${formattedRows}`
 
   return { name: file.name, rowCount: rows.length, headers, fullText }
 }
@@ -176,9 +184,17 @@ export default function AgentChat() {
     let displayText = text
 
     if (attached) {
-      const intro = `عندي خطة محتوى من ملف Excel اسمه "${attached.name}" (${attached.rowCount} صف).\n\n${attached.fullText}`
-      messageText = text ? `${intro}\n\nملاحظة: ${text}` : `${intro}\n\nابدأ سير عمل استيراد هذه الخطة.`
-      displayText = text || `📊 ${attached.name} — ${attached.rowCount} صف`
+      const intro =
+        `استلمت ملف Excel خطة محتوى:\n` +
+        `${attached.fullText}\n\n` +
+        `══════════════════════════\n` +
+        `المطلوب:\n` +
+        `١. افهم أعمدة الملف وطابقها: الموضوع→title | الهوك/الفكرة→description | النوع→task_type | الموعد→due_date | الأولوية→priority\n` +
+        `٢. جلب العملاء وأعضاء الفريق وتحليل الأعباء\n` +
+        `٣. اسأل سؤالاً واحداً فقط: لأي عميل؟ ومين مسؤول عن كل نوع؟\n` +
+        `٤. بعد التأكيد: أنشئ كل التاسكات دفعة واحدة مع الموضوع والهوك والتفاصيل الكاملة`
+      messageText = text ? `${intro}\n\nملاحظة إضافية: ${text}` : intro
+      displayText = text || `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
     }
 
     setChat(prev => [...prev, { role: 'user', text: displayText, isFile: !!attached && !text }])
