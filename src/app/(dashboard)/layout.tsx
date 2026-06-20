@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import { ToastProvider } from '@/components/ui/toast'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import AgentChat from '@/components/AgentChat'
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -52,6 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+      <AgentChat />
     </ToastProvider>
   )
 }
