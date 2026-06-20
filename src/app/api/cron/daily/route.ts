@@ -618,6 +618,64 @@ export async function GET(req: NextRequest) {
     console.error('[cron] data retention failed:', retentionErr instanceof Error ? retentionErr.message : String(retentionErr))
   }
 
+  // ── 10. Daily Progress Report → Slack ─────────────────────────────────────
+  try {
+    const [tasksRes, invoicesRes, overdueTasksRes] = await Promise.all([
+      supabase.from('tasks').select('id, status, due_date').is('deleted_at', null),
+      supabase.from('invoices').select('id, total, status').is('deleted_at', null),
+      supabase.from('tasks')
+        .select('id, title, due_date, priority, assignee:profiles!assigned_to(display_name), client:clients(name)')
+        .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+        .lt('due_date', today)
+        .is('deleted_at', null)
+        .order('due_date', { ascending: true })
+        .limit(5),
+    ])
+
+    const allTasks     = tasksRes.data ?? []
+    const allInvoices  = invoicesRes.data ?? []
+    const todayTasks   = allTasks.filter(t => t.due_date === today)
+
+    const stats = {
+      done:        allTasks.filter(t => t.status === 'done').length,
+      in_progress: allTasks.filter(t => t.status === 'in_progress').length,
+      in_review:   allTasks.filter(t => t.status === 'review').length,
+      overdue:     (overdueTasksRes.data ?? []).length,
+      due_today:   todayTasks.length,
+    }
+
+    const outstanding = allInvoices
+      .filter(i => i.status === 'sent')
+      .reduce((s: number, i: { total?: number }) => s + (i.total ?? 0), 0)
+    const overdueInvoices = allInvoices.filter(i => i.status === 'overdue').length
+
+    let report = `📊 *التقرير اليومي — ${today}*\n\n`
+    report += `*التاسكات:*\n`
+    report += `• ✅ منجزة: ${stats.done}\n`
+    report += `• 🔄 قيد التنفيذ: ${stats.in_progress}\n`
+    report += `• 👁️ للمراجعة: ${stats.in_review}\n`
+    if (stats.due_today > 0) report += `• 📅 موعد تسليمها اليوم: ${stats.due_today}\n`
+    if (stats.overdue > 0)   report += `• 🔴 *متأخرة: ${stats.overdue}*\n`
+
+    if ((overdueTasksRes.data ?? []).length > 0) {
+      report += `\n*أكثر التأخيرات إلحاحاً:*\n`
+      for (const t of (overdueTasksRes.data ?? []).slice(0, 3)) {
+        const assignee = (t.assignee as { display_name?: string } | null)?.display_name ?? '—'
+        const client   = (t.client   as { name?: string }         | null)?.name          ?? '—'
+        report += `• ${t.title} (${client}) — ${assignee} — مطلوب ${t.due_date}\n`
+      }
+    }
+
+    report += `\n*الماليات:*\n`
+    report += `• 💰 فواتير مفتوحة: ${outstanding.toLocaleString()} AED\n`
+    if (overdueInvoices > 0) report += `• 🔴 فواتير متأخرة: ${overdueInvoices}\n`
+    report += `\n⚙️ ${results.length} إجراء آلي أُرسل اليوم`
+
+    await sendSlack(report)
+  } catch (reportErr: unknown) {
+    console.error('[cron] daily report failed:', reportErr instanceof Error ? reportErr.message : String(reportErr))
+  }
+
     // ── Log successful run + ping external monitor ─────────────────────────────
     try {
       await supabase.from('automation_logs').insert({

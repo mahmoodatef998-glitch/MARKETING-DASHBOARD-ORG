@@ -142,6 +142,16 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     description: 'ملخص مالي: إيرادات، فواتير مدفوعة، غير مدفوعة، المتأخرة',
     parameters: schema({ type: obj, properties: {} }),
   },
+  {
+    name: 'get_progress_report',
+    description: 'تقرير تقدم شامل: إنجازات الأسبوع، تأخيرات، مواعيد قريبة، حالة كل مرحلة. ممكن تفلتر بعميل معين.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        client_id: { type: str, description: 'ID العميل (اختياري — إذا مش موجود يجيب لكل العملاء)' },
+      },
+    }),
+  },
 ]
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -334,6 +344,50 @@ async function executeTool(name: string, args: Record<string, unknown>) {
       }
     }
 
+    case 'get_progress_report': {
+      const clientId = args.client_id ? String(args.client_id) : null
+      const today = now.toISOString().split('T')[0]
+      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7)
+      const threeDaysLater = new Date(now); threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+      const threeDaysLaterStr = threeDaysLater.toISOString().split('T')[0]
+      const weekAgoStr = weekAgo.toISOString()
+
+      let query = admin.from('tasks')
+        .select('id, title, status, priority, task_type, due_date, updated_at, assignee:profiles!assigned_to(display_name), client:clients(id, name)')
+        .is('deleted_at', null)
+        .order('due_date', { ascending: true })
+
+      if (clientId) query = query.eq('client_id', clientId)
+
+      const { data: tasks } = await query
+      const all = tasks ?? []
+
+      const overdue      = all.filter(t => !['done'].includes(t.status) && t.due_date < today)
+      const completedWk  = all.filter(t => t.status === 'done' && t.updated_at >= weekAgoStr)
+      const upcoming     = all.filter(t => !['done'].includes(t.status) && t.due_date >= today && t.due_date <= threeDaysLaterStr)
+      const inProgress   = all.filter(t => t.status === 'in_progress')
+      const inReview     = all.filter(t => t.status === 'review')
+      const todo         = all.filter(t => t.status === 'todo')
+      const done         = all.filter(t => t.status === 'done')
+
+      return {
+        report_date: today,
+        summary: {
+          total: all.length,
+          done: done.length,
+          in_progress: inProgress.length,
+          in_review: inReview.length,
+          todo: todo.length,
+          overdue: overdue.length,
+          completion_rate: all.length ? Math.round((done.length / all.length) * 100) : 0,
+        },
+        overdue_tasks:       overdue.slice(0, 10),
+        completed_this_week: completedWk.slice(0, 10),
+        upcoming_deadlines:  upcoming.slice(0, 8),
+        in_review:           inReview.slice(0, 5),
+      }
+    }
+
     default:
       return { error: `أداة غير معروفة: ${name}` }
   }
@@ -341,16 +395,33 @@ async function executeTool(name: string, args: Record<string, unknown>) {
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `أنت مساعد ذكي ومدير سيستم متكامل لوكالة تسويق رقمي.
-مهمتك: إدارة العمليات اليومية، تحليل البيانات، وتنفيذ المطلوب مباشرةً.
+const SYSTEM_PROMPT = `أنت مساعد ذكي ومدير تنفيذي متكامل لوكالة تسويق رقمي. مهمتك تنفيذ الأوامر مباشرةً، وإدارة العمليات، ومتابعة التقدم.
 
-قواعد:
+═══ قواعد عامة ═══
 - رد دائماً بالعربية إلا لو الكلام إنجليزي
-- كن موجزاً وعملياً — لا حشو
-- لما تنشئ تاسكات من خطة محتوى، استخدم tool call واحد لـ import_content_plan بدل إنشاء كل تاسك لوحده
-- لما تحتاج بيانات، استخدم الأدوات المتاحة مباشرةً
-- الـ task_type المتاح: reel_video (ريلز وفيديو), design (ديزاين وتصميم), ai_video, post, custom
-- دايماً أكد على الإجراءات اللي اتخذت وعدد التاسكات اللي اتعملت`
+- كن موجزاً وعملياً — بلا حشو أو مقدمات طويلة
+- استخدم الأدوات المتاحة مباشرةً بدون تردد
+- الـ task_type المتاح: reel_video | design | ai_video | post | custom
+
+═══ سير عمل استيراد خطة المحتوى ═══
+لما المستخدم يدفعلك خطة محتوى (نص، جدول، قائمة):
+١. استخدم get_clients لجلب قائمة العملاء وعرضها
+٢. استخدم get_team_members لجلب الفريق
+٣. اسأل: لأي عميل؟ ومين المسؤول عن كل نوع محتوى؟
+٤. بعد ما تاخد الإجابات، لخص الخطة (عدد التاسكات، المواعيد) واطلب تأكيد
+٥. بعد التأكيد، استخدم import_content_plan بـ tool call واحد لكل التاسكات
+٦. أكد بعد التنفيذ: "تم إنشاء X تاسك بنجاح ✅"
+
+═══ سير عمل التقارير اليومية ═══
+لما يطلبوا تقرير أو متابعة تقدم:
+١. استخدم get_progress_report (مع client_id لو محدد عميل)
+٢. اعرض النتائج بشكل منظم: الملخص، التأخيرات، الإنجازات، المواعيد القريبة
+٣. أضف توصيات عملية بناءً على البيانات
+
+═══ قواعد التنفيذ ═══
+- قبل أي bulk operation (أكتر من 3 تاسكات)، خد تأكيد من المستخدم
+- دايماً أكد على الإجراءات اللي اتخذت بالأرقام
+- لو في تأخيرات، نبّه عليها بوضوح مع أسماء المسؤولين`
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
