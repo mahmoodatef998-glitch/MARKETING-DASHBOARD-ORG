@@ -46,6 +46,8 @@ interface GenerateInvoiceOpts {
   cycleType: CycleType
   customDays?: number
   completedTasks?: CompletedTask[]
+  /** Explicit due date (YYYY-MM-DD). Defaults to today + 7 days if omitted. */
+  dueDate?: string
 }
 
 /**
@@ -226,7 +228,9 @@ export async function generateAndSendInvoice(opts: GenerateInvoiceOpts) {
   }
 
   const invoiceNumber = await nextInvoiceNumber(supabase)
-  const due = dueDate(now)
+  // Use explicit due date if provided (e.g. billing plan's next_invoice_date),
+  // otherwise default to today + 7 days
+  const due = opts.dueDate ?? dueDate(now)
 
   const invoice = {
     id:             generateId(),

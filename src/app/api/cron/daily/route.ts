@@ -102,11 +102,16 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 1. Auto-generate invoices from billing plans ───────────────────────────
+  // Send invoice 2 days before the due date so the client has time to pay
+  const d2before = new Date(now); d2before.setDate(d2before.getDate() + 2)
+  const date2before = toDateStr(d2before)
+
   const { data: duePlans } = await supabase
     .from('billing_plans')
     .select('*, client:clients(id, name, email)')
     .eq('is_active', true)
-    .lte('next_invoice_date', today)
+    .neq('cycle_type', 'manual')
+    .lte('next_invoice_date', date2before)
 
   for (const plan of duePlans ?? []) {
     if (!plan.client?.email) continue
@@ -141,6 +146,7 @@ export async function GET(req: NextRequest) {
         cycleType:      plan.cycle_type as CycleType,
         customDays:     plan.custom_days ?? undefined,
         completedTasks: doneTasks ?? [],
+        dueDate:        plan.next_invoice_date, // actual payment due date
       })
 
       await supabase.from('automation_logs').insert({
