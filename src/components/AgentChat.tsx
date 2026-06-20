@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
+import type { HistoryMessage } from '@/app/api/ai/agent/route'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -14,7 +14,7 @@ export default function AgentChat() {
   const [chat, setChat]         = useState<ChatMessage[]>([
     { role: 'assistant', text: 'أهلاً! أنا مساعدك الذكي. أقدر أساعدك في:\n• إنشاء تاسكات وتوزيعها على الفريق\n• متابعة التأخيرات والمشاكل\n• استيراد خطط محتوى كاملة\n• تقارير عن العملاء والماليات\n\nبس قولي إيه اللي محتاج!' },
   ])
-  const [history, setHistory]   = useState<MessageParam[]>([])
+  const [history, setHistory]   = useState<HistoryMessage[]>([])
   const bottomRef               = useRef<HTMLDivElement>(null)
   const textareaRef             = useRef<HTMLTextAreaElement>(null)
 
@@ -32,7 +32,7 @@ export default function AgentChat() {
     setLoading(true)
 
     try {
-      const newHistory: MessageParam[] = [...history, { role: 'user', content: text }]
+      const newHistory: HistoryMessage[] = [...history, { role: 'user', text }]
       const res = await fetch('/api/ai/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,7 +41,7 @@ export default function AgentChat() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'خطأ غير معروف')
 
-      setHistory(data.messages ?? newHistory)
+      setHistory(data.messages ?? [...newHistory, { role: 'model', text: data.reply }])
       setChat(prev => [...prev, { role: 'assistant', text: data.reply }])
     } catch (err) {
       setChat(prev => [...prev, { role: 'assistant', text: `❌ ${err instanceof Error ? err.message : 'حدث خطأ'}` }])
@@ -88,7 +88,7 @@ export default function AgentChat() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { setChat([{ role: 'assistant', text: 'تم مسح المحادثة. إيه اللي محتاج؟' }]); setHistory([]) }}
+                onClick={() => { setChat([{ role: 'assistant', text: 'تم مسح المحادثة. إيه اللي محتاج؟' }]); setHistory([{ role: 'model', text: 'تم مسح المحادثة. إيه اللي محتاج؟' }]) }}
                 className="text-violet-200 hover:text-white text-xs px-2 py-1 rounded hover:bg-violet-600 transition-colors"
                 title="محادثة جديدة"
               >

@@ -1,125 +1,152 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
-import { anthropic, AGENT_MODEL } from '@/lib/anthropic'
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type FunctionDeclaration,
+  type FunctionDeclarationSchema,
+  type Part,
+} from '@google/generative-ai'
 import { generateId } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
-import type { Tool, MessageParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const AGENT_MODEL = 'gemini-2.5-flash'
 
 function getIp(req: NextRequest) {
   return req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
 }
 
+export interface HistoryMessage {
+  role: 'user' | 'model'
+  text: string
+}
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
-const TOOLS: Tool[] = [
+const obj  = SchemaType.OBJECT
+const str  = SchemaType.STRING
+const num  = SchemaType.NUMBER
+const arr  = SchemaType.ARRAY
+
+// Using unknown cast because the SDK's EnumStringSchema requires format:'enum'
+// on each enum field which clashes with the nested generic Schema type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function schema(s: Record<string, unknown>): FunctionDeclarationSchema { return s as any }
+
+const enumStr = (values: string[], description?: string) => ({
+  type: str, format: 'enum' as const, enum: values, ...(description ? { description } : {}),
+})
+
+const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: 'get_overview',
     description: 'احصل على ملخص شامل للسيستم: عدد العملاء، التاسكات، الفواتير، أعضاء الفريق',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: schema({ type: obj, properties: {} }),
   },
   {
     name: 'get_tasks',
     description: 'جلب التاسكات مع فلاتر اختيارية',
-    input_schema: {
-      type: 'object',
+    parameters: schema({
+      type: obj,
       properties: {
-        status: { type: 'string', enum: ['todo', 'in_progress', 'review', 'done', 'overdue'], description: 'فلتر بالحالة' },
-        client_name: { type: 'string', description: 'اسم العميل' },
-        task_type: { type: 'string', enum: ['reel_video', 'design', 'ai_video', 'post', 'custom'], description: 'نوع التاسك' },
-        limit: { type: 'number', description: 'عدد النتائج (افتراضي 20)' },
+        status:      enumStr(['todo', 'in_progress', 'review', 'done', 'overdue'], 'فلتر بالحالة'),
+        client_name: { type: str, description: 'اسم العميل' },
+        task_type:   enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom'], 'نوع التاسك'),
+        limit:       { type: num, description: 'عدد النتائج (افتراضي 20)' },
       },
-    },
+    }),
   },
   {
     name: 'get_overdue_items',
     description: 'جلب كل التأخيرات: تاسكات متأخرة + فواتير غير مدفوعة',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: schema({ type: obj, properties: {} }),
   },
   {
     name: 'get_team_members',
     description: 'جلب أعضاء الفريق مع أدوارهم وعدد تاسكاتهم',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: schema({ type: obj, properties: {} }),
   },
   {
     name: 'get_clients',
     description: 'جلب قائمة العملاء مع حالتهم',
-    input_schema: {
-      type: 'object',
+    parameters: schema({
+      type: obj,
       properties: {
-        status: { type: 'string', enum: ['active', 'pending', 'inactive'], description: 'فلتر بالحالة' },
+        status: enumStr(['active', 'pending', 'inactive'], 'فلتر بالحالة'),
       },
-    },
+    }),
   },
   {
     name: 'create_task',
     description: 'إنشاء تاسك واحد جديد في السيستم',
-    input_schema: {
-      type: 'object',
+    parameters: schema({
+      type: obj,
       properties: {
-        title: { type: 'string', description: 'عنوان التاسك' },
-        description: { type: 'string', description: 'تفاصيل التاسك (Brief)' },
-        task_type: { type: 'string', enum: ['reel_video', 'design', 'ai_video', 'post', 'custom'], description: 'نوع التاسك' },
-        due_date: { type: 'string', description: 'تاريخ التسليم بصيغة YYYY-MM-DD' },
-        client_id: { type: 'string', description: 'ID العميل' },
-        assigned_to: { type: 'string', description: 'ID عضو الفريق المسؤول' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'الأولوية' },
+        title:       { type: str, description: 'عنوان التاسك' },
+        description: { type: str, description: 'تفاصيل التاسك (Brief)' },
+        task_type:   enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom'], 'نوع التاسك'),
+        due_date:    { type: str, description: 'تاريخ التسليم بصيغة YYYY-MM-DD' },
+        client_id:   { type: str, description: 'ID العميل' },
+        assigned_to: { type: str, description: 'ID عضو الفريق المسؤول' },
+        priority:    enumStr(['low', 'medium', 'high', 'urgent'], 'الأولوية'),
       },
       required: ['title', 'task_type', 'due_date'],
-    },
+    }),
   },
   {
     name: 'import_content_plan',
     description: 'استيراد خطة محتوى كاملة وإنشاء جميع التاسكات دفعة واحدة',
-    input_schema: {
-      type: 'object',
+    parameters: schema({
+      type: obj,
       properties: {
         tasks: {
-          type: 'array',
+          type: arr,
           description: 'قائمة التاسكات للإنشاء',
           items: {
-            type: 'object',
+            type: obj,
             properties: {
-              title: { type: 'string' },
-              description: { type: 'string' },
-              task_type: { type: 'string', enum: ['reel_video', 'design', 'ai_video', 'post', 'custom'] },
-              due_date: { type: 'string' },
-              client_id: { type: 'string' },
-              assigned_to: { type: 'string' },
-              priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+              title:       { type: str },
+              description: { type: str },
+              task_type:   enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom']),
+              due_date:    { type: str },
+              client_id:   { type: str },
+              assigned_to: { type: str },
+              priority:    enumStr(['low', 'medium', 'high', 'urgent']),
             },
             required: ['title', 'task_type', 'due_date'],
           },
         },
       },
       required: ['tasks'],
-    },
+    }),
   },
   {
     name: 'update_task',
     description: 'تحديث تاسك موجود (حالة، تعيين، أولوية)',
-    input_schema: {
-      type: 'object',
+    parameters: schema({
+      type: obj,
       properties: {
-        task_id: { type: 'string', description: 'ID التاسك' },
-        status: { type: 'string', enum: ['todo', 'in_progress', 'review', 'done', 'overdue'] },
-        assigned_to: { type: 'string', description: 'ID عضو الفريق' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
-        due_date: { type: 'string' },
+        task_id:     { type: str, description: 'ID التاسك' },
+        status:      enumStr(['todo', 'in_progress', 'review', 'done', 'overdue']),
+        assigned_to: { type: str, description: 'ID عضو الفريق' },
+        priority:    enumStr(['low', 'medium', 'high', 'urgent']),
+        due_date:    { type: str },
       },
       required: ['task_id'],
-    },
+    }),
   },
   {
     name: 'get_financial_overview',
     description: 'ملخص مالي: إيرادات، فواتير مدفوعة، غير مدفوعة، المتأخرة',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: schema({ type: obj, properties: {} }),
   },
 ]
 
 // ── Tool execution ────────────────────────────────────────────────────────────
 
-async function executeTool(name: string, input: Record<string, unknown>) {
+async function executeTool(name: string, args: Record<string, unknown>) {
   const admin = createAdminClient()
   const now = new Date()
 
@@ -133,9 +160,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
       ])
 
       const tasksByStatus: Record<string, number> = {}
-      for (const t of tasks.data ?? []) {
-        tasksByStatus[t.status] = (tasksByStatus[t.status] ?? 0) + 1
-      }
+      for (const t of tasks.data ?? []) tasksByStatus[t.status] = (tasksByStatus[t.status] ?? 0) + 1
 
       const invoiceStats = { paid: 0, sent: 0, overdue: 0, total_revenue: 0 }
       for (const inv of invoices.data ?? []) {
@@ -158,22 +183,20 @@ async function executeTool(name: string, input: Record<string, unknown>) {
         .select('id, title, status, priority, task_type, due_date, assignee:profiles!assigned_to(display_name, role), client:clients(name)')
         .is('deleted_at', null)
         .order('due_date', { ascending: true })
-        .limit(Number(input.limit ?? 20))
+        .limit(Number(args.limit ?? 20))
 
-      if (input.status) query = query.eq('status', String(input.status))
-      if (input.task_type) query = query.eq('task_type', String(input.task_type))
+      if (args.status)    query = query.eq('status', String(args.status))
+      if (args.task_type) query = query.eq('task_type', String(args.task_type))
 
       const { data, error } = await query
       if (error) return { error: error.message }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let results: any[] = data ?? []
-      if (input.client_name) {
-        const cn = String(input.client_name).toLowerCase()
+      if (args.client_name) {
+        const cn = String(args.client_name).toLowerCase()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        results = results.filter((t: any) =>
-          t.client?.name?.toLowerCase().includes(cn)
-        )
+        results = results.filter((t: any) => t.client?.name?.toLowerCase().includes(cn))
       }
 
       return { tasks: results, count: results.length }
@@ -224,7 +247,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
 
     case 'get_clients': {
       let query = admin.from('clients').select('id, name, email, status, country').is('deleted_at', null).order('name')
-      if (input.status) query = query.eq('status', String(input.status))
+      if (args.status) query = query.eq('status', String(args.status))
       const { data, error } = await query
       if (error) return { error: error.message }
       return { clients: data ?? [], count: data?.length ?? 0 }
@@ -233,13 +256,13 @@ async function executeTool(name: string, input: Record<string, unknown>) {
     case 'create_task': {
       const { error, data } = await admin.from('tasks').insert({
         id:          generateId(),
-        title:       String(input.title),
-        description: input.description ? String(input.description) : null,
-        task_type:   String(input.task_type),
-        due_date:    String(input.due_date),
-        client_id:   input.client_id ? String(input.client_id) : null,
-        assigned_to: input.assigned_to ? String(input.assigned_to) : null,
-        priority:    input.priority ? String(input.priority) : 'medium',
+        title:       String(args.title),
+        description: args.description ? String(args.description) : null,
+        task_type:   String(args.task_type),
+        due_date:    String(args.due_date),
+        client_id:   args.client_id ? String(args.client_id) : null,
+        assigned_to: args.assigned_to ? String(args.assigned_to) : null,
+        priority:    args.priority ? String(args.priority) : 'medium',
         status:      'todo',
         approval_status: 'none',
         created_at:  now.toISOString(),
@@ -251,7 +274,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
     }
 
     case 'import_content_plan': {
-      const tasks = input.tasks as Array<Record<string, unknown>>
+      const tasks = args.tasks as Array<Record<string, unknown>>
       if (!Array.isArray(tasks) || tasks.length === 0) return { error: 'لا يوجد تاسكات للإضافة' }
 
       const rows = tasks.map(t => ({
@@ -281,12 +304,12 @@ async function executeTool(name: string, input: Record<string, unknown>) {
 
     case 'update_task': {
       const updates: Record<string, unknown> = { updated_at: now.toISOString() }
-      if (input.status) updates.status = input.status
-      if (input.assigned_to) updates.assigned_to = input.assigned_to
-      if (input.priority) updates.priority = input.priority
-      if (input.due_date) updates.due_date = input.due_date
+      if (args.status)      updates.status      = args.status
+      if (args.assigned_to) updates.assigned_to = args.assigned_to
+      if (args.priority)    updates.priority    = args.priority
+      if (args.due_date)    updates.due_date    = args.due_date
 
-      const { error } = await admin.from('tasks').update(updates).eq('id', String(input.task_id))
+      const { error } = await admin.from('tasks').update(updates).eq('id', String(args.task_id))
       if (error) return { error: error.message }
       return { success: true }
     }
@@ -303,11 +326,11 @@ async function executeTool(name: string, input: Record<string, unknown>) {
         (arr ?? []).reduce((s, r) => s + (r[field] ?? 0), 0)
 
       return {
-        revenue: sum(paid.data, 'total'),
+        revenue:     sum(paid.data, 'total'),
         outstanding: sum(sent.data, 'total'),
-        overdue: sum(overdue.data, 'total'),
-        expenses: sum(expenses.data, 'amount'),
-        net_profit: sum(paid.data, 'total') - sum(expenses.data, 'amount'),
+        overdue:     sum(overdue.data, 'total'),
+        expenses:    sum(expenses.data, 'amount'),
+        net_profit:  sum(paid.data, 'total') - sum(expenses.data, 'amount'),
       }
     }
 
@@ -342,56 +365,72 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  let body: { messages?: MessageParam[]; message?: string }
+  let body: { messages?: HistoryMessage[] }
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // Accept either a full messages array (for multi-turn) or a single message
-  const messages: MessageParam[] = body.messages ?? [
-    { role: 'user', content: body.message ?? '' },
-  ]
-
+  const messages: HistoryMessage[] = body.messages ?? []
   if (!messages.length) return NextResponse.json({ error: 'message required' }, { status: 400 })
 
-  // ── Agentic loop: keep running until no more tool calls ──────────────────
+  // Separate history (all but last) from the current user message
+  const lastMsg = messages[messages.length - 1]
+  if (lastMsg.role !== 'user') return NextResponse.json({ error: 'Last message must be from user' }, { status: 400 })
+
+  const history = messages.slice(0, -1)
+
+  // Build Gemini model with tools
+  const model = genAI.getGenerativeModel({
+    model: AGENT_MODEL,
+    tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
+    systemInstruction: SYSTEM_PROMPT,
+  })
+
+  // Convert our simple history to Gemini format
+  const geminiHistory = history.map(m => ({
+    role: m.role,
+    parts: [{ text: m.text }] as Part[],
+  }))
+
+  const chat = model.startChat({ history: geminiHistory })
+
+  // ── Agentic loop ──────────────────────────────────────────────────────────
   const MAX_ROUNDS = 6
+  let currentMessage: string | Part[] = lastMsg.text
+
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await anthropic.messages.create({
-      model:      AGENT_MODEL,
-      max_tokens: 4096,
-      system:     SYSTEM_PROMPT,
-      tools:      TOOLS,
-      messages,
-    })
+    const result = await chat.sendMessage(currentMessage)
+    const functionCalls = result.response.functionCalls()
 
-    // Add assistant response to history
-    messages.push({ role: 'assistant', content: response.content })
-
-    if (response.stop_reason !== 'tool_use') {
+    if (!functionCalls || functionCalls.length === 0) {
       // Final text response
-      const text = response.content.find(b => b.type === 'text')?.text ?? ''
-      return NextResponse.json({ reply: text, messages })
+      const reply = result.response.text()
+      const updatedMessages: HistoryMessage[] = [
+        ...messages,
+        { role: 'model', text: reply },
+      ]
+      return NextResponse.json({ reply, messages: updatedMessages })
     }
 
-    // Execute tool calls
-    const toolResults: ToolResultBlockParam[] = []
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue
-      let result: unknown
-      try {
-        result = await executeTool(block.name, block.input as Record<string, unknown>)
-      } catch (err) {
-        result = { error: err instanceof Error ? err.message : String(err) }
-      }
-      toolResults.push({
-        type:        'tool_result',
-        tool_use_id: block.id,
-        content:     JSON.stringify(result),
+    // Execute all tool calls in parallel
+    const functionResponses: Part[] = await Promise.all(
+      functionCalls.map(async (call) => {
+        let toolResult: unknown
+        try {
+          toolResult = await executeTool(call.name, call.args as Record<string, unknown>)
+        } catch (err) {
+          toolResult = { error: err instanceof Error ? err.message : String(err) }
+        }
+        return {
+          functionResponse: {
+            name: call.name,
+            response: { result: toolResult },
+          },
+        } as Part
       })
-    }
+    )
 
-    messages.push({ role: 'user', content: toolResults })
+    currentMessage = functionResponses
   }
 
   return NextResponse.json({ error: 'Agent loop exceeded max rounds' }, { status: 500 })
