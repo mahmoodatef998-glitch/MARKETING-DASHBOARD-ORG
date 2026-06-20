@@ -1324,12 +1324,10 @@ export default function InvoicesPage() {
 
   const doneInvoices    = invoices.filter((i) => i.status === 'paid'    && matches(i))
   const overdueInvoices = invoices.filter((i) => i.status === 'overdue' && matches(i))
-  const activeInvoices  = invoices.filter((i) => i.status !== 'paid' && i.status !== 'overdue' && matches(i))
-
-  const billingClients = clients.filter((c) =>
-    c.billing_plans?.some((p) => p.is_active && p.cycle_type !== 'manual') &&
-    (!search || c.name.toLowerCase().includes(search.toLowerCase()))
-  )
+    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
+  const activeInvoices  = invoices
+    .filter((i) => i.status !== 'paid' && i.status !== 'overdue' && matches(i))
+    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
 
   const totalRevenue   = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0)
   const pendingRevenue = invoices.filter((i) => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + i.total, 0)
@@ -1397,37 +1395,30 @@ export default function InvoicesPage() {
             </div>
           )}
 
-          {/* ── ACTIVE ── */}
+          {/* ── PENDING / UPCOMING ── */}
           <div>
             <SectionRibbon
-              label="ACTIVE"
+              label="PENDING"
               color="violet"
               icon={<Clock className="h-3.5 w-3.5 animate-pulse" />}
-              count={billingClients.length + activeInvoices.length}
+              count={activeInvoices.length}
             />
-            {billingClients.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
-                {billingClients.map((client) => (
-                  <BillingCard key={client.id} client={client} tasks={tasks} />
-                ))}
-              </div>
-            )}
             {activeInvoices.length > 0 ? (
               <div className="space-y-2">
                 {activeInvoices.map((inv) => (
                   <InvoiceRow key={inv.id} inv={inv} onClick={() => setDetailInv(inv)} />
                 ))}
               </div>
-            ) : billingClients.length === 0 ? (
+            ) : (
               <Card>
                 <CardContent className="py-10 text-center">
-                  <p className="text-slate-400 text-sm">No active invoices.</p>
+                  <p className="text-slate-400 text-sm">No pending invoices.</p>
                   <Button className="mt-3" onClick={() => { setEditing(null); setFormOpen(true) }}>
                     <Plus className="h-4 w-4" /> Create Invoice
                   </Button>
                 </CardContent>
               </Card>
-            ) : null}
+            )}
           </div>
 
           {/* ── DONE ── */}

@@ -11,7 +11,8 @@ import {
   Zap, Calendar, CreditCard, ArrowRight, Eye,
   Send, Film, ImageIcon,
 } from 'lucide-react'
-import type { Task } from '@/types'
+import { formatDate } from '@/lib/utils'
+import type { Task, Client, BillingPlan } from '@/types'
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -292,6 +293,83 @@ function MediaBuyerDashboard({ data }: { data: MediaBuyerData | null }) {
   )
 }
 
+// ── Billing Overview Card ─────────────────────────────────────────────────────
+
+function cycleLabel(plan: BillingPlan): string {
+  if (plan.cycle_type === 'custom_days') return `Every ${plan.custom_days ?? '?'} Days`
+  const map: Record<string, string> = { monthly: 'Monthly', biweekly: 'Every 2 Weeks', every_10_days: 'Every 10 Days' }
+  return map[plan.cycle_type] ?? plan.cycle_type
+}
+
+function currSym(c?: string) {
+  return c === 'EGP' ? 'EGP ' : c === 'EUR' ? '€' : c === 'GBP' ? '£' : c === 'AED' ? 'AED ' : '$'
+}
+
+function BillingOverviewCard({ client, tasks }: { client: Client; tasks: Task[] }) {
+  const plan = client.billing_plans?.find((p: BillingPlan) => p.is_active && p.cycle_type !== 'manual')
+  if (!plan) return null
+
+  const today      = new Date().toISOString().split('T')[0]
+  const clientTasks = tasks.filter((t) => t.client_id === client.id)
+  const done       = clientTasks.filter((t) => t.status === 'done').length
+  const total      = clientTasks.length
+  const pct        = total > 0 ? Math.round((done / total) * 100) : 0
+  const sym        = currSym(plan.currency)
+  const daysUntil  = Math.ceil((new Date(plan.next_invoice_date).setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / 86400000)
+  const isDueSoon  = daysUntil <= 2
+
+  const barColor = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-violet-500' : pct >= 25 ? 'bg-orange-400' : 'bg-red-500'
+
+  return (
+    <Card className="border-violet-500/20 bg-violet-950/10 hover:border-violet-500/40 transition-colors">
+      <CardContent className="pt-4 pb-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="font-semibold text-slate-100 text-sm">{client.name}</p>
+            <p className="text-xs text-violet-400 mt-0.5 flex items-center gap-1">
+              <CreditCard className="h-3 w-3" />
+              {cycleLabel(plan)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-base font-bold text-slate-100">{sym}{plan.amount.toLocaleString()}</p>
+            <p className="text-xs text-slate-500">{plan.currency}</p>
+          </div>
+        </div>
+
+        <div className={`flex items-center gap-1.5 text-xs mb-3 px-2.5 py-1.5 rounded-lg ${
+          isDueSoon
+            ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+            : 'bg-slate-800/50 text-slate-400'
+        }`}>
+          <Calendar className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            {plan.next_invoice_date <= today
+              ? 'Invoice generating soon…'
+              : `Next invoice: ${formatDate(plan.next_invoice_date)}`}
+          </span>
+        </div>
+
+        {total > 0 ? (
+          <div>
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-400 flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" /> Package Progress
+              </span>
+              <span className="text-slate-300 font-medium">{done}/{total} tasks · {pct}%</span>
+            </div>
+            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-600 italic">No tasks linked to this client yet</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
@@ -311,11 +389,13 @@ function LoadingSkeleton() {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [role,        setRole]        = useState<string | null>(null)
-  const [data,        setData]        = useState<ReportData | null>(null)
-  const [mbData,      setMbData]      = useState<MediaBuyerData | null>(null)
-  const [reviewTasks, setReviewTasks] = useState<Task[]>([])
-  const [loading,     setLoading]     = useState(true)
+  const [role,           setRole]          = useState<string | null>(null)
+  const [data,           setData]          = useState<ReportData | null>(null)
+  const [mbData,         setMbData]        = useState<MediaBuyerData | null>(null)
+  const [reviewTasks,    setReviewTasks]   = useState<Task[]>([])
+  const [billingClients, setBillingClients] = useState<Client[]>([])
+  const [allTasks,       setAllTasks]      = useState<Task[]>([])
+  const [loading,        setLoading]       = useState(true)
 
   // Detect role first — redirect team-only roles back to their portal
   useEffect(() => {
@@ -339,9 +419,16 @@ export default function DashboardPage() {
       Promise.all([
         fetch('/api/reports').then(r => r.ok ? r.json() : null),
         fetch('/api/tasks?status=review').then(r => r.ok ? r.json() : []).catch(() => []),
-      ]).then(([reportData, tasks]) => {
+        fetch('/api/clients').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/tasks').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([reportData, reviewT, clients, allT]) => {
         setData(reportData)
-        setReviewTasks(Array.isArray(tasks) ? tasks : [])
+        setReviewTasks(Array.isArray(reviewT) ? reviewT : [])
+        const clientList: Client[] = Array.isArray(clients) ? clients : (clients?.data ?? [])
+        setBillingClients(clientList.filter((c: Client) =>
+          c.billing_plans?.some((p: BillingPlan) => p.is_active && p.cycle_type !== 'manual')
+        ))
+        setAllTasks(Array.isArray(allT) ? allT : [])
         setLoading(false)
       }).catch(() => setLoading(false))
 
@@ -516,6 +603,26 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Billing Overview */}
+      {billingClients.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-violet-400" />
+              Active Billing Plans
+            </h2>
+            <Link href="/invoices" className="text-xs text-slate-500 hover:text-indigo-400 transition-colors flex items-center gap-1">
+              View invoices <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {billingClients.map((client) => (
+              <BillingOverviewCard key={client.id} client={client} tasks={allTasks} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Revenue + Top Clients */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
