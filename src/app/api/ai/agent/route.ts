@@ -2141,37 +2141,43 @@ export async function POST(req: NextRequest) {
   const MAX_ROUNDS = 8
   let currentMessage: string | Part[] = lastMsg.text
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const result = await chat.sendMessage(currentMessage)
-    const functionCalls = result.response.functionCalls()
+  try {
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const result = await chat.sendMessage(currentMessage)
+      const functionCalls = result.response.functionCalls()
 
-    if (!functionCalls || functionCalls.length === 0) {
-      const reply = result.response.text()
-      const updatedMessages: HistoryMessage[] = [
-        ...messages,
-        { role: 'model', text: reply },
-      ]
-      return NextResponse.json({ reply, messages: updatedMessages })
+      if (!functionCalls || functionCalls.length === 0) {
+        const reply = result.response.text()
+        const updatedMessages: HistoryMessage[] = [
+          ...messages,
+          { role: 'model', text: reply },
+        ]
+        return NextResponse.json({ reply, messages: updatedMessages })
+      }
+
+      const functionResponses: Part[] = await Promise.all(
+        functionCalls.map(async (call) => {
+          let toolResult: unknown
+          try {
+            toolResult = await executeTool(call.name, call.args as Record<string, unknown>, ctx)
+          } catch (err) {
+            toolResult = { error: err instanceof Error ? err.message : String(err) }
+          }
+          return {
+            functionResponse: {
+              name: call.name,
+              response: { result: toolResult },
+            },
+          } as Part
+        })
+      )
+
+      currentMessage = functionResponses
     }
-
-    const functionResponses: Part[] = await Promise.all(
-      functionCalls.map(async (call) => {
-        let toolResult: unknown
-        try {
-          toolResult = await executeTool(call.name, call.args as Record<string, unknown>, ctx)
-        } catch (err) {
-          toolResult = { error: err instanceof Error ? err.message : String(err) }
-        }
-        return {
-          functionResponse: {
-            name: call.name,
-            response: { result: toolResult },
-          },
-        } as Part
-      })
-    )
-
-    currentMessage = functionResponses
+  } catch (err) {
+    console.error('[Agent] loop error:', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `حدث خطأ في المساعد: ${msg}` }, { status: 500 })
   }
 
   return NextResponse.json({ error: 'Agent loop exceeded max rounds' }, { status: 500 })

@@ -193,8 +193,12 @@ export default function AgentChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newHistory }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'خطأ غير معروف')
+      const raw = await res.text()
+      let data: Record<string, unknown>
+      try { data = JSON.parse(raw) } catch {
+        throw new Error(`خطأ في الخادم (${res.status}) — حاول مرة تانية`)
+      }
+      if (!res.ok) throw new Error((data.error as string) ?? 'خطأ غير معروف')
       setHistory(data.messages ?? [...newHistory, { role: 'model', text: data.reply }])
       setChat(prev => [...prev, { role: 'assistant', text: data.reply }])
     } catch (err) {
