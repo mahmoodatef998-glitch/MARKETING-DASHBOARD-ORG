@@ -4,12 +4,13 @@ import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
-  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed' | 'pending_approval' | 'invoice_due_soon'
+  type: 'overdue_task' | 'overdue_invoice' | 'task_due_today' | 'automation_failed' | 'pending_approval' | 'invoice_due_soon' | 'agent_message'
   title: string
   message: string
   severity: 'error' | 'warning' | 'info'
   link?: string
   count?: number
+  fromAgent?: boolean
 }
 
 export async function GET() {
@@ -213,6 +214,38 @@ export async function GET() {
       link:     '/approvals',
       count:    pendingApprovals.length,
     })
+  }
+
+  // ── Agent notifications (persistent, from AI agent actions) ─────────────
+  try {
+    const { data: agentNotes } = await admin
+      .from('agent_notifications')
+      .select('id, title, body, type, link, created_at')
+      .eq('user_id', user.id)
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    const severityMap: Record<string, 'error' | 'warning' | 'info'> = {
+      urgent:          'error',
+      action_required: 'warning',
+      warning:         'warning',
+      info:            'info',
+    }
+
+    for (const note of agentNotes ?? []) {
+      notifications.unshift({
+        id:        `agent-${note.id}`,
+        type:      'agent_message',
+        title:     note.title,
+        message:   note.body,
+        severity:  severityMap[note.type] ?? 'info',
+        link:      note.link ?? undefined,
+        fromAgent: true,
+      })
+    }
+  } catch {
+    // agent_notifications table may not exist yet — safe to ignore
   }
 
   return NextResponse.json(notifications)

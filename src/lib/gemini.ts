@@ -163,6 +163,46 @@ Rules:
   return JSON.parse(text)
 }
 
+// Smart contextual email written by the AI agent (not a template)
+export async function generateSmartAgentEmail(opts: {
+  recipientName:  string
+  recipientRole:  string   // 'video_maker' | 'designer' | 'content_writer' | etc.
+  situation:      string   // Full context: task name, client, days overdue, impact
+  tone:           'gentle' | 'firm' | 'urgent'
+  senderName?:    string
+}): Promise<{ subject: string; body: string }> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+  const toneGuide = {
+    gentle: 'ودي ومتفاهم — متأخر يوم أو يومين — اسأل عن السبب وعرض المساعدة',
+    firm:   'محترم لكن واضح — متأخر 3-4 أيام — وضّح الأثر على العميل واطلب موعد تسليم محدد',
+    urgent: 'جدي وحازم — متأخر أكتر من 5 أيام أو أولوية عالية — وضّح خطورة الوضع واطلب رد فوري',
+  }
+
+  const prompt = `أنت مدير حسابات محترف في وكالة تسويق رقمي. اكتب إيميل ${opts.tone} لعضو الفريق.
+
+المعلومات:
+- اسم المستلم: ${opts.recipientName}
+- دوره: ${opts.recipientRole}
+- الموقف: ${opts.situation}
+- أسلوب الإيميل: ${toneGuide[opts.tone]}
+- المرسل: ${opts.senderName ?? 'المدير'}
+
+قواعد:
+- اكتب بالعربية العامية المصرية المهنية
+- لا تستخدم صياغة آلية أو قوالب جاهزة
+- اذكر تفاصيل الموقف بشكل طبيعي مش رسمي
+- كن مباشر لكن غير مهين
+- لا تزيد عن 150 كلمة
+- ختم الإيميل بـ"${opts.senderName ?? 'المدير'}"
+
+أرجع JSON فقط بالشكل: {"subject": "...", "body": "..."}`
+
+  const result = await model.generateContent(prompt)
+  const text   = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(text)
+}
+
 export async function chatWithAssistant(opts: {
   message: string
   history: Array<{ role: 'user' | 'model'; parts: string }>

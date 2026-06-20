@@ -10,6 +10,8 @@ import {
 } from '@google/generative-ai'
 import { generateId } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
+import { generateSmartAgentEmail } from '@/lib/gemini'
+import { sendEmail } from '@/lib/gmail'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const AGENT_MODEL = 'gemini-2.5-flash'
@@ -150,6 +152,39 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       properties: {
         client_id: { type: str, description: 'ID العميل (اختياري — إذا مش موجود يجيب لكل العملاء)' },
       },
+    }),
+  },
+  {
+    name: 'get_team_delay_analysis',
+    description: 'تحليل تأخيرات مفصّل لكل عضو في الفريق: أسماؤهم، إيميلاتهم، التاسكات المتأخرة لكل شخص مع العميل وعدد الأيام المتأخرة والأولوية',
+    parameters: schema({ type: obj, properties: {} }),
+  },
+  {
+    name: 'send_smart_email',
+    description: 'يكتب ويبعت إيميل ذكي مخصص (مش template) لعضو فريق أو عميل بناءاً على الموقف الحقيقي',
+    parameters: schema({
+      type: obj,
+      properties: {
+        to_user_id:  { type: str, description: 'ID المستلم من جدول profiles' },
+        situation:   { type: str, description: 'وصف كامل للموقف: إيه المشكلة، التاسك، العميل، كام يوم متأخر، الأثر' },
+        tone:        enumStr(['gentle', 'firm', 'urgent'], 'أسلوب الإيميل: gentle=ودي | firm=حازم | urgent=عاجل'),
+      },
+      required: ['to_user_id', 'situation', 'tone'],
+    }),
+  },
+  {
+    name: 'notify_user',
+    description: 'يبعت إشعار داخل السيستم لعضو فريق أو عميل — يظهرله لما يفتح الداشبورد',
+    parameters: schema({
+      type: obj,
+      properties: {
+        user_id: { type: str, description: 'ID المستلم' },
+        title:   { type: str, description: 'عنوان الإشعار (قصير)' },
+        body:    { type: str, description: 'محتوى الإشعار — يكون مخصص ومش آلي' },
+        type:    enumStr(['info', 'warning', 'urgent', 'action_required'], 'نوع الإشعار'),
+        link:    { type: str, description: 'رابط داخلي اختياري مثل /tasks أو /invoices' },
+      },
+      required: ['user_id', 'title', 'body'],
     }),
   },
 ]
@@ -344,6 +379,147 @@ async function executeTool(name: string, args: Record<string, unknown>) {
       }
     }
 
+    case 'get_team_delay_analysis': {
+      const today = now.toISOString().split('T')[0]
+
+      // Get all team members (non-admin, non-client)
+      const { data: members } = await admin
+        .from('profiles')
+        .select('id, display_name, email, role')
+        .not('role', 'in', '("admin","client")')
+
+      // For each member, get their overdue tasks and upcoming tasks
+      const analysis = await Promise.all((members ?? []).map(async (member) => {
+        const [overdue, upcoming, inProgress] = await Promise.all([
+          admin.from('tasks')
+            .select('id, title, due_date, priority, task_type, client:clients(name)')
+            .eq('assigned_to', member.id)
+            .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+            .lt('due_date', today)
+            .is('deleted_at', null)
+            .order('due_date', { ascending: true }),
+          admin.from('tasks')
+            .select('id, title, due_date, priority, task_type, client:clients(name)')
+            .eq('assigned_to', member.id)
+            .in('status', ['todo', 'in_progress', 'review'])
+            .gte('due_date', today)
+            .is('deleted_at', null)
+            .order('due_date', { ascending: true })
+            .limit(5),
+          admin.from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .eq('assigned_to', member.id)
+            .eq('status', 'in_progress')
+            .is('deleted_at', null),
+        ])
+
+        const overdueTasks = (overdue.data ?? []).map(t => ({
+          ...t,
+          days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000),
+        }))
+
+        return {
+          member: {
+            id: member.id,
+            name: member.display_name,
+            email: member.email,
+            role: member.role,
+          },
+          overdue_count:    overdueTasks.length,
+          in_progress_count: inProgress.count ?? 0,
+          overdue_tasks:    overdueTasks,
+          upcoming_tasks:   upcoming.data ?? [],
+          needs_attention:  overdueTasks.length > 0,
+        }
+      }))
+
+      const membersWithDelays = analysis.filter(m => m.overdue_count > 0)
+      return {
+        analysis,
+        summary: `${membersWithDelays.length} أعضاء لديهم تأخيرات من أصل ${analysis.length}`,
+        members_with_delays: membersWithDelays,
+      }
+    }
+
+    case 'send_smart_email': {
+      const userId  = String(args.to_user_id)
+      const situation = String(args.situation)
+      const tone    = (args.tone as 'gentle' | 'firm' | 'urgent') ?? 'firm'
+
+      // Get recipient info
+      const { data: recipient } = await admin
+        .from('profiles')
+        .select('display_name, email, role')
+        .eq('id', userId)
+        .single()
+
+      if (!recipient?.email) return { error: 'المستلم مش موجود أو مفيش إيميل' }
+
+      // Use Gemini to write a personalized, smart email
+      const emailContent = await generateSmartAgentEmail({
+        recipientName: recipient.display_name ?? 'الزميل',
+        recipientRole: recipient.role ?? 'team_member',
+        situation,
+        tone,
+        senderName: 'مدير الحسابات',
+      })
+
+      // Send the email
+      await sendEmail({
+        to:      recipient.email,
+        subject: emailContent.subject,
+        body:    emailContent.body,
+      })
+
+      // Also create an in-system notification
+      await admin.from('agent_notifications').insert({
+        id:         generateId(),
+        user_id:    userId,
+        title:      emailContent.subject,
+        body:       'تم إرسال إيميل لك من المساعد الذكي — تحقق من بريدك الإلكتروني.',
+        type:       tone === 'urgent' ? 'urgent' : 'warning',
+        created_at: now.toISOString(),
+      })
+
+      return {
+        success: true,
+        sent_to: recipient.display_name,
+        email:   recipient.email,
+        subject: emailContent.subject,
+      }
+    }
+
+    case 'notify_user': {
+      const userId = String(args.user_id)
+
+      // Verify user exists
+      const { data: userCheck } = await admin
+        .from('profiles')
+        .select('id, display_name')
+        .eq('id', userId)
+        .single()
+
+      if (!userCheck) return { error: 'المستخدم مش موجود' }
+
+      const { error } = await admin.from('agent_notifications').insert({
+        id:         generateId(),
+        user_id:    userId,
+        title:      String(args.title),
+        body:       String(args.body),
+        type:       args.type ? String(args.type) : 'info',
+        link:       args.link ? String(args.link) : null,
+        created_at: now.toISOString(),
+      })
+
+      if (error) return { error: error.message }
+
+      return {
+        success: true,
+        notified: userCheck.display_name,
+        message: `تم إرسال إشعار لـ ${userCheck.display_name} — سيظهر لما يفتح السيستم`,
+      }
+    }
+
     case 'get_progress_report': {
       const clientId = args.client_id ? String(args.client_id) : null
       const today = now.toISOString().split('T')[0]
@@ -427,8 +603,34 @@ custom     = أي محتوى آخر
 - المواعيد القادمة خلال 3 أيام
 - توصيات واضحة للأولويات
 
+═══ إدارة التأخيرات والتواصل الذكي ═══
+لما تُطلب منك متابعة التأخيرات أو التواصل مع الفريق:
+١. استخدم get_team_delay_analysis لتحليل دقيق لكل شخص
+٢. قيّم الموقف: كام يوم تأخير؟ أولوية التاسك؟ العميل متأثر؟
+٣. قرر أسلوب التواصل:
+   - يوم أو يومين → tone: "gentle" (اسأل عن السبب)
+   - 3-4 أيام → tone: "firm" (وضّح الأثر، اطلب موعد)
+   - 5+ أيام أو urgent → tone: "urgent" (جدي وصريح)
+٤. استخدم send_smart_email لكل شخص متأخر (كل واحد رسالة مختلفة ومخصصة)
+٥. استخدم notify_user عشان يشوف تنبيه في السيستم لما يفتح الداشبورد
+٦. أكد للمدير: "بعتلهم إيميل وإشعار — انتظر ردودهم"
+
+قواعد التواصل الذكي:
+- كل إيميل بيذكر: اسم التاسك + اسم العميل + كام يوم + الأثر المتوقع
+- مش template — كل رسالة مختلفة حسب الموقف
+- لا تبعت رسايل جماعية — كل شخص رسالة مخصصة
+- بعد الإرسال، بلّغ المدير بالأسماء والإجراءات
+
+═══ إشعارات داخل السيستم ═══
+استخدم notify_user لما تريد:
+- تنبيه شخص بمهمة محددة قبل موعدها
+- تذكير عميل بفاتورة أو موافقة مطلوبة
+- إعلام الفريق بتحديث مهم في الخطة
+- الرسالة بتظهر في البيل لما يفتح الداشبورد
+
 ═══ قواعد الأمان ═══
 - قبل أي عملية جماعية (+3 تاسكات)، خلاصة + اطلب تأكيد
+- قبل إرسال إيميلات جماعية (+3 أشخاص)، لخّص وانتظر موافقة
 - لا تحذف أي بيانات بدون أمر صريح
 - لو في خطأ في الأداة، وضّح السبب واقترح البديل`
 

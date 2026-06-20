@@ -56,8 +56,22 @@ const titles: Record<string, string> = {
   '/settings':      'Social Media',
 }
 
+function AgentMiniIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 40 40" fill="none" className="shrink-0 mt-0.5">
+      <circle cx="20" cy="20" r="20" fill="#1e1b4b"/>
+      <rect x="7" y="9" width="26" height="19" rx="4.5" fill="#0f0a2e"/>
+      <rect x="11" y="14" width="7" height="6" rx="2" fill="#7c3aed"/>
+      <rect x="22" y="14" width="7" height="6" rx="2" fill="#7c3aed"/>
+      <rect x="13.5" y="15.5" width="2" height="3" rx="0.5" fill="#ede9fe"/>
+      <rect x="24.5" y="15.5" width="2" height="3" rx="0.5" fill="#ede9fe"/>
+    </svg>
+  )
+}
+
 const typeIcon: Partial<Record<string, React.ReactElement>> = {
   pending_approval: <FileCheck className="h-3.5 w-3.5 text-indigo-400 shrink-0 mt-0.5" />,
+  agent_message:    <AgentMiniIcon />,
 }
 
 const severityIcon = {
@@ -220,7 +234,9 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                   visible.map((n) => (
                     <div
                       key={n.id}
-                      className="flex items-start gap-3 px-4 py-3 hover:bg-slate-800/60 transition-colors group"
+                      className={`flex items-start gap-3 px-4 py-3 hover:bg-slate-800/60 transition-colors group ${
+                        n.fromAgent ? 'bg-violet-950/20 border-r-2 border-violet-600' : ''
+                      }`}
                     >
                       {typeIcon[n.type] ?? severityIcon[n.severity]}
                       <div
@@ -231,6 +247,9 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                           if (n.link) router.push(n.link)
                         }}
                       >
+                        {n.fromAgent && (
+                          <p className="text-[10px] text-violet-400 font-medium mb-0.5">المساعد الذكي</p>
+                        )}
                         <p className="text-xs font-semibold text-slate-200">{n.title}</p>
                         <p className="text-xs text-slate-400 truncate mt-0.5">{n.message}</p>
                       </div>
