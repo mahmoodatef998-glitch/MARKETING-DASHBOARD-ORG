@@ -203,6 +203,48 @@ export async function generateSmartAgentEmail(opts: {
   return JSON.parse(text)
 }
 
+export async function generateClientReportEmail(opts: {
+  clientName:      string
+  completedTasks:  Array<{ title: string; task_type: string }>
+  inProgressTasks: Array<{ title: string; task_type: string }>
+  upcomingTasks:   Array<{ title: string; task_type: string; due_date: string }>
+  completionRate:  number
+  totalTasks:      number
+}): Promise<{ subject: string; body: string }> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+  const typeLabel: Record<string, string> = {
+    reel_video: 'ريلز', design: 'تصميم', ai_video: 'فيديو AI', post: 'منشور', custom: 'محتوى',
+  }
+  const fmt = (tasks: Array<{ title: string; task_type: string }>) =>
+    tasks.map(t => `- ${t.title} (${typeLabel[t.task_type] ?? t.task_type})`).join('\n')
+
+  const prompt = `أنت مدير حسابات محترف في وكالة تسويق رقمي. اكتب تقرير تقدم أسبوعي للعميل.
+
+المعلومات:
+- اسم العميل: ${opts.clientName}
+- نسبة الإنجاز الإجمالية: ${opts.completionRate}% (${opts.completedTasks.length} من ${opts.totalTasks} تاسك)
+- المنجز مؤخراً:
+${opts.completedTasks.length > 0 ? fmt(opts.completedTasks) : '- لا يوجد تاسكات منجزة بعد'}
+- جاري العمل الآن:
+${opts.inProgressTasks.length > 0 ? fmt(opts.inProgressTasks) : '- لا يوجد تاسكات جارية'}
+- المواعيد القريبة:
+${opts.upcomingTasks.length > 0 ? opts.upcomingTasks.map(t => `- ${t.title} — الموعد: ${t.due_date}`).join('\n') : '- لا توجد مواعيد قريبة'}
+
+قواعد الكتابة:
+- أسلوب إيجابي ومشجع، لا تذكر مشاكل أو تأخيرات
+- احترافي وودود في نفس الوقت
+- ابدأ بتحديث عام عن التقدم، اذكر الإنجازات بشكل إيجابي
+- أنهِ بجملة تشجيعية عن الخطوات القادمة
+- لا تزيد عن 200 كلمة، ولا تستخدم HTML
+
+أرجع JSON فقط: {"subject": "...", "body": "..."}`
+
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(text)
+}
+
 export async function chatWithAssistant(opts: {
   message: string
   history: Array<{ role: 'user' | 'model'; parts: string }>
