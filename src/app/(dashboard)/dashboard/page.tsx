@@ -476,18 +476,19 @@ export default function DashboardPage() {
   const [openInvoices,   setOpenInvoices]  = useState<Invoice[]>([])
   const [loading,        setLoading]       = useState(true)
 
-  // Detect role first — redirect team-only roles back to their portal
+  // Detect role first — strict: never default to 'admin' on failure
   useEffect(() => {
     fetch('/api/profile')
       .then(r => r.ok ? r.json() : null)
       .then(p => {
-        if (!p) { setRole('admin'); return }
-        const teamOnlyRoles = ['video_maker', 'designer', 'ai_video']
+        if (!p || !p.role) { router.replace('/login'); return }
+        const teamOnlyRoles = ['video_maker', 'designer', 'ai_video', 'content_writer', 'photographer']
         if (teamOnlyRoles.includes(p.role)) { router.replace('/team-portal'); return }
         if (p.role === 'client') { router.replace('/client-portal'); return }
-        setRole(p.role ?? 'admin')
+        if (p.role !== 'admin' && p.role !== 'media_buyer') { router.replace('/login'); return }
+        setRole(p.role)
       })
-      .catch(() => setRole('admin'))
+      .catch(() => router.replace('/login'))
   }, [router])
 
   // Load data once role is known

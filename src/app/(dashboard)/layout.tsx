@@ -22,11 +22,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!data.session) { router.replace('/login'); return }
       try {
         const res = await fetch('/api/profile')
-        if (res.ok) {
-          const p = await res.json()
-          setRole(p.role ?? null)
-        }
-      } catch { /* non-critical */ }
+        if (!res.ok) { router.replace('/login'); return }
+        const p = await res.json()
+        if (!p.role) { router.replace('/login'); return }
+        // Enforce portal boundaries — wrong role → correct portal
+        if (p.role === 'client') { router.replace('/client-portal'); return }
+        if (!['admin', 'media_buyer'].includes(p.role)) { router.replace('/team-portal'); return }
+        setRole(p.role)
+      } catch {
+        router.replace('/login'); return
+      }
       setReady(true)
     })
   }, [router])

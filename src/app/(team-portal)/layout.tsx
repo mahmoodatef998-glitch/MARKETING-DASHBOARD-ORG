@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from '@/lib/supabase'
+import { getSupabaseClient, resetSupabaseClient } from '@/lib/supabase'
 import { Loader2, Building2, LogOut } from 'lucide-react'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -24,8 +24,10 @@ export default function TeamPortalLayout({ children }: { children: React.ReactNo
         const res = await fetch('/api/profile')
         if (!res.ok) { router.replace('/login'); return }
         const p = await res.json()
+        if (!p.role) { router.replace('/login'); return }
         if (p.role === 'admin' || p.role === 'media_buyer') { router.replace('/dashboard'); return }
         if (p.role === 'client') { router.replace('/client-portal'); return }
+        // Only team roles allowed here
         setProfile(p)
         setReady(true)
       } catch {
@@ -37,6 +39,7 @@ export default function TeamPortalLayout({ children }: { children: React.ReactNo
 
   async function handleLogout() {
     await getSupabaseClient().auth.signOut()
+    resetSupabaseClient()
     router.push('/login')
   }
 

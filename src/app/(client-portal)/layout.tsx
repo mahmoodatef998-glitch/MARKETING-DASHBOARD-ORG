@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from '@/lib/supabase'
+import { getSupabaseClient, resetSupabaseClient } from '@/lib/supabase'
 import { Loader2, Building2, LogOut } from 'lucide-react'
 
 export default function ClientPortalLayout({ children }: { children: React.ReactNode }) {
@@ -11,19 +11,27 @@ export default function ClientPortalLayout({ children }: { children: React.React
 
   useEffect(() => {
     async function check() {
-      const { data } = await getSupabaseClient().auth.getSession()
-      if (!data.session) { router.replace('/login'); return }
-      const res = await fetch('/api/profile')
-      const p = await res.json()
-      if (p.role !== 'client') { router.replace('/dashboard'); return }
-      setName(p.display_name ?? p.email ?? 'Client')
-      setReady(true)
+      try {
+        const { data } = await getSupabaseClient().auth.getSession()
+        if (!data.session) { router.replace('/login'); return }
+        const res = await fetch('/api/profile')
+        if (!res.ok) { router.replace('/login'); return }
+        const p = await res.json()
+        if (!p.role) { router.replace('/login'); return }
+        if (p.role === 'admin' || p.role === 'media_buyer') { router.replace('/dashboard'); return }
+        if (p.role !== 'client') { router.replace('/team-portal'); return }
+        setName(p.display_name ?? p.email ?? 'Client')
+        setReady(true)
+      } catch {
+        router.replace('/login')
+      }
     }
     check()
   }, [router])
 
   async function handleLogout() {
     await getSupabaseClient().auth.signOut()
+    resetSupabaseClient()
     router.push('/login')
   }
 
