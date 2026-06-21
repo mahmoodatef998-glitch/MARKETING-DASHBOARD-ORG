@@ -755,17 +755,22 @@ async function executeTool(
         .neq('role', 'admin')
         .neq('role', 'client')
 
-      const teamWithTasks = await Promise.all(
-        (profiles ?? []).map(async (p) => {
-          const { count } = await admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', p.id)
+      const memberIds = (profiles ?? []).map(p => p.id)
+      // Single query for all active task counts — avoids N+1
+      const { data: activeTasks } = memberIds.length > 0
+        ? await admin.from('tasks')
+            .select('assigned_to')
+            .in('assigned_to', memberIds)
             .not('status', 'in', '("done","overdue")')
             .is('deleted_at', null)
-          return { ...p, active_tasks: count ?? 0 }
-        })
-      )
-      return { team: teamWithTasks }
+        : { data: [] }
+
+      const countMap: Record<string, number> = {}
+      for (const t of activeTasks ?? []) {
+        if (t.assigned_to) countMap[t.assigned_to] = (countMap[t.assigned_to] ?? 0) + 1
+      }
+
+      return { team: (profiles ?? []).map(p => ({ ...p, active_tasks: countMap[p.id] ?? 0 })) }
     }
 
     case 'get_team_delay_analysis': {
@@ -774,44 +779,45 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, upcoming, inProgress] = await Promise.all([
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review', 'overdue'])
-            .lt('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true }),
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .gte('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true })
-            .limit(5),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-        ])
+      const memberIds = (members ?? []).map(m => m.id)
 
-        const overdueTasks = (overdue.data ?? []).map(t => ({
-          ...t,
-          days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000),
-        }))
+      // Two bulk queries instead of 3 per member
+      const [overdueRes, upcomingRes] = memberIds.length > 0 ? await Promise.all([
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+          .lt('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, status, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review'])
+          .gte('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+      ]) : [{ data: [] }, { data: [] }]
+
+      const analysis = (members ?? []).map(member => {
+        const overdueTasks = (overdueRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .map(t => ({ ...t, days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000) }))
+        const upcomingTasks = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .slice(0, 5)
+        const inProgressCount = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id && t.status === 'in_progress').length
 
         return {
           member: { id: member.id, name: member.display_name, email: member.email, role: member.role },
           overdue_count:     overdueTasks.length,
-          in_progress_count: inProgress.count ?? 0,
+          in_progress_count: inProgressCount,
           overdue_tasks:     overdueTasks,
-          upcoming_tasks:    upcoming.data ?? [],
+          upcoming_tasks:    upcomingTasks,
           needs_attention:   overdueTasks.length > 0,
         }
-      }))
+      })
 
       const membersWithDelays = analysis.filter(m => m.overdue_count > 0)
       return {
@@ -827,41 +833,26 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
+      const memberIds = (members ?? []).map(m => m.id)
       const in7days = new Date(now)
       in7days.setDate(in7days.getDate() + 7)
       const in7daysStr = in7days.toISOString().split('T')[0]
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, urgent_due, in_progress, total_active] = await Promise.all([
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .lt('due_date', today)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .gte('due_date', today)
-            .lte('due_date', in7daysStr)
-            .in('status', ['todo', 'in_progress'])
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
+      // Single query for all active tasks — replaces N×4 parallel queries
+      const { data: allTasks } = memberIds.length > 0
+        ? await admin.from('tasks')
+            .select('assigned_to, status, due_date')
+            .in('assigned_to', memberIds)
             .not('status', 'in', '("done")')
-            .is('deleted_at', null),
-        ])
+            .is('deleted_at', null)
+        : { data: [] }
 
-        const overdueCount   = overdue.count ?? 0
-        const urgentCount    = urgent_due.count ?? 0
-        const inProgCount    = in_progress.count ?? 0
-        const totalActive    = total_active.count ?? 0
+      const analysis = (members ?? []).map(member => {
+        const myTasks = (allTasks ?? []).filter(t => t.assigned_to === member.id)
+        const overdueCount = myTasks.filter(t => t.due_date < today && ['todo','in_progress','review'].includes(t.status)).length
+        const urgentCount  = myTasks.filter(t => t.due_date >= today && t.due_date <= in7daysStr && ['todo','in_progress'].includes(t.status)).length
+        const inProgCount  = myTasks.filter(t => t.status === 'in_progress').length
+        const totalActive  = myTasks.length
 
         // Pressure score: 0–100
         const pressure = Math.min(100,
@@ -876,16 +867,16 @@ async function executeTool(
 
         return {
           member: { id: member.id, name: member.display_name, role: member.role },
-          pressure_score:  pressure,
-          workload_level:  level,
-          overdue_count:   overdueCount,
-          urgent_week:     urgentCount,
-          in_progress:     inProgCount,
-          total_active:    totalActive,
-          can_take_more:   pressure < 50,
-          needs_help:      pressure >= 85,
+          pressure_score: pressure,
+          workload_level: level,
+          overdue_count:  overdueCount,
+          urgent_week:    urgentCount,
+          in_progress:    inProgCount,
+          total_active:   totalActive,
+          can_take_more:  pressure < 50,
+          needs_help:     pressure >= 85,
         }
-      }))
+      })
 
       analysis.sort((a, b) => b.pressure_score - a.pressure_score)
 
@@ -1922,44 +1913,45 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, upcoming, inProgress] = await Promise.all([
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review', 'overdue'])
-            .lt('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true }),
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .gte('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true })
-            .limit(5),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-        ])
+      const memberIds = (members ?? []).map(m => m.id)
 
-        const overdueTasks = (overdue.data ?? []).map(t => ({
-          ...t,
-          days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000),
-        }))
+      // Two bulk queries instead of 3 per member
+      const [overdueRes, upcomingRes] = memberIds.length > 0 ? await Promise.all([
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+          .lt('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, status, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review'])
+          .gte('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+      ]) : [{ data: [] }, { data: [] }]
+
+      const analysis = (members ?? []).map(member => {
+        const overdueTasks = (overdueRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .map(t => ({ ...t, days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000) }))
+        const upcomingTasks = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .slice(0, 5)
+        const inProgressCount = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id && t.status === 'in_progress').length
 
         return {
           member: { id: member.id, name: member.display_name, email: member.email, role: member.role },
           overdue_count:     overdueTasks.length,
-          in_progress_count: inProgress.count ?? 0,
+          in_progress_count: inProgressCount,
           overdue_tasks:     overdueTasks,
-          upcoming_tasks:    upcoming.data ?? [],
+          upcoming_tasks:    upcomingTasks,
           needs_attention:   overdueTasks.length > 0,
         }
-      }))
+      })
 
       const membersWithDelays = analysis.filter(m => m.overdue_count > 0)
       return {
@@ -2269,6 +2261,8 @@ export async function POST(req: NextRequest) {
     model: AGENT_MODEL,
     tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
     systemInstruction: SYSTEM_PROMPT,
+    // Disable extended thinking to reduce per-round latency in agentic loops
+    generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as Record<string, unknown>,
   })
 
   const geminiHistory = history.map(m => ({
