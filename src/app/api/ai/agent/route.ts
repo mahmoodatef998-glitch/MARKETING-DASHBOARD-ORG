@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 220
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import {
@@ -2195,7 +2195,7 @@ export async function POST(req: NextRequest) {
   const chat = model.startChat({ history: geminiHistory })
 
   // ── Agentic loop ──────────────────────────────────────────────────────────
-  const MAX_ROUNDS = 15
+  const MAX_ROUNDS = 30
   let currentMessage: string | Part[] = lastMsg.text
 
   try {
