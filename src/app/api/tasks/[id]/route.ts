@@ -62,7 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Fetch old state before update
   const { data: oldTask } = await supabase
     .from('tasks')
-    .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at')
+    .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at, started_at')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -70,6 +70,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Auto-queue for admin approval when any task is marked done
   if (body.status === 'done' && oldTask?.status !== 'done') {
     updated.approval_status = 'pending'
+  }
+
+  // Time tracking: record when work starts and when it finishes
+  const now = new Date().toISOString()
+  if (body.status === 'in_progress' && oldTask?.status !== 'in_progress' && !oldTask?.started_at) {
+    updated.started_at = now
+  }
+  if (body.status === 'done' && oldTask?.status !== 'done') {
+    updated.completed_at = now
   }
 
   const { data, error } = await supabase

@@ -13,6 +13,8 @@ import { generateId } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
 import { generateSmartAgentEmail, generateClientReportEmail } from '@/lib/gemini'
 import { sendEmail } from '@/lib/gmail'
+import { anthropic } from '@/lib/anthropic'
+import type Anthropic from '@anthropic-ai/sdk'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const AGENT_MODEL = 'gemini-2.5-flash'
@@ -2155,6 +2157,87 @@ get_financial_overview → إيرادات + أرباح + مخاطر
   ⚡ EXCEPTION: رسائل [EXCEL_IMPORT] مُعفاة تماماً من قاعدة +5 تاسكات — نفّذ كل التاسكات دفعة واحدة فور استلام الملف
 - خطأ في أداة → وضّح + اقترح بديل`
 
+// ── Claude fallback loop ──────────────────────────────────────────────────────
+
+async function runClaudeLoop(
+  messages: HistoryMessage[],
+  ctx: { adminUserId: string }
+): Promise<{ reply: string; messages: HistoryMessage[] }> {
+  // Convert Gemini FUNCTION_DECLARATIONS → Anthropic tool format
+  // Gemini uses SchemaType enums ('object','string'...) which are JSON-Schema-compatible
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tools: Anthropic.Tool[] = FUNCTION_DECLARATIONS.map(fn => ({
+    name:        fn.name,
+    description: fn.description,
+    input_schema: {
+      type:       'object' as const,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      properties: (fn.parameters as any)?.properties ?? {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      required:   (fn.parameters as any)?.required   ?? [],
+    },
+  }))
+
+  // Anthropic uses 'assistant' where Gemini uses 'model'
+  type AnthrMsg = Anthropic.MessageParam
+  let currentMessages: AnthrMsg[] = messages.map(m => ({
+    role:    (m.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant',
+    content: m.text,
+  }))
+
+  const MAX_ROUNDS = 30
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const response = await anthropic.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system:     SYSTEM_PROMPT,
+      tools,
+      messages:   currentMessages,
+    })
+
+    if (response.stop_reason === 'end_turn') {
+      const textBlock = response.content.find(b => b.type === 'text') as Anthropic.TextBlock | undefined
+      const reply = textBlock?.text ?? ''
+      return {
+        reply,
+        messages: [...messages, { role: 'model', text: reply }],
+      }
+    }
+
+    if (response.stop_reason === 'tool_use') {
+      const toolBlocks = response.content.filter(b => b.type === 'tool_use') as Anthropic.ToolUseBlock[]
+
+      // Push assistant turn (may contain text + tool_use blocks)
+      currentMessages.push({ role: 'assistant', content: response.content as Anthropic.ContentBlock[] })
+
+      // Execute tools in parallel
+      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolBlocks.map(async block => {
+          let result: unknown
+          try {
+            result = await executeTool(block.name, block.input as Record<string, unknown>, ctx)
+          } catch (err) {
+            result = { error: err instanceof Error ? err.message : String(err) }
+          }
+          return {
+            type:        'tool_result' as const,
+            tool_use_id: block.id,
+            content:     JSON.stringify(result),
+          }
+        })
+      )
+
+      currentMessages.push({ role: 'user', content: toolResults })
+      continue
+    }
+
+    break
+  }
+
+  throw new Error('Claude loop exceeded max rounds')
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -2233,9 +2316,15 @@ export async function POST(req: NextRequest) {
       currentMessage = functionResponses
     }
   } catch (err) {
-    console.error('[Agent] loop error:', err)
-    const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: `حدث خطأ في المساعد: ${msg}` }, { status: 500 })
+    console.error('[Agent] Gemini loop error — falling back to Claude:', err)
+    try {
+      const result = await runClaudeLoop(messages, ctx)
+      return NextResponse.json(result)
+    } catch (claudeErr) {
+      console.error('[Agent] Claude fallback also failed:', claudeErr)
+      const msg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr)
+      return NextResponse.json({ error: `حدث خطأ في المساعد: ${msg}` }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ error: 'Agent loop exceeded max rounds' }, { status: 500 })

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { sendEmail } from '@/lib/gmail'
-import { generateEmailContent } from '@/lib/gemini'
+import { generateEmailContent, generateClientReportEmail } from '@/lib/gemini'
 import { generateAndSendInvoice, toDateStr, type CycleType } from '@/lib/invoice-automation'
 import { rateLimit } from '@/lib/rate-limit'
 import { sendSlack } from '@/lib/slack'
@@ -486,34 +486,34 @@ export async function GET(req: NextRequest) {
       .eq('status', 'active')
       .is('deleted_at', null)
 
+    const thirtyDaysFromNow = new Date(now); thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    const in30str = toDateStr(thirtyDaysFromNow)
+
     for (const client of activeClientsM ?? []) {
       try {
-        const [doneTasks, paidInvoices, totalInvoices] = await Promise.all([
+        const [doneRes, inProgressRes, upcomingRes, allMonthRes] = await Promise.all([
           supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'done').is('deleted_at', null).gte('updated_at', monthStartStr).lte('updated_at', monthEndStr + 'T23:59:59Z'),
-          supabase.from('invoices').select('invoice_number, total, received_amount').eq('client_id', client.id).eq('status', 'paid').is('deleted_at', null).gte('received_at', monthStartStr).lte('received_at', monthEndStr + 'T23:59:59Z'),
-          supabase.from('invoices').select('invoice_number, total, status').eq('client_id', client.id).in('status', ['sent', 'overdue', 'paid']).is('deleted_at', null).gte('issued_date', monthStartStr).lte('issued_date', monthEndStr),
+          supabase.from('tasks').select('title, task_type').eq('client_id', client.id).eq('status', 'in_progress').is('deleted_at', null),
+          supabase.from('tasks').select('title, task_type, due_date').eq('client_id', client.id).in('status', ['todo', 'in_progress']).is('deleted_at', null).not('due_date', 'is', null).gte('due_date', today).lte('due_date', in30str).order('due_date', { ascending: true }).limit(5),
+          supabase.from('tasks').select('id').eq('client_id', client.id).is('deleted_at', null).gte('created_at', monthStartStr).lte('created_at', monthEndStr + 'T23:59:59Z'),
         ])
 
-        const completedList = (doneTasks.data ?? []).map(t => `• ${t.title}`).join('\n') || 'No tasks completed'
-        const totalPaid = (paidInvoices.data ?? []).reduce((s, i) => s + (i.received_amount ?? i.total), 0)
-        const unpaidCount = (totalInvoices.data ?? []).filter(i => i.status !== 'paid').length
+        const completedTasks  = (doneRes.data ?? []) as Array<{ title: string; task_type: string }>
+        const inProgressTasks = (inProgressRes.data ?? []) as Array<{ title: string; task_type: string }>
+        const upcomingTasks   = (upcomingRes.data ?? []) as Array<{ title: string; task_type: string; due_date: string }>
+        const totalTasks      = (allMonthRes.data ?? []).length || completedTasks.length
+        const completionRate  = totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0
 
-        const details = [
-          `Monthly Report: ${monthLabel}`,
-          ``,
-          `✅ Completed Tasks (${doneTasks.data?.length ?? 0}):\n${completedList}`,
-          ``,
-          `💰 Payments: ${totalPaid > 0 ? `${totalPaid.toLocaleString()} paid this month` : 'No payments recorded'}`,
-          unpaidCount > 0 ? `⚠️ Outstanding invoices: ${unpaidCount}` : '',
-        ].filter(Boolean).join('\n')
-
-        const { subject, body } = await generateEmailContent({
-          type: 'weekly_report',
-          recipientName: client.name,
-          details,
+        const { subject, body } = await generateClientReportEmail({
+          clientName: client.name,
+          completedTasks,
+          inProgressTasks,
+          upcomingTasks,
+          completionRate,
+          totalTasks,
         })
 
-        await sendEmail({ to: client.email, subject: `Monthly Report — ${monthLabel}`, body })
+        await sendEmail({ to: client.email, subject: `${subject} — ${monthLabel}`, body })
         await supabase.from('automation_logs').insert({
           type: 'monthly_report', recipient_email: client.email, subject: `Monthly Report — ${monthLabel}`, status: 'sent', created_at: now.toISOString(),
         })
@@ -523,6 +523,59 @@ export async function GET(req: NextRequest) {
           type: 'monthly_report', recipient_email: client.email, subject: `Monthly Report — ${monthLabel}`, status: 'failed', error: err.message, created_at: now.toISOString(),
         })
         results.push({ type: 'monthly_report', recipient: client.email, status: 'failed' })
+      }
+    }
+  }
+
+  // ── 7c. Churn alerts — health score < 50 → admin notification ────────────
+  {
+    const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysAgoStr = toDateStr(thirtyDaysAgo)
+
+    const [churnClientsRes, adminProfilesRes] = await Promise.all([
+      supabase.from('clients').select('id, name').eq('status', 'active').is('deleted_at', null),
+      supabase.from('profiles').select('id').eq('role', 'admin'),
+    ])
+    const adminIds = (adminProfilesRes.data ?? []).map((p: { id: string }) => p.id)
+
+    for (const client of churnClientsRes.data ?? []) {
+      try {
+        const [overdueTasksRes, overdueInvsRes, recentDoneRes] = await Promise.all([
+          supabase.from('tasks').select('id').eq('client_id', client.id).eq('status', 'overdue').is('deleted_at', null),
+          supabase.from('invoices').select('id').eq('client_id', client.id).eq('status', 'overdue').is('deleted_at', null),
+          supabase.from('tasks').select('id').eq('client_id', client.id).eq('status', 'done').is('deleted_at', null).gte('updated_at', thirtyDaysAgoStr),
+        ])
+
+        const overdueTaskCount = (overdueTasksRes.data ?? []).length
+        const overdueInvCount  = (overdueInvsRes.data ?? []).length
+        const recentDoneCount  = (recentDoneRes.data ?? []).length
+
+        let health = 100
+        health -= Math.min(overdueTaskCount * 15, 60)
+        health -= Math.min(overdueInvCount  * 20, 40)
+        health += Math.min(recentDoneCount  * 10, 30)
+        health = Math.max(0, Math.min(100, health))
+
+        if (health < 50 && adminIds.length > 0) {
+          const reasons: string[] = []
+          if (overdueTaskCount > 0) reasons.push(`${overdueTaskCount} overdue task${overdueTaskCount > 1 ? 's' : ''}`)
+          if (overdueInvCount  > 0) reasons.push(`${overdueInvCount} overdue invoice${overdueInvCount > 1 ? 's' : ''}`)
+          if (recentDoneCount === 0) reasons.push('no tasks completed in 30 days')
+
+          await Promise.all(
+            adminIds.map((adminId: string) =>
+              supabase.from('agent_notifications').insert({
+                user_id: adminId,
+                type:    'churn_alert',
+                title:   `⚠️ Churn Risk: ${client.name}`,
+                body:    `Health score ${health}/100. Issues: ${reasons.join(', ')}.`,
+              })
+            )
+          )
+          results.push({ type: 'churn_alert', recipient: client.name, status: 'sent' })
+        }
+      } catch (err: any) {
+        console.error(`[cron] churn alert failed for ${client.name}:`, err.message)
       }
     }
   }
