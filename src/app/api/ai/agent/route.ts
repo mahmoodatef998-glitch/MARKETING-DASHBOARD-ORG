@@ -338,6 +338,54 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: 'update_content_plan',
+    description: 'تحديث خطة محتوى موجودة — تعديل عنوانها أو حالتها أو ملاحظاتها، وإضافة عناصر جديدة إليها أو تعديل عناصر موجودة. استخدم هذه الأداة عندما يطلب تعديل خطة قائمة بدلاً من create_content_plan.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        plan_id: { type: str, description: 'ID الخطة المراد تحديثها' },
+        title:   { type: str, description: 'عنوان جديد للخطة (اختياري)' },
+        status:  enumStr(['draft', 'active', 'completed', 'archived'], 'الحالة الجديدة (اختياري)'),
+        notes:   { type: str, description: 'ملاحظات جديدة على الخطة (اختياري)' },
+        add_items: {
+          type: arr,
+          description: 'عناصر جديدة تُضاف للخطة — نفس منطق create_content_plan (SLA تلقائي)',
+          items: {
+            type: obj,
+            properties: {
+              title:        { type: str, description: 'عنوان القطعة' },
+              content_type: enumStr(['reel', 'design', 'ai_video'], 'نوع المحتوى'),
+              hook:         { type: str, description: 'الهوك — للريلز والـ AI Video' },
+              publish_date: { type: str, description: 'تاريخ النشر YYYY-MM-DD' },
+              assigned_to:  { type: str, description: 'ID عضو الفريق' },
+              platforms:    { type: arr, items: { type: str }, description: 'المنصات' },
+              priority:     enumStr(['low', 'medium', 'high', 'urgent'], 'الأولوية'),
+              notes:        { type: str, description: 'البريف الكامل' },
+            },
+            required: ['title', 'content_type'],
+          },
+        },
+        update_items: {
+          type: arr,
+          description: 'تعديل عناصر موجودة بالـ ID',
+          items: {
+            type: obj,
+            properties: {
+              item_id:      { type: str, description: 'ID العنصر الموجود' },
+              title:        { type: str, description: 'عنوان جديد' },
+              status:       enumStr(['pending_production', 'in_production', 'ready', 'published'], 'الحالة الجديدة'),
+              publish_date: { type: str, description: 'تاريخ نشر جديد YYYY-MM-DD' },
+              assigned_to:  { type: str, description: 'ID عضو الفريق' },
+              notes:        { type: str, description: 'ملاحظات جديدة' },
+            },
+            required: ['item_id'],
+          },
+        },
+      },
+      required: ['plan_id'],
+    }),
+  },
+  {
     name: 'create_client_package',
     description: 'إنشاء باقة جديدة لعميل مع تحديد عدد القطع لكل نوع محتوى',
     parameters: schema({
@@ -1447,6 +1495,136 @@ async function executeTool(
       }
     }
 
+    case 'update_content_plan': {
+      const planId = String(args.plan_id)
+
+      const { data: plan } = await admin
+        .from('content_plans')
+        .select('id, title, client_id, month')
+        .eq('id', planId)
+        .single()
+      if (!plan) return { error: 'الخطة مش موجودة' }
+
+      // Update plan-level fields
+      const planUpdates: Record<string, unknown> = { updated_at: now.toISOString() }
+      if (args.title)  planUpdates.title  = String(args.title)
+      if (args.status) planUpdates.status = String(args.status)
+      if (args.notes)  planUpdates.notes  = String(args.notes)
+      const { error: planErr } = await admin.from('content_plans').update(planUpdates).eq('id', planId)
+      if (planErr) return { error: planErr.message }
+
+      // Add new items (same SLA logic as create_content_plan)
+      const ctToTaskType: Record<string, string> = { reel: 'reel_video', design: 'design', ai_video: 'ai_video' }
+      let itemsAdded = 0
+      let tasksAdded = 0
+
+      const rawAddItems = (args.add_items as Array<Record<string, unknown>> | undefined) ?? []
+      if (rawAddItems.length > 0) {
+        const newItemRows: Record<string, unknown>[] = []
+        const newTaskRows: Record<string, unknown>[] = []
+
+        for (const item of rawAddItems) {
+          const ct = String(item.content_type)
+          const slaDays = ct === 'design' ? 1 : 3
+          const itemId  = generateId()
+          const taskId  = generateId()
+
+          const publishDateRaw = item.publish_date ? String(item.publish_date).slice(0, 10) : null
+          let taskDueDate: string | null = null
+          if (publishDateRaw) {
+            const d = new Date(publishDateRaw)
+            d.setDate(d.getDate() - slaDays)
+            taskDueDate = d.toISOString().slice(0, 10)
+          }
+
+          newItemRows.push({
+            id:                itemId,
+            plan_id:           planId,
+            client_id:         plan.client_id,
+            content_type:      ct,
+            title:             String(item.title),
+            assigned_to:       item.assigned_to ? String(item.assigned_to) : null,
+            publish_date:      publishDateRaw ? new Date(publishDateRaw).toISOString() : now.toISOString(),
+            internal_due_date: taskDueDate,
+            platforms:         Array.isArray(item.platforms) ? item.platforms : ['instagram'],
+            notes:             item.notes ? String(item.notes) : null,
+            status:            'pending_production',
+            task_id:           taskId,
+            sla_days:          slaDays,
+            created_at:        now.toISOString(),
+            updated_at:        now.toISOString(),
+          })
+
+          newTaskRows.push({
+            id:           taskId,
+            title:        String(item.title),
+            description:  item.notes ? String(item.notes) : null,
+            hook:         item.hook ? String(item.hook) : null,
+            status:       'todo',
+            priority:     item.priority ? String(item.priority) : 'medium',
+            task_type:    ctToTaskType[ct] ?? ct,
+            due_date:     taskDueDate,
+            assigned_to:  item.assigned_to ? String(item.assigned_to) : null,
+            client_id:    plan.client_id,
+            plan_item_id: itemId,
+            created_at:   now.toISOString(),
+            updated_at:   now.toISOString(),
+          })
+        }
+
+        const { error: addItemsErr } = await admin.from('content_plan_items').insert(newItemRows)
+        if (addItemsErr) return { error: addItemsErr.message }
+        itemsAdded = newItemRows.length
+
+        try {
+          const { error: addTasksErr } = await admin.from('tasks').insert(newTaskRows)
+          if (!addTasksErr) tasksAdded = newTaskRows.length
+          else console.error('[update_content_plan] tasks insert failed:', addTasksErr.message)
+        } catch {}
+      }
+
+      // Update existing items
+      const rawUpdateItems = (args.update_items as Array<Record<string, unknown>> | undefined) ?? []
+      let itemsUpdated = 0
+      for (const upd of rawUpdateItems) {
+        const itemId = String(upd.item_id)
+        const itemUpdates: Record<string, unknown> = { updated_at: now.toISOString() }
+        if (upd.title)        itemUpdates.title        = String(upd.title)
+        if (upd.status)       itemUpdates.status       = String(upd.status)
+        if (upd.assigned_to)  itemUpdates.assigned_to  = String(upd.assigned_to)
+        if (upd.notes)        itemUpdates.notes        = String(upd.notes)
+        if (upd.publish_date) {
+          itemUpdates.publish_date = new Date(String(upd.publish_date)).toISOString()
+          // Also update the linked task's due_date based on its content_type
+          const { data: existingItem } = await admin
+            .from('content_plan_items')
+            .select('content_type, task_id')
+            .eq('id', itemId)
+            .single()
+          if (existingItem?.task_id) {
+            const slaDays = existingItem.content_type === 'design' ? 1 : 3
+            const d = new Date(String(upd.publish_date))
+            d.setDate(d.getDate() - slaDays)
+            const newDueDate = d.toISOString().slice(0, 10)
+            itemUpdates.internal_due_date = newDueDate
+            await admin.from('tasks').update({ due_date: newDueDate, updated_at: now.toISOString() }).eq('id', existingItem.task_id)
+          }
+        }
+        const { error: updErr } = await admin.from('content_plan_items').update(itemUpdates).eq('id', itemId)
+        if (!updErr) itemsUpdated++
+      }
+
+      return {
+        success:       true,
+        plan_id:       planId,
+        plan_updated:  Object.keys(planUpdates).length > 1,
+        items_added:   itemsAdded,
+        tasks_added:   tasksAdded,
+        items_updated: itemsUpdated,
+        link:          '/content-plans',
+      }
+    }
+
     case 'create_client_package': {
       const clientId = String(args.client_id)
 
@@ -2103,6 +2281,20 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
    ثم: agent_remember("plan_[client]_[month]", "...")
 
 قاعدة مهمة: لا تفسّر الخطة ولا تضيف عليها — ما في الملف هو كل شيء.
+
+═══ تحديث خطة محتوى موجودة ═══
+⚡ لو المدير قال "عدّل الخطة" أو "ضيف قطعة" أو "غيّر تاريخ" → استخدم update_content_plan مش create_content_plan
+
+متى تستخدم كل أداة:
+  • create_content_plan → لما الخطة مش موجودة أصلاً (شهر جديد / عميل جديد)
+  • update_content_plan → لما الخطة موجودة وتحتاج تعديل (إضافة قطع / تغيير تواريخ / تحديث حالة)
+
+للتحديث:
+١. get_content_plans(client_id=...) لجلب plan_id الخطة الموجودة
+٢. update_content_plan(plan_id=...) مع:
+   - add_items: قطع جديدة تُضاف (SLA يُحسب تلقائياً)
+   - update_items: تعديل عناصر موجودة بالـ item_id (لو غيرت publish_date يتحدث due_date التاسك تلقائياً)
+   - title/status/notes: تعديل بيانات الخطة نفسها
 
 ═══ حساب مواعيد التاسكات من تواريخ النشر ═══
 الـ due_date للتاسك ≠ تاريخ النشر — هو الموعد الداخلي للإنتاج:
