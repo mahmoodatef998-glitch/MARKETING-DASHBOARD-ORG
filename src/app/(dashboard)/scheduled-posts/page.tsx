@@ -5,7 +5,7 @@ import {
   Calendar, Camera, Globe, Music2, Clock, CheckCircle2, XCircle,
   Loader2, Trash2, ExternalLink, RefreshCw, Sparkles, Send,
   ImageIcon, FileVideo, Layers, ChevronDown, X, AlertCircle,
-  LayoutGrid, PlayCircle, CalendarDays,
+  LayoutGrid, PlayCircle, CalendarDays, Clapperboard, Palette, Bot,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,21 @@ interface ScheduledPost {
   attempts: number
   created_at: string
   task?: { id: string; title: string; delivery_url: string | null } | null
+}
+
+interface PlanItem {
+  id: string
+  title: string
+  content_type: string
+  publish_date: string
+  internal_due_date: string | null
+  status: string
+  platforms: string[] | null
+  client_id: string | null
+  plan_id: string
+  task_id: string | null
+  plan: { id: string; title: string; status: string } | null
+  client: { id: string; name: string } | null
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -498,11 +513,23 @@ const PLATFORM_COLOR: Record<string, string> = {
   tiktok:    'bg-slate-600/40 text-slate-300 border-slate-500/30',
 }
 
+const PLAN_ITEM_COLOR: Record<string, string> = {
+  reel:     'bg-violet-500/20 text-violet-300 border-violet-500/30',
+  design:   'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  ai_video: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+}
+const PLAN_ITEM_ICON: Record<string, React.ElementType> = {
+  reel:     Clapperboard,
+  design:   Palette,
+  ai_video: Bot,
+}
+
 function CalendarView({ posts }: { posts: ScheduledPost[] }) {
-  const [month,    setMonth]    = useState(() => new Date())
-  const [clients,  setClients]  = useState<{ id: string; name: string }[]>([])
-  const [clientId, setClientId] = useState('')
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [month,     setMonth]     = useState(() => new Date())
+  const [clients,   setClients]   = useState<{ id: string; name: string }[]>([])
+  const [clientId,  setClientId]  = useState('')
+  const [expanded,  setExpanded]  = useState<string | null>(null)
+  const [planItems, setPlanItems] = useState<PlanItem[]>([])
 
   useEffect(() => {
     fetch('/api/clients')
@@ -511,6 +538,18 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
       .catch(() => {})
   }, [])
 
+  // Fetch plan items whenever month or client changes
+  useEffect(() => {
+    const y = month.getFullYear()
+    const m = String(month.getMonth() + 1).padStart(2, '0')
+    const monthParam = `${y}-${m}`
+    const url = `/api/content-plans/calendar-items?month=${monthParam}${clientId ? `&client_id=${clientId}` : ''}`
+    fetch(url)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setPlanItems(data) })
+      .catch(() => {})
+  }, [month, clientId])
+
   const year  = month.getFullYear()
   const mon   = month.getMonth()
   const label = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -518,17 +557,24 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
   function prevMonth() { setMonth(new Date(year, mon - 1, 1)) }
   function nextMonth() { setMonth(new Date(year, mon + 1, 1)) }
 
-  // Build a map: 'YYYY-MM-DD' → ScheduledPost[]
-  const filtered = clientId ? posts.filter(p => p.client_id === clientId) : posts
-  const byDay: Record<string, ScheduledPost[]> = {}
-  for (const p of filtered) {
+  // Build maps: 'YYYY-MM-DD' → items
+  const filteredPosts = clientId ? posts.filter(p => p.client_id === clientId) : posts
+  const postsByDay: Record<string, ScheduledPost[]> = {}
+  for (const p of filteredPosts) {
     if (!p.scheduled_at) continue
     const key = new Date(p.scheduled_at).toISOString().slice(0, 10)
-    ;(byDay[key] = byDay[key] ?? []).push(p)
+    ;(postsByDay[key] = postsByDay[key] ?? []).push(p)
+  }
+
+  const planByDay: Record<string, PlanItem[]> = {}
+  for (const item of planItems) {
+    if (!item.publish_date) continue
+    const key = item.publish_date.slice(0, 10)
+    ;(planByDay[key] = planByDay[key] ?? []).push(item)
   }
 
   // Calendar grid: weeks starting Sunday
-  const firstDay = new Date(year, mon, 1).getDay() // 0=Sun
+  const firstDay = new Date(year, mon, 1).getDay()
   const daysInMonth = new Date(year, mon + 1, 0).getDate()
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
@@ -543,7 +589,6 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Month nav */}
         <div className="flex items-center gap-2 bg-slate-800/60 rounded-xl px-3 py-1.5">
           <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors">
             <ChevronDown className="h-4 w-4 rotate-90" />
@@ -554,7 +599,6 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
           </button>
         </div>
 
-        {/* Client filter */}
         <select
           value={clientId}
           onChange={e => setClientId(e.target.value)}
@@ -565,40 +609,38 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
         </select>
 
         <span className="text-xs text-slate-500 ml-auto">
-          {filtered.length} post{filtered.length !== 1 ? 's' : ''} scheduled
-          {clientId ? ` for ${clients.find(c => c.id === clientId)?.name ?? '…'}` : ''}
+          {filteredPosts.length} scheduled · {planItems.length} planned
+          {clientId ? ` — ${clients.find(c => c.id === clientId)?.name ?? '…'}` : ''}
         </span>
       </div>
 
       {/* Grid */}
       <div className="overflow-x-auto">
       <div className="min-w-[560px] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-slate-800">
           {DAY_LABELS.map(d => (
-            <div key={d} className="py-2 text-center text-xs font-semibold text-slate-500 tracking-wide">
-              {d}
-            </div>
+            <div key={d} className="py-2 text-center text-xs font-semibold text-slate-500 tracking-wide">{d}</div>
           ))}
         </div>
 
-        {/* Weeks */}
         {Array.from({ length: cells.length / 7 }, (_, wi) => (
           <div key={wi} className="grid grid-cols-7">
             {cells.slice(wi * 7, wi * 7 + 7).map((day, di) => {
-              if (!day) return <div key={di} className="min-h-[80px] border-r border-b border-slate-800/50 bg-slate-950/30" />
+              if (!day) return <div key={di} className="min-h-[90px] border-r border-b border-slate-800/50 bg-slate-950/30" />
               const key = `${year}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-              const dayPosts = byDay[key] ?? []
+              const dayPosts = postsByDay[key] ?? []
+              const dayPlan  = planByDay[key] ?? []
+              const total    = dayPosts.length + dayPlan.length
               const isToday  = key === todayStr
               const isOpen   = expanded === key
 
               return (
                 <div
                   key={di}
-                  className={`min-h-[80px] border-r border-b border-slate-800/50 p-1.5 cursor-pointer transition-colors ${
-                    dayPosts.length > 0 ? 'hover:bg-slate-800/40' : ''
+                  className={`min-h-[90px] border-r border-b border-slate-800/50 p-1.5 transition-colors ${
+                    total > 0 ? 'cursor-pointer hover:bg-slate-800/40' : ''
                   } ${isToday ? 'bg-indigo-950/30' : ''}`}
-                  onClick={() => dayPosts.length > 0 && setExpanded(isOpen ? null : key)}
+                  onClick={() => total > 0 && setExpanded(isOpen ? null : key)}
                 >
                   <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
                     isToday ? 'bg-indigo-600 text-white' : 'text-slate-400'
@@ -606,17 +648,29 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
                     {day}
                   </div>
 
-                  {/* Post pills (max 2 visible) */}
                   <div className="space-y-0.5">
-                    {(isOpen ? dayPosts : dayPosts.slice(0, 2)).map((p, i) => (
-                      <div key={i} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border truncate ${
+                    {/* Content plan items (publish date) */}
+                    {(isOpen ? dayPlan : dayPlan.slice(0, 2)).map((item, i) => {
+                      const Icon = PLAN_ITEM_ICON[item.content_type] ?? Calendar
+                      return (
+                        <div key={`plan-${i}`} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border truncate ${
+                          PLAN_ITEM_COLOR[item.content_type] ?? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                        }`}>
+                          <Icon className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{item.title}</span>
+                        </div>
+                      )
+                    })}
+                    {/* Scheduled posts */}
+                    {(isOpen ? dayPosts : dayPosts.slice(0, Math.max(0, 2 - dayPlan.length))).map((p, i) => (
+                      <div key={`post-${i}`} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border truncate ${
                         PLATFORM_COLOR[p.platform] ?? 'bg-slate-700 text-slate-300 border-slate-600'
                       }`}>
                         <span className="truncate">{p.task?.title ?? p.platform}</span>
                       </div>
                     ))}
-                    {!isOpen && dayPosts.length > 2 && (
-                      <div className="text-[10px] text-slate-500 px-1">+{dayPosts.length - 2} more</div>
+                    {!isOpen && total > 2 && (
+                      <div className="text-[10px] text-slate-500 px-1">+{total - 2} more</div>
                     )}
                   </div>
                 </div>
@@ -628,7 +682,17 @@ function CalendarView({ posts }: { posts: ScheduledPost[] }) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-slate-500">
+      <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+        <span className="font-semibold text-slate-400">Planned:</span>
+        {Object.entries(PLAN_ITEM_COLOR).map(([ct, cls]) => {
+          const Icon = PLAN_ITEM_ICON[ct] ?? Calendar
+          return (
+            <span key={ct} className={`flex items-center gap-1 px-2 py-0.5 rounded-md border font-medium ${cls}`}>
+              <Icon className="h-3 w-3" />{ct}
+            </span>
+          )
+        })}
+        <span className="font-semibold text-slate-400 ml-2">Scheduled:</span>
         {Object.entries(PLATFORM_COLOR).map(([p, cls]) => (
           <span key={p} className={`px-2 py-0.5 rounded-md border font-medium ${cls}`}>
             {p.charAt(0).toUpperCase() + p.slice(1)}

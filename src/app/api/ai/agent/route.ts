@@ -324,7 +324,7 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
               content_type:      enumStr(['reel', 'design', 'ai_video'], 'نوع المحتوى'),
               hook:              { type: str, description: 'الهوك الجذاب — الجملة الأولى التي تشد الجمهور (للريلز والـ AI Video)' },
               publish_date:      { type: str, description: 'تاريخ النشر بصيغة ISO' },
-              internal_due_date: { type: str, description: 'الموعد الداخلي للإنتاج (publish_date - SLA days)' },
+              internal_due_date: { type: str, description: 'اختياري — السيرفر يحسبه تلقائياً من publish_date (reel/ai_video: −3 أيام | design: −1 يوم)' },
               assigned_to:       { type: str, description: 'ID عضو الفريق المسؤول' },
               platforms:         { type: arr, items: { type: str }, description: 'المنصات: instagram, facebook, tiktok' },
               priority:          enumStr(['low', 'medium', 'high', 'urgent'], 'أولوية التاسك'),
@@ -1373,7 +1373,19 @@ async function executeTool(
         contentTypeCount[ct] = (contentTypeCount[ct] ?? 0) + 1
         const itemId = generateId()
         const taskId = generateId()
+        // SLA: design = 1 day before publish, reel/ai_video = 3 days before publish
         const slaDays = ct === 'design' ? 1 : 3
+
+        // Always auto-compute task due_date from publish_date — server owns this logic
+        const publishDateRaw = item.publish_date ? String(item.publish_date).slice(0, 10) : null
+        let taskDueDate: string | null = null
+        if (publishDateRaw) {
+          const d = new Date(publishDateRaw)
+          d.setDate(d.getDate() - slaDays)
+          taskDueDate = d.toISOString().slice(0, 10)
+        } else if (item.internal_due_date) {
+          taskDueDate = String(item.internal_due_date).slice(0, 10)
+        }
 
         itemRows.push({
           id:                itemId,
@@ -1382,8 +1394,8 @@ async function executeTool(
           content_type:      ct,
           title:             String(item.title),
           assigned_to:       item.assigned_to ? String(item.assigned_to) : null,
-          publish_date:      item.publish_date ? String(item.publish_date) : now.toISOString(),
-          internal_due_date: item.internal_due_date ? String(item.internal_due_date) : null,
+          publish_date:      publishDateRaw ? new Date(publishDateRaw).toISOString() : now.toISOString(),
+          internal_due_date: taskDueDate,
           platforms:         Array.isArray(item.platforms) ? item.platforms : ['instagram'],
           notes:             item.notes ? String(item.notes) : null,
           sequence_number:   contentTypeCount[ct],
@@ -1402,11 +1414,7 @@ async function executeTool(
           status:       'todo',
           priority:     item.priority ? String(item.priority) : 'medium',
           task_type:    ctToTaskType[ct] ?? ct,
-          due_date:     item.internal_due_date
-            ? String(item.internal_due_date).slice(0, 10)
-            : item.publish_date
-              ? String(item.publish_date).slice(0, 10)
-              : null,
+          due_date:     taskDueDate,
           assigned_to:  item.assigned_to ? String(item.assigned_to) : null,
           client_id:    clientId,
           plan_item_id: itemId,
@@ -2080,8 +2088,8 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
    - content_type: reel | design | ai_video
    - hook: الهوك من الملف كما هو — للريلز والـ AI Video
    - notes: البريف الكامل من الملف (اجمع كل أعمدة التفاصيل)
-   - publish_date: تاريخ النشر من الملف
-   - internal_due_date: publish_date − SLA (reel/ai_video: −3 أيام | design: −1 يوم)
+   - publish_date: تاريخ النشر من الملف بصيغة YYYY-MM-DD
+   ⚡ الـ due_date للتاسك يُحسب تلقائياً من السيرفر (reel/ai_video: −3 أيام | design: −1 يوم) — لا تحتاج تمرر internal_due_date
    - assigned_to: ID عضو الفريق المناسب حسب الأعباء
    - platforms: من الملف أو ['instagram'] افتراضياً
    - priority: من الملف أو 'medium' افتراضياً
@@ -2111,7 +2119,21 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
 لو المدير حدد أيام مختلفة (مثلاً "3 أيام للريلز") → استخدم تعليمه
 لو مفيش تاريخ نشر في الملف → استخدم تاريخ النشر مباشرة أو وزّع على مدى الشهر
 
-═══ خطة الميديا باير — الوركفلو الكامل ═══
+═══ إنشاء خطة محتوى (من طلب مباشر أو Excel) ═══
+قواعد SLA للتاسكات — السيرفر يحسبها تلقائياً من publish_date:
+  • reel / ai_video → due_date = publish_date − 3 أيام (للتصوير والمونتاج)
+  • design → due_date = publish_date − 1 يوم (للتصميم والمراجعة)
+⚡ مرر publish_date فقط — السيرفر يحسب due_date ويحدّث التاسك تلقائياً
+
+لما يطلب المدير إنشاء خطة لعميل (بدون Excel):
+١. get_clients (لتأكيد client_id) + get_team_members + get_workload_analysis
+٢. اسأل: لأي شهر؟ كم ريل؟ كم تصميم؟ تواريخ نشر محددة؟ (أو اقترح توزيع منطقي)
+٣. نفّذ create_content_plan بكل القطع + تواريخ النشر + توزيع الفريق حسب الأعباء
+   ⚡ كل قطعة تُنشئ تلقائياً تاسك مرتبط بـ due_date صحيح (SLA محسوب تلقائياً)
+   ⚡ القطع تظهر في Publishing Calendar تلقائياً بتاريخ النشر
+٤. notify_all_team + ملخص نهائي + agent_remember
+
+═══ خطة الميديا باير — الوركفلو الكامل (من Excel) ═══
 لما تستلم Excel خطة ميديا باير، نفّذ بالترتيب:
 
 ١. get_clients + get_team_members + get_workload_analysis (معاً في نفس الوقت)
