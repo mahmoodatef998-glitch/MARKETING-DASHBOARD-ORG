@@ -731,7 +731,7 @@ async function executeTool(
       const taskId = String(args.task_id)
 
       // Verify task exists
-      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).single()
+      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).is('deleted_at', null).single()
       if (!task) return { error: 'التاسك مش موجود' }
 
       const { error } = await admin.from('task_comments').insert({
@@ -1004,6 +1004,7 @@ async function executeTool(
         .from('clients')
         .select('id, name, email')
         .eq('id', clientId)
+        .is('deleted_at', null)
         .single()
 
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
@@ -1058,7 +1059,7 @@ async function executeTool(
       const clientId = String(args.client_id)
 
       const [client, allTasks, invoices, meetings, campaigns, scheduledPosts, packages, billingPlan] = await Promise.all([
-        admin.from('clients').select('id, name, email, status, country, phone, notes').eq('id', clientId).single(),
+        admin.from('clients').select('id, name, email, status, country, phone, notes').eq('id', clientId).is('deleted_at', null).single(),
         admin.from('tasks').select('id, title, status, priority, task_type, due_date, updated_at').eq('client_id', clientId).is('deleted_at', null).order('due_date', { ascending: true }),
         admin.from('invoices').select('id, invoice_number, total, status, due_date, issued_date').eq('client_id', clientId).is('deleted_at', null).order('issued_date', { ascending: false }).limit(10),
         admin.from('meetings').select('id, title, scheduled_at, status, notes').eq('client_id', clientId).order('scheduled_at', { ascending: false }).limit(5),
@@ -1297,7 +1298,7 @@ async function executeTool(
     case 'send_payment_reminder': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).is('deleted_at', null).single()
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
 
       let invoicesQuery = admin.from('invoices').select('id, invoice_number, total, currency, due_date, status').eq('client_id', clientId).is('deleted_at', null).in('status', ['sent', 'overdue'])
@@ -1346,7 +1347,7 @@ async function executeTool(
     case 'create_content_plan': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const planId = generateId()
@@ -1406,7 +1407,7 @@ async function executeTool(
     case 'create_client_package': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const pkgId = generateId()
@@ -1525,7 +1526,7 @@ async function executeTool(
     // ── Billing & Campaigns ───────────────────────────────────────────────────
     case 'create_invoice': {
       const clientId = String(args.client_id)
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const rawItems = args.items as Array<{ description: string; quantity: number; unit_price: number }>
@@ -1575,7 +1576,7 @@ async function executeTool(
 
     case 'create_campaign': {
       const clientId = String(args.client_id)
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const { data, error } = await admin.from('campaigns').insert({
@@ -1641,7 +1642,7 @@ async function executeTool(
       const situation = String(args.situation)
       const tone      = (args.tone as 'gentle' | 'firm' | 'urgent') ?? 'gentle'
 
-      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).is('deleted_at', null).single()
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
 
       const emailContent = await generateSmartAgentEmail({
@@ -1664,7 +1665,7 @@ async function executeTool(
 
     case 'update_client': {
       const clientId = String(args.client_id)
-      const { data: existing } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: existing } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!existing) return { error: 'العميل مش موجود' }
 
       const updates: Record<string, unknown> = { updated_at: now.toISOString() }
@@ -2165,7 +2166,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin', 'media_buyer'].includes(profile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: { messages?: HistoryMessage[] }
   try { body = await req.json() } catch {
