@@ -136,23 +136,27 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   return { name: file.name, rowCount: rows.length, headers, fullText }
 }
 
+const INITIAL_MESSAGE: ChatMessage = {
+  role: 'assistant',
+  text: 'أهلاً! أنا مديرك التنفيذي الذكي — 37 صلاحية تنفيذية كاملة.\n\n**ارفع خطة الميديا باير وأنا أتعامل مع كل حاجة:**\n• 🎯 إنشاء الكمبانيات + خطط المحتوى + التاسكات دفعة واحدة\n• 👥 توزيع الفريق بناءً على الأعباء الفعلية\n• 📦 متابعة استهلاك باقات العملاء + تنبيه التجديد\n• 💰 إنشاء فواتير + تذكيرات دفع ذكية للعملاء\n• ⚠️ مراقبة التأخيرات + إيميلات مخصصة للفريق\n• 📊 تقارير يومية + تقارير للعملاء على إيميلهم\n• 🧠 ذاكرة دائمة بين الجلسات\n\n**أنت تركز على السيلز — أنا أدير الباقي.**\nارفع ملف Excel أو اكتب أمرك.',
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AgentChat() {
   const [open, setOpen]             = useState(false)
+  const [minimized, setMinimized]   = useState(false)
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [attached, setAttached]     = useState<AttachedFile | null>(null)
   const [parseError, setParseError] = useState('')
-  const [chat, setChat]             = useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      text: 'أهلاً! أنا مديرك التنفيذي الذكي — 37 صلاحية تنفيذية كاملة.\n\n**ارفع خطة الميديا باير وأنا أتعامل مع كل حاجة:**\n• 🎯 إنشاء الكمبانيات + خطط المحتوى + التاسكات دفعة واحدة\n• 👥 توزيع الفريق بناءً على الأعباء الفعلية\n• 📦 متابعة استهلاك باقات العملاء + تنبيه التجديد\n• 💰 إنشاء فواتير + تذكيرات دفع ذكية للعملاء\n• ⚠️ مراقبة التأخيرات + إيميلات مخصصة للفريق\n• 📊 تقارير يومية + تقارير للعملاء على إيميلهم\n• 🧠 ذاكرة دائمة بين الجلسات\n\n**أنت تركز على السيلز — أنا أدير الباقي.**\nارفع ملف Excel أو اكتب أمرك.',
-    },
-  ])
+  const [chat, setChat]             = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const bottomRef             = useRef<HTMLDivElement>(null)
   const textareaRef           = useRef<HTMLTextAreaElement>(null)
   const fileRef               = useRef<HTMLInputElement>(null)
+
+  // Chat has content beyond the first greeting
+  const hasActiveConversation = chat.length > 1
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -247,16 +251,29 @@ export default function AgentChat() {
     <>
       {/* ── Floating button ─────────────────────────────────────────────────── */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          if (minimized) { setMinimized(false); setOpen(true) }
+          else setOpen(o => !o)
+        }}
         dir="rtl"
         className="fixed bottom-6 left-6 z-50 flex items-center gap-2.5 rounded-2xl bg-gradient-to-br from-violet-700 to-violet-900 px-3.5 py-2.5 text-white shadow-2xl shadow-violet-950/60 hover:from-violet-600 hover:to-violet-800 transition-all duration-200 border border-violet-600/30"
       >
-        <RobotAvatar size={26} active={loading} />
-        {!open && <span className="text-sm font-semibold hidden sm:block">المساعد الذكي</span>}
+        <div className="relative">
+          <RobotAvatar size={26} active={loading} />
+          {/* Minimized indicator: pulsing dot when conversation is active and minimized */}
+          {minimized && hasActiveConversation && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-violet-400 border-2 border-violet-900 animate-pulse" />
+          )}
+        </div>
+        {(!open || minimized) && (
+          <span className="text-sm font-semibold hidden sm:block">
+            {minimized ? 'استكمل المحادثة' : 'المساعد الذكي'}
+          </span>
+        )}
       </button>
 
       {/* ── Chat window ─────────────────────────────────────────────────────── */}
-      {open && (
+      {open && !minimized && (
         <div
           dir="rtl"
           className="fixed bottom-[5rem] left-6 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-black/70 border border-slate-700/40"
@@ -283,16 +300,21 @@ export default function AgentChat() {
             {/* Left side: actions */}
             <div className="flex items-center gap-1" dir="ltr">
               <button
-                onClick={() => { setChat([{ role: 'assistant', text: 'محادثة جديدة. أنا جاهز.' }]); setHistory([]); setAttached(null) }}
+                onClick={() => { setChat([INITIAL_MESSAGE]); setHistory([]); setAttached(null); setMinimized(false) }}
                 className="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                title="محادثة جديدة"
               >
                 جديد
               </button>
+              {/* Minimize — preserves conversation */}
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => setMinimized(true)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="تصغير"
               >
-                ✕
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                  <path d="M5 12h14" />
+                </svg>
               </button>
             </div>
           </div>

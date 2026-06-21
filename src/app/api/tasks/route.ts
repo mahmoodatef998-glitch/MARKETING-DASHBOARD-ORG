@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
     due_date:            (b.due_date            as string | undefined) ?? undefined,
     assigned_to:         (b.assigned_to         as string | undefined) ?? undefined,
     client_id:           (b.client_id           as string | undefined) ?? undefined,
+    hook:                  (b.hook                  as string | undefined) ?? undefined,
     delivery_url:          (b.delivery_url          as string | undefined) ?? undefined,
     reference_image_url:   (b.reference_image_url   as string | undefined) ?? undefined,
     scheduled_publish_at:  (b.scheduled_publish_at  as string | undefined) ?? undefined,

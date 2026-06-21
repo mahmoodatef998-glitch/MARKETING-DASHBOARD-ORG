@@ -14,6 +14,7 @@ export const TaskCreateSchema = z.object({
   due_date:     e2n(z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullable().optional()),
   assigned_to:  e2n(z.string().uuid().nullable().optional()),
   client_id:    e2n(z.string().uuid().nullable().optional()),
+  hook:                  e2n(z.string().max(2000).nullable().optional()),
   delivery_url:          e2n(z.string().url().max(2048).nullable().optional()),
   reference_image_url:   e2n(z.string().url().max(2048).nullable().optional()),
   scheduled_publish_at:  e2n(z.string().nullable().optional()),
