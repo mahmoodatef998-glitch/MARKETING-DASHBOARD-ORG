@@ -197,13 +197,18 @@ export default function AgentChat() {
         `${attached.fullText}` +
         `${userNote}\n\n` +
         `══════════════════════════\n` +
-        `تعليمات التنفيذ الفوري:\n` +
-        `• ابدأ الآن بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
-        `• طابق الأعمدة: الموضوع→title | الهوك/الفكرة→description | النوع→task_type | الموعد→due_date\n` +
-        `• لو العميل واضح من الملف أو من السياق → نفّذ مباشرة بدون سؤال\n` +
-        `• لو مش واضح → اسأل سؤال واحد مضغوط ثم نفّذ فور الرد\n` +
-        `• IMPORTANT: قاعدة "+5 tasks = اطلب تأكيد" لا تنطبق على Excel imports — نفّذ كل التاسكات دفعة واحدة\n` +
-        `• بعد التنفيذ: notify_all_team + ملخص النتيجة`
+        `⚡ القاعدة الأهم: الخطة المرفوعة هي المرجع الوحيد — التزم بها 100% دون إضافة أو تعديل.\n\n` +
+        `تعليمات التنفيذ:\n` +
+        `١. ابدأ بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
+        `٢. اقرأ كل الـ sheets واستخرج: النوع + الهوك + البريف + تاريخ النشر + المنصات لكل قطعة\n` +
+        `٣. لو العميل مش واضح → سؤال واحد فقط ثم نفّذ فور الرد\n` +
+        `٤. أنشئ الخطة بـ create_content_plan واحدة تشمل كل قطع reel/design/ai_video:\n` +
+        `   • title: من الملف كما هو | hook: الهوك كما هو | notes: البريف الكامل\n` +
+        `   • publish_date من الملف | internal_due_date = publish − SLA (reel: -3أيام | design: -1يوم)\n` +
+        `   • assigned_to حسب الأعباء | platforms من الملف\n` +
+        `   ← create_content_plan تنشئ تلقائياً الخطة + عناصرها + تاسك مرتبط لكل عنصر\n` +
+        `٥. import_content_plan فقط لو في post/custom خارج الـ content plan\n` +
+        `٦. notify_all_team + ملخص: "✅ خطة [العميل]: Y ريلز + Z تصاميم + W AI video"`
       messageText = intro
       displayText = text ? `📊 ${attached.name} — ${attached.rowCount} قطعة | ${text}` : `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
     }
