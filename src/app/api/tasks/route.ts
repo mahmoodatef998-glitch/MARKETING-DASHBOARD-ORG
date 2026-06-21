@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
     title:               b.title,
     description:         (b.description         as string | undefined) ?? undefined,
     status:              b.status              ?? 'todo',
+    approval_status:     'pending',
     priority:            b.priority            ?? 'medium',
     task_type:           (b.task_type           as import('@/types').TaskType | undefined) ?? undefined,
     due_date:            (b.due_date            as string | undefined) ?? undefined,

@@ -718,7 +718,7 @@ async function executeTool(
         assigned_to: args.assigned_to ? String(args.assigned_to) : null,
         priority:    args.priority ? String(args.priority) : 'medium',
         status:      'todo',
-        approval_status: 'none',
+        approval_status: 'pending',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }).select('id, title, task_type, due_date').single()
@@ -740,7 +740,7 @@ async function executeTool(
         assigned_to: t.assigned_to ? String(t.assigned_to) : null,
         priority:    t.priority ? String(t.priority) : 'medium',
         status:      'todo',
-        approval_status: 'none',
+        approval_status: 'pending',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }))
@@ -1455,19 +1455,20 @@ async function executeTool(
         })
 
         taskRows.push({
-          id:           taskId,
-          title:        String(item.title),
-          description:  item.notes ? String(item.notes) : null,
-          hook:         item.hook ? String(item.hook) : null,
-          status:       'todo',
-          priority:     item.priority ? String(item.priority) : 'medium',
-          task_type:    ctToTaskType[ct] ?? ct,
-          due_date:     taskDueDate,
-          assigned_to:  item.assigned_to ? String(item.assigned_to) : null,
-          client_id:    clientId,
-          plan_item_id: itemId,
-          created_at:   now.toISOString(),
-          updated_at:   now.toISOString(),
+          id:              taskId,
+          title:           String(item.title),
+          description:     item.notes ? String(item.notes) : null,
+          hook:            item.hook ? String(item.hook) : null,
+          status:          'todo',
+          approval_status: 'pending',
+          priority:        item.priority ? String(item.priority) : 'medium',
+          task_type:       ctToTaskType[ct] ?? ct,
+          due_date:        taskDueDate,
+          assigned_to:     item.assigned_to ? String(item.assigned_to) : null,
+          client_id:       clientId,
+          plan_item_id:    itemId,
+          created_at:      now.toISOString(),
+          updated_at:      now.toISOString(),
         })
       }
 
@@ -1556,19 +1557,20 @@ async function executeTool(
           })
 
           newTaskRows.push({
-            id:           taskId,
-            title:        String(item.title),
-            description:  item.notes ? String(item.notes) : null,
-            hook:         item.hook ? String(item.hook) : null,
-            status:       'todo',
-            priority:     item.priority ? String(item.priority) : 'medium',
-            task_type:    ctToTaskType[ct] ?? ct,
-            due_date:     taskDueDate,
-            assigned_to:  item.assigned_to ? String(item.assigned_to) : null,
-            client_id:    plan.client_id,
-            plan_item_id: itemId,
-            created_at:   now.toISOString(),
-            updated_at:   now.toISOString(),
+            id:              taskId,
+            title:           String(item.title),
+            description:     item.notes ? String(item.notes) : null,
+            hook:            item.hook ? String(item.hook) : null,
+            status:          'todo',
+            approval_status: 'pending',
+            priority:        item.priority ? String(item.priority) : 'medium',
+            task_type:       ctToTaskType[ct] ?? ct,
+            due_date:        taskDueDate,
+            assigned_to:     item.assigned_to ? String(item.assigned_to) : null,
+            client_id:       plan.client_id,
+            plan_item_id:    itemId,
+            created_at:      now.toISOString(),
+            updated_at:      now.toISOString(),
           })
         }
 
