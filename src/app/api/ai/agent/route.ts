@@ -668,7 +668,6 @@ async function executeTool(
         assigned_to: args.assigned_to ? String(args.assigned_to) : null,
         priority:    args.priority ? String(args.priority) : 'medium',
         status:      'todo',
-        approval_status: 'none',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }).select('id, title, task_type, due_date').single()
@@ -690,7 +689,6 @@ async function executeTool(
         assigned_to: t.assigned_to ? String(t.assigned_to) : null,
         priority:    t.priority ? String(t.priority) : 'medium',
         status:      'todo',
-        approval_status: 'none',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }))
