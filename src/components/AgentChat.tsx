@@ -116,9 +116,12 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   if (rows.length === 0) throw new Error('الملف فاضي')
 
   const headers = Object.keys(rows[0])
+  const MAX_ROWS = 60
+  const displayRows = rows.slice(0, MAX_ROWS)
+  const truncated  = rows.length > MAX_ROWS
 
   // Format each row as labeled key→value pairs so the agent can clearly map columns
-  const formattedRows = rows.map((row, idx) => {
+  const formattedRows = displayRows.map((row, idx) => {
     const pairs = headers
       .filter(h => String(row[h] ?? '').trim() !== '')
       .map(h => `  ${h}: ${String(row[h]).trim()}`)
@@ -126,9 +129,9 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   }).join('\n\n')
 
   const fullText =
-    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى\n` +
+    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى${truncated ? ` (عارض أول ${MAX_ROWS} فقط)` : ''}\n` +
     `الأعمدة المتاحة: ${headers.join(' | ')}\n\n` +
-    `═══ البيانات الكاملة ═══\n${formattedRows}`
+    `═══ البيانات ═══\n${formattedRows}`
 
   return { name: file.name, rowCount: rows.length, headers, fullText }
 }

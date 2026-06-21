@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import {
@@ -2052,6 +2053,21 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
 
 قاعدة مهمة: لو أي عمود مش موجود → استنتجه بذكاء أو استخدم القيمة الافتراضية (priority=medium)
 
+═══ حساب مواعيد التاسكات من تواريخ النشر ═══
+الـ due_date للتاسك ≠ تاريخ النشر — هو الموعد الداخلي للإنتاج:
+
+  reel_video   → due_date = تاريخ النشر − 3 أيام (إنتاج فيديو يحتاج وقت)
+  ai_video     → due_date = تاريخ النشر − 3 أيام
+  design       → due_date = تاريخ النشر − 1 يوم  (تصميم أسرع)
+  post         → due_date = تاريخ النشر − 1 يوم
+  custom       → due_date = تاريخ النشر − 2 أيام (افتراضي)
+
+مثال: نشر Instagram رييلز يوم 2026-07-10 → due_date = 2026-07-07
+مثال: نشر تصميم يوم 2026-07-15 → due_date = 2026-07-14
+
+لو المدير حدد أيام مختلفة (مثلاً "3 أيام للريلز") → استخدم تعليمه
+لو مفيش تاريخ نشر في الملف → استخدم تاريخ النشر مباشرة أو وزّع على مدى الشهر
+
 ═══ خطة الميديا باير — الوركفلو الكامل ═══
 لما تستلم Excel خطة ميديا باير، نفّذ بالترتيب:
 
@@ -2179,7 +2195,7 @@ export async function POST(req: NextRequest) {
   const chat = model.startChat({ history: geminiHistory })
 
   // ── Agentic loop ──────────────────────────────────────────────────────────
-  const MAX_ROUNDS = 8
+  const MAX_ROUNDS = 15
   let currentMessage: string | Part[] = lastMsg.text
 
   try {
