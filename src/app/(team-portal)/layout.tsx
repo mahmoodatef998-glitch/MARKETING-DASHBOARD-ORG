@@ -18,14 +18,19 @@ export default function TeamPortalLayout({ children }: { children: React.ReactNo
 
   useEffect(() => {
     async function check() {
-      const { data } = await getSupabaseClient().auth.getSession()
-      if (!data.session) { router.replace('/login'); return }
-      const res = await fetch('/api/profile')
-      const p = await res.json()
-      if (p.role === 'admin' || p.role === 'media_buyer') { router.replace('/dashboard'); return }
-      if (p.role === 'client') { router.replace('/client-portal'); return }
-      setProfile(p)
-      setReady(true)
+      try {
+        const { data } = await getSupabaseClient().auth.getSession()
+        if (!data.session) { router.replace('/login'); return }
+        const res = await fetch('/api/profile')
+        if (!res.ok) { router.replace('/login'); return }
+        const p = await res.json()
+        if (p.role === 'admin' || p.role === 'media_buyer') { router.replace('/dashboard'); return }
+        if (p.role === 'client') { router.replace('/client-portal'); return }
+        setProfile(p)
+        setReady(true)
+      } catch {
+        router.replace('/login')
+      }
     }
     check()
   }, [router])

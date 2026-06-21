@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 export async function GET() {
   const supabase = await createServerClient()
@@ -14,13 +14,25 @@ export async function GET() {
     .single()
 
   if (!profile) {
-    // First time — auto-create profile with default role (non-admin)
-    const { data: newProfile } = await supabase
+    // First login — use admin client to bypass RLS (no INSERT policy on profiles)
+    const admin = createAdminClient()
+    const displayName = (user.user_metadata?.full_name as string)
+      ?? user.email?.split('@')[0]
+      ?? user.email
+      ?? 'Team Member'
+    const { data: newProfile, error } = await admin
       .from('profiles')
-      .insert({ id: user.id, role: 'video_maker', display_name: user.email })
+      .insert({
+        id:           user.id,
+        role:         'video_maker',
+        display_name: displayName,
+        created_at:   new Date().toISOString(),
+        updated_at:   new Date().toISOString(),
+      })
       .select()
       .single()
-    return NextResponse.json({ ...newProfile, email: user.email })
+    if (error) console.error('[profile] auto-create failed:', error.message)
+    return NextResponse.json({ ...(newProfile ?? { id: user.id, role: 'video_maker', display_name: displayName }), email: user.email })
   }
 
   return NextResponse.json({ ...profile, email: user.email })
