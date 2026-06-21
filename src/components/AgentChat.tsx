@@ -110,30 +110,58 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   const XLSX = await import('xlsx')
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
-  if (rows.length === 0) throw new Error('الملف فاضي')
+  if (wb.SheetNames.length === 0) throw new Error('الملف فاضي')
 
-  const headers = Object.keys(rows[0])
-  const MAX_ROWS = 60
-  const displayRows = rows.slice(0, MAX_ROWS)
-  const truncated  = rows.length > MAX_ROWS
+  // Identify the main content/calendar sheet (largest data sheet)
+  let mainSheetName = wb.SheetNames[0]
+  let mainRows: Record<string, unknown>[] = []
+  let totalRows = 0
 
-  // Format each row as labeled key→value pairs so the agent can clearly map columns
-  const formattedRows = displayRows.map((row, idx) => {
-    const pairs = headers
-      .filter(h => String(row[h] ?? '').trim() !== '')
-      .map(h => `  ${h}: ${String(row[h]).trim()}`)
-    return `◆ قطعة ${idx + 1}:\n${pairs.join('\n')}`
-  }).join('\n\n')
+  const MAX_ROWS_PER_SHEET = 40
+  const sheetSections: string[] = []
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+    const nonEmptyRows = rows.filter(r => Object.values(r).some(v => String(v).trim() !== ''))
+    if (nonEmptyRows.length === 0) continue
+
+    // Track which sheet has the most rows (likely the content calendar)
+    if (nonEmptyRows.length > mainRows.length) {
+      mainRows = nonEmptyRows
+      mainSheetName = sheetName
+    }
+    totalRows += nonEmptyRows.length
+
+    const displayRows = nonEmptyRows.slice(0, MAX_ROWS_PER_SHEET)
+    const truncated = nonEmptyRows.length > MAX_ROWS_PER_SHEET
+    const headers = Object.keys(nonEmptyRows[0] ?? {})
+
+    const formattedRows = displayRows.map((row) => {
+      const pairs = headers
+        .filter(h => String(row[h] ?? '').trim() !== '')
+        .map(h => `    ${h}: ${String(row[h]).trim()}`)
+      return pairs.join('\n')
+    }).filter(Boolean).join('\n  ---\n')
+
+    sheetSections.push(
+      `\n╔══ ${sheetName} ══╗\n` +
+      (truncated ? `  (عارض أول ${MAX_ROWS_PER_SHEET} من ${nonEmptyRows.length} صف)\n` : '') +
+      `  الأعمدة: ${headers.join(' | ')}\n\n` +
+      `${formattedRows}`
+    )
+  }
+
+  if (mainRows.length === 0) throw new Error('الملف فاضي')
 
   const fullText =
-    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى${truncated ? ` (عارض أول ${MAX_ROWS} فقط)` : ''}\n` +
-    `الأعمدة المتاحة: ${headers.join(' | ')}\n\n` +
-    `═══ البيانات ═══\n${formattedRows}`
+    `📋 ملف: "${file.name}" — ${wb.SheetNames.length} sheets — ${totalRows} صف إجمالي\n` +
+    `الـ Sheets: ${wb.SheetNames.join(' | ')}\n` +
+    sheetSections.join('\n')
 
-  return { name: file.name, rowCount: rows.length, headers, fullText }
+  const mainHeaders = Object.keys(mainRows[0] ?? {})
+  return { name: file.name, rowCount: totalRows, headers: mainHeaders, fullText }
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -189,17 +217,29 @@ export default function AgentChat() {
     if (attached) {
       const userNote = text ? `\n\nملاحظة من المدير: ${text}` : ''
       const intro =
-        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} قطعة\n\n` +
+        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} صف في ${attached.headers.length > 0 ? 'عدة sheets' : 'sheet واحد'}\n\n` +
         `${attached.fullText}` +
         `${userNote}\n\n` +
         `══════════════════════════\n` +
-        `تعليمات التنفيذ الفوري:\n` +
-        `• ابدأ الآن بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
-        `• طابق الأعمدة: الموضوع→title | الهوك/الفكرة→description | النوع→task_type | الموعد→due_date\n` +
-        `• لو العميل واضح من الملف أو من السياق → نفّذ مباشرة بدون سؤال\n` +
-        `• لو مش واضح → اسأل سؤال واحد مضغوط ثم نفّذ فور الرد\n` +
-        `• IMPORTANT: قاعدة "+5 tasks = اطلب تأكيد" لا تنطبق على Excel imports — نفّذ كل التاسكات دفعة واحدة\n` +
-        `• بعد التنفيذ: notify_all_team + ملخص النتيجة`
+        `تعليمات التحليل والتنفيذ:\n` +
+        `\n` +
+        `١. ابدأ بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
+        `\n` +
+        `٢. ادرس الملف بعمق — لا تبدأ التنفيذ قبل ما تفهم:\n` +
+        `   • الـ Positioning والـ USP (من sheet الـ Overview)\n` +
+        `   • الجمهور المستهدف وأهداف الشهر\n` +
+        `   • أولويات المحتوى (إيه أهم قطعة وليه)\n` +
+        `   • كل قطعة وبريفها التفصيلي من sheets الـ Reels والـ Designs\n` +
+        `\n` +
+        `٣. أنشئ التاسكات بذكاء لا ميكانيكياً:\n` +
+        `   • title = عنوان جذاب يعكس الفكرة والـ hook (مش مجرد نسخ من الملف)\n` +
+        `   • description = الـ brief الكامل + الـ hook + تفاصيل التنفيذ + الأولوية الاستراتيجية\n` +
+        `   • task_type: ريلز→reel_video | تصميم→design | فيديو AI→ai_video | stories→custom\n` +
+        `   • due_date = تاريخ التسليم الداخلي (reel = يوم النشر -3 أيام | design = -1 يوم)\n` +
+        `   • وزّع الفريق حسب الأعباء الفعلية — مش عشوائي\n` +
+        `\n` +
+        `٤. IMPORTANT: قاعدة "+5 tasks = اطلب تأكيد" لا تنطبق هنا — نفّذ كل التاسكات دفعة واحدة\n` +
+        `٥. بعد التنفيذ: notify_all_team + ملخص استراتيجي بالأرقام والأولويات`
       messageText = intro
       displayText = text ? `📊 ${attached.name} — ${attached.rowCount} قطعة | ${text}` : `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
     }
