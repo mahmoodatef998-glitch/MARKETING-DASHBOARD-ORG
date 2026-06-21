@@ -554,7 +554,7 @@ function TaskCard({
               </span>
             ) : null}
             {hasHook && task.hook && (
-              <Flame className="h-3.5 w-3.5 text-orange-400 shrink-0" title="Has hook" />
+              <Flame className="h-3.5 w-3.5 text-orange-400 shrink-0" aria-label="Has hook" />
             )}
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.badge}`}>
               <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
