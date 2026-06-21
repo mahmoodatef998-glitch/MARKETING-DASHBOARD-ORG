@@ -53,6 +53,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     due_date:            body.due_date            || null,
     assigned_to:         body.assigned_to         || null,
     client_id:           body.client_id           || null,
+    hook:                  body.hook                  || null,
     delivery_url:          body.delivery_url          || null,
     reference_image_url:   body.reference_image_url   || null,
     scheduled_publish_at:  body.scheduled_publish_at  || null,

@@ -75,17 +75,15 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   // ── Tasks ─────────────────────────────────────────────────────────────────
   {
     name: 'get_tasks',
-    description: 'جلب التاسكات مع فلاتر اختيارية (حالة، عميل، نوع، بحث بالعنوان، غير معينة)',
+    description: 'جلب التاسكات مع فلاتر اختيارية (حالة، عميل، نوع، بحث بالعنوان)',
     parameters: schema({
       type: obj,
       properties: {
         status:      enumStr(['todo', 'in_progress', 'review', 'done', 'overdue'], 'فلتر بالحالة'),
         client_name: { type: str, description: 'اسم العميل' },
-        client_id:   { type: str, description: 'ID العميل (بديل لاسم العميل)' },
         task_type:   enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom'], 'نوع التاسك'),
         search:      { type: str, description: 'بحث بكلمة في عنوان التاسك' },
-        unassigned:  { type: str, description: '"true" لجلب التاسكات غير المعينة فقط' },
-        limit:       { type: num, description: 'عدد النتائج (افتراضي 50)' },
+        limit:       { type: num, description: 'عدد النتائج (افتراضي 20)' },
       },
     }),
   },
@@ -104,32 +102,6 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         priority:    enumStr(['low', 'medium', 'high', 'urgent'], 'الأولوية'),
       },
       required: ['title', 'task_type', 'due_date'],
-    }),
-  },
-  {
-    name: 'delete_task',
-    description: 'حذف تاسك واحد نهائياً من السيستم — استخدمه عندما يطلب المدير حذف تاسك محدد. لو مش عندك الـ ID، استخدم get_tasks أولاً للبحث عنه.',
-    parameters: schema({
-      type: obj,
-      properties: {
-        task_id: { type: str, description: 'ID التاسك المراد حذفه' },
-      },
-      required: ['task_id'],
-    }),
-  },
-  {
-    name: 'bulk_delete_tasks',
-    description: 'حذف مجموعة تاسكات دفعة واحدة — مفيد لحذف تاسكات غير معينة أو إدارية. لو المدير قال "احذف التاسكات غير المعينة لـ X" → استخدم get_tasks أولاً للحصول على الـ IDs ثم استدعِ هذه الأداة.',
-    parameters: schema({
-      type: obj,
-      properties: {
-        task_ids: {
-          type: arr,
-          items: { type: str },
-          description: 'قائمة IDs التاسكات المراد حذفها',
-        },
-      },
-      required: ['task_ids'],
     }),
   },
   {
@@ -334,7 +306,7 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: 'create_content_plan',
-    description: 'إنشاء خطة محتوى شهرية رسمية للعميل في صفحة Content Plans — مع كل عناصرها (موضوع كل قطعة، النوع، تاريخ النشر، المنصات، المسؤول)',
+    description: 'إنشاء خطة محتوى شهرية رسمية للعميل في صفحة Content Plans — ينشئ عناصر الخطة + تاسك مرتبط لكل عنصر تلقائياً. هذه الأداة هي الطريقة الوحيدة لاستيراد خطط المحتوى من Excel.',
     parameters: schema({
       type: obj,
       properties: {
@@ -344,17 +316,19 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         notes:     { type: str, description: 'ملاحظات عامة على الخطة' },
         items: {
           type: arr,
-          description: 'عناصر الخطة — كل عنصر يمثل قطعة محتوى واحدة',
+          description: 'عناصر الخطة — كل عنصر يمثل قطعة محتوى واحدة. الالتزام الكامل بالخطة المرفوعة.',
           items: {
             type: obj,
             properties: {
-              title:             { type: str, description: 'موضوع أو فكرة القطعة' },
+              title:             { type: str, description: 'موضوع القطعة كما هو في الخطة — دون تغيير' },
               content_type:      enumStr(['reel', 'design', 'ai_video'], 'نوع المحتوى'),
+              hook:              { type: str, description: 'الهوك الجذاب — الجملة الأولى التي تشد الجمهور (للريلز والـ AI Video)' },
               publish_date:      { type: str, description: 'تاريخ النشر بصيغة ISO' },
-              internal_due_date: { type: str, description: 'الموعد الداخلي للتسليم بصيغة ISO' },
+              internal_due_date: { type: str, description: 'الموعد الداخلي للإنتاج (publish_date - SLA days)' },
               assigned_to:       { type: str, description: 'ID عضو الفريق المسؤول' },
               platforms:         { type: arr, items: { type: str }, description: 'المنصات: instagram, facebook, tiktok' },
-              notes:             { type: str, description: 'تفاصيل أو brief القطعة' },
+              priority:          enumStr(['low', 'medium', 'high', 'urgent'], 'أولوية التاسك'),
+              notes:             { type: str, description: 'البريف الكامل للقطعة — كل تفاصيل التنفيذ من الخطة' },
             },
             required: ['title', 'content_type'],
           },
@@ -659,15 +633,13 @@ async function executeTool(
     case 'get_tasks': {
       let query = admin
         .from('tasks')
-        .select('id, title, status, priority, task_type, due_date, assigned_to, assignee:profiles!assigned_to(id, display_name, role), client:clients(id, name)')
+        .select('id, title, status, priority, task_type, due_date, assignee:profiles!assigned_to(id, display_name, role), client:clients(id, name)')
         .is('deleted_at', null)
         .order('due_date', { ascending: true })
-        .limit(Number(args.limit ?? 50))
+        .limit(Number(args.limit ?? 20))
 
       if (args.status)    query = query.eq('status', String(args.status))
       if (args.task_type) query = query.eq('task_type', String(args.task_type))
-      if (args.client_id) query = query.eq('client_id', String(args.client_id))
-      if (String(args.unassigned) === 'true') query = query.is('assigned_to', null)
 
       const { data, error } = await query
       if (error) return { error: error.message }
@@ -698,30 +670,12 @@ async function executeTool(
         assigned_to: args.assigned_to ? String(args.assigned_to) : null,
         priority:    args.priority ? String(args.priority) : 'medium',
         status:      'todo',
+        approval_status: 'none',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }).select('id, title, task_type, due_date').single()
       if (error) return { error: error.message }
       return { success: true, task: data }
-    }
-
-    case 'delete_task': {
-      const taskId = String(args.task_id)
-      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).is('deleted_at', null).single()
-      if (!task) return { error: 'التاسك مش موجود أو محذوف بالفعل' }
-      const { error } = await admin.from('tasks').update({ deleted_at: now.toISOString() }).eq('id', taskId)
-      if (error) return { error: error.message }
-      return { success: true, deleted: task.title }
-    }
-
-    case 'bulk_delete_tasks': {
-      const ids = args.task_ids as string[]
-      if (!Array.isArray(ids) || ids.length === 0) return { error: 'مفيش IDs للحذف' }
-      const { data: tasks } = await admin.from('tasks').select('id, title').in('id', ids).is('deleted_at', null)
-      if (!tasks || tasks.length === 0) return { error: 'مفيش تاسكات موجودة بهذه الـ IDs' }
-      const { error } = await admin.from('tasks').update({ deleted_at: now.toISOString() }).in('id', ids)
-      if (error) return { error: error.message }
-      return { success: true, deleted_count: tasks.length, deleted_tasks: tasks.map(t => t.title) }
     }
 
     case 'import_content_plan': {
@@ -738,6 +692,7 @@ async function executeTool(
         assigned_to: t.assigned_to ? String(t.assigned_to) : null,
         priority:    t.priority ? String(t.priority) : 'medium',
         status:      'todo',
+        approval_status: 'none',
         created_at:  now.toISOString(),
         updated_at:  now.toISOString(),
       }))
@@ -1396,7 +1351,7 @@ async function executeTool(
         client_id:  clientId,
         month:      String(args.month),
         title:      String(args.title),
-        status:     'draft',
+        status:     'active',
         notes:      args.notes ? String(args.notes) : null,
         created_by: ctx.adminUserId,
         created_at: now.toISOString(),
@@ -1407,30 +1362,69 @@ async function executeTool(
       const rawItems = args.items as Array<Record<string, unknown>>
       const contentTypeCount: Record<string, number> = {}
 
-      const itemRows = rawItems.map((item) => {
+      // Map content_type → task_type
+      const ctToTaskType: Record<string, string> = { reel: 'reel_video', design: 'design', ai_video: 'ai_video' }
+
+      const itemRows: Record<string, unknown>[] = []
+      const taskRows: Record<string, unknown>[] = []
+
+      for (const item of rawItems) {
         const ct = String(item.content_type)
         contentTypeCount[ct] = (contentTypeCount[ct] ?? 0) + 1
-        return {
-          id:                generateId(),
+        const itemId = generateId()
+        const taskId = generateId()
+        const slaDays = ct === 'design' ? 1 : 3
+
+        itemRows.push({
+          id:                itemId,
           plan_id:           planId,
           client_id:         clientId,
           content_type:      ct,
           title:             String(item.title),
           assigned_to:       item.assigned_to ? String(item.assigned_to) : null,
-          publish_date:      item.publish_date ? String(item.publish_date) : null,
+          publish_date:      item.publish_date ? String(item.publish_date) : now.toISOString(),
           internal_due_date: item.internal_due_date ? String(item.internal_due_date) : null,
-          platforms:         Array.isArray(item.platforms) ? item.platforms : [],
+          platforms:         Array.isArray(item.platforms) ? item.platforms : ['instagram'],
           notes:             item.notes ? String(item.notes) : null,
           sequence_number:   contentTypeCount[ct],
           status:            'pending_production',
-          sla_days:          3,
+          task_id:           taskId,
+          sla_days:          slaDays,
           created_at:        now.toISOString(),
           updated_at:        now.toISOString(),
-        }
-      })
+        })
+
+        taskRows.push({
+          id:           taskId,
+          title:        String(item.title),
+          description:  item.notes ? String(item.notes) : null,
+          hook:         item.hook ? String(item.hook) : null,
+          status:       'todo',
+          priority:     item.priority ? String(item.priority) : 'medium',
+          task_type:    ctToTaskType[ct] ?? ct,
+          due_date:     item.internal_due_date
+            ? String(item.internal_due_date).slice(0, 10)
+            : item.publish_date
+              ? String(item.publish_date).slice(0, 10)
+              : null,
+          assigned_to:  item.assigned_to ? String(item.assigned_to) : null,
+          client_id:    clientId,
+          plan_item_id: itemId,
+          created_at:   now.toISOString(),
+          updated_at:   now.toISOString(),
+        })
+      }
 
       const { error: itemsErr } = await admin.from('content_plan_items').insert(itemRows)
       if (itemsErr) return { error: itemsErr.message }
+
+      // Create linked tasks — non-fatal if fails
+      let tasksCreated = 0
+      try {
+        const { error: tasksErr } = await admin.from('tasks').insert(taskRows)
+        if (!tasksErr) tasksCreated = taskRows.length
+        else console.error('[create_content_plan] tasks insert failed:', tasksErr.message)
+      } catch {}
 
       return {
         success: true,
@@ -1439,6 +1433,7 @@ async function executeTool(
         title: args.title,
         month: args.month,
         items_created: itemRows.length,
+        tasks_created: tasksCreated,
         breakdown: contentTypeCount,
         link: '/content-plans',
       }
@@ -2056,51 +2051,50 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
 (في content_plans: reel | design | ai_video فقط — post/custom → tasks فقط)
 
 ═══ استيراد خطط المحتوى من Excel ═══
-لما المدير يرفع ملف Excel، اتبع الترتيب ده بدقة:
+⚡ القاعدة الذهبية: الخطة المرفوعة هي المرجع الوحيد — التزم بها 100% بدون إضافة أو تغيير أو تفسير إبداعي.
 
-١. جلب البيانات المطلوبة (معاً في نفس الوقت):
+لما المدير يرفع ملف Excel، اتبع الترتيب ده:
+
+١. اقرأ الملف بالكامل — كل الـ sheets — قبل ما تبدأ أي تنفيذ:
+   ┌─ title (اسم القطعة) ← أعمدة: الموضوع | العنوان | Topic | Title | اسم القطعة
+   ├─ content_type ← أعمدة: النوع | نوع المحتوى | Type
+   │   ← ريلز/reel → reel | تصميم/design → design | فيديو AI/ai video → ai_video
+   ├─ hook ← أعمدة: الهوك | Hook | الجملة الأولى | السيناريو | فكرة الريلز
+   ├─ notes (البريف الكامل) ← اجمع: الهوك + الفكرة + الرسالة + النص + الملاحظات + المنصة
+   ├─ publish_date ← أعمدة: تاريخ النشر | Publish Date | التاريخ
+   ├─ priority ← عاجل→urgent | مهم/high→high | عادي→medium | منخفض→low
+   └─ platforms ← Instagram/انستا→instagram | TikTok/تيك توك→tiktok | Facebook/فيسبوك→facebook
+
+٢. جلب البيانات في نفس الوقت:
    get_clients() + get_team_members() + get_workload_analysis()
 
-٢. ادرس الملف بعمق قبل أي تنفيذ:
-   لو الملف فيه أكتر من sheet:
-   ╔═ sheet الـ Overview / الاستراتيجية ═╗
-   │ اقرأ: الـ Positioning | الجمهور المستهدف | الـ USP | أهداف الشهر | Content Mix
-   │ استخدم هذا الفهم لإثراء وصف كل تاسك — مش مجرد copy-paste
-   ╔═ sheet الـ Content Calendar ═╗
-   │ هنا التسلسل الزمني للنشر — أساس التاسكات
-   ╔═ sheets الـ Reels Brief + Designs Brief ═╗
-   │ لكل قطعة: اجمع فكرة التنفيذ التفصيلية + الموسيقى + المدة + الأولوية
-   │ هذه التفاصيل تكون الـ description الثري للتاسك
-   ╔═ sheet تحليل المنافسين ═╗
-   │ استخدمه لتحديد الأولوية — ما يميزك عن المنافسين = أعلى أولوية
-   ╔═ sheet الـ KPIs ═╗
-   │ استخدمه لفهم الهدف النهائي وربط التاسكات بالأهداف
-
 ٣. تحديد العميل والفريق:
-   أ. لو العميل واضح من الملف (اسمه في العنوان أو البيانات) → طابقه من get_clients() ونفّذ
-   ب. لو مش واضح → سؤال واحد مضغوط: "الخطة دي لـ [اقترح أقرب عميل]؟ الريلز على [اسم]، التصاميم على [اسم]؟"
-   ج. وزّع الفريق بناءً على get_workload_analysis() — مش عشوائي
+   أ. لو العميل واضح من الملف أو السياق → نفّذ فوراً بدون سؤال
+   ب. لو مش واضح → سؤال مضغوط واحد فقط:
+      "الخطة دي لـ [اقترح أقرب عميل]؟ الريلز على [اسم]، التصاميم على [اسم]؟"
+   ج. فور الرد → نفّذ فوراً
 
-٤. نفّذ كل ده دفعة واحدة — لا تطلب تأكيد — ابدأ التنفيذ:
-   أ. import_content_plan بكل التاسكات دفعة واحدة:
-      - title: عنوان يعكس الفكرة الاستراتيجية + الـ hook (مش مجرد نسخ)
-        مثال جيد: "ريلز Before/After — علاج الشعر التالف (الأولوية الأولى)"
-        مثال سيء: "رييل 1"
-      - description: الـ brief الكامل + الهوك + تفاصيل التنفيذ + ارتباطه بالاستراتيجية
-        مثال: "🎬 الهوك: شعرك وصل لمرحلة ما فيش حل؟\n📋 التنفيذ: تصوير قبل التريتمنت → أثناء التطبيق close-up → النتيجة سلو موشن\n🎵 الصوت: Arabic soft trending\n⭐ الأولوية: الأعلى — يميزنا عن SOLO وباقي المنافسين"
-      - task_type: ريلز/reel → reel_video | تصميم/design → design | فيديو AI → ai_video | stories → custom
-      - due_date: reel_video = تاريخ النشر - 3 أيام | design = تاريخ النشر - 1 يوم
-      - priority: من الملف أو استنتجها من الأهمية الاستراتيجية
-   ب. create_content_plan للقطع من نوع reel/design/ai_video (الخطة الرسمية)
-   ج. notify_all_team بقائمة التاسكات والمواعيد
+٤. نفّذ بـ create_content_plan واحدة تشمل كل قطع الـ reel/design/ai_video:
+   ⚡ هذه الأداة تنشئ تلقائياً: خطة المحتوى + عناصرها + تاسك مرتبط لكل عنصر
+   - title: اسم القطعة كما هو في الملف (لا تعدّل)
+   - content_type: reel | design | ai_video
+   - hook: الهوك من الملف كما هو — للريلز والـ AI Video
+   - notes: البريف الكامل من الملف (اجمع كل أعمدة التفاصيل)
+   - publish_date: تاريخ النشر من الملف
+   - internal_due_date: publish_date − SLA (reel/ai_video: −3 أيام | design: −1 يوم)
+   - assigned_to: ID عضو الفريق المناسب حسب الأعباء
+   - platforms: من الملف أو ['instagram'] افتراضياً
+   - priority: من الملف أو 'medium' افتراضياً
 
-٥. ملخص استراتيجي نهائي — مش مجرد أرقام:
-   ✅ تم إنشاء X تاسك لـ [العميل] — Y ريلز، Z تصاميم، W فيديو AI
-   🎯 الأولويات: [أهم 3 قطع وليه]
-   ⚡ تحذيرات: [أي تضارب في المواعيد أو تحميل زائد على الفريق]
-   ثم: agent_remember("plan_[client]_[month]", "الملخص الاستراتيجي...")
+   لو في الخطة محتوى نوع post/custom → استخدم import_content_plan لهم بشكل منفصل
 
-قاعدة مهمة: الـ brief التفصيلي في sheets الـ Reels والـ Designs أهم من الـ Calendar — استخدمه دائماً
+٥. notify_all_team بالخطة الجديدة والمواعيد
+
+٦. ملخص نهائي:
+   ✅ تم إنشاء خطة [العميل] — [الشهر]: Y ريلز + Z تصاميم + W فيديو AI + X تاسك مرتبط
+   ثم: agent_remember("plan_[client]_[month]", "...")
+
+قاعدة مهمة: لا تفسّر الخطة ولا تضيف عليها — ما في الملف هو كل شيء.
 
 ═══ حساب مواعيد التاسكات من تواريخ النشر ═══
 الـ due_date للتاسك ≠ تاريخ النشر — هو الموعد الداخلي للإنتاج:
@@ -2125,11 +2119,11 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
 ٣. اسأل المدير: لأي عميل؟ ومين مسؤول عن كل نوع كريتيف؟ (مع اقتراح بناءً على الأعباء)
 ٤. بعد تأكيد المدير، نفّذ تلقائياً كل الخطوات دفعة واحدة:
    أ. create_campaign لكل كمبانيا في الخطة (بالمنصات والميزانية والهدف)
-   ب. create_content_plan للشهر (الريلز والتصاميم والفيديو)
-   ج. import_content_plan (التاسكات الإنتاجية مع التعيين)
+   ب. create_content_plan للشهر (ريلز + تصاميم + فيديو AI — تنشئ تلقائياً العناصر + التاسكات)
+   ج. import_content_plan فقط لو في post/custom خارج الـ content plan
    د. notify_all_team بالخطة الجديدة والمواعيد
    هـ. create_meeting لجلسة kick-off مع العميل (اقترح موعداً قريباً)
-٥. "✅ تم تجهيز خطة [اسم الشهر]: X كمبانيا + Y قطعة كريتيف + Z تاسك إنتاجي للعميل [الاسم]"
+٥. "✅ تم تجهيز خطة [اسم الشهر]: X كمبانيا + Y قطعة كريتيف + Z تاسك مرتبط للعميل [الاسم]"
 ٦. احفظ الخطة في الذاكرة: agent_remember("plan_[client]_[month]", "...")
 
 ═══ إدارة دورة حياة العميل الكاملة ═══
@@ -2188,16 +2182,8 @@ get_client_health دوري:
    - agent_remember, agent_recall
 
 ⚠️ يحتاج تأكيد المدير:
-   - update_invoice_status("paid") ← مالي حساس فقط
-
-═══ قواعد الحذف ═══
-- لو المدير طلب حذف تاسكات → نفّذ مباشرة بدون سؤال
-- لا تطلب من المدير أي IDs أبداً — جلّبها أنت:
-  1. get_tasks(client_name="...", unassigned="true") أو get_tasks(task_type="custom", client_name="...")
-  2. bulk_delete_tasks(task_ids=[...كل الـ IDs اللي جبتها...])
-- لو المدير قال "احذف التاسكات غير المعينة لـ X" → خطوتان فقط: get_tasks ثم bulk_delete_tasks
-- لا تقل أبداً "لا يوجد لدي صلاحية للحذف" — delete_task و bulk_delete_tasks موجودتان
-- بعد الحذف أكّد: "✅ تم حذف X تاسك"
+   - update_invoice_status("paid") ← مالي حساس
+   - أي حذف لبيانات
 
 ═══ التقارير اليومية ═══
 get_progress_report → إنجاز% + تأخيرات + مواعيد + توصيات

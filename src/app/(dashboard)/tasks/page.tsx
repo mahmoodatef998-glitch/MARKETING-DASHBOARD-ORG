@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import SchedulePublishPanel from '@/components/tasks/SchedulePublishPanel'
-import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2, Filter, Film, Palette, Sparkles, Smartphone, Wrench, Eye, Circle, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Calendar, AlertTriangle, Loader2, Download, CheckSquare, Square, X, ImagePlus, ExternalLink, ChevronUp, ChevronDown, CheckCircle2, Filter, Film, Palette, Sparkles, Smartphone, Wrench, Eye, Circle, LayoutGrid, List, Flame } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Task, Client, TaskAssignee } from '@/types'
@@ -31,6 +31,8 @@ const TASK_TYPE_OPTIONS = [
   { value: 'post',       label: 'Social Media Post' },
   { value: 'custom',     label: 'Custom / Other' },
 ] as const
+
+const HOOK_TASK_TYPES = new Set(['reel_video', 'ai_video'])
 
 function ImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
   const [uploading,   setUploading]   = useState(false)
@@ -128,6 +130,7 @@ function TaskForm({
   const [form, setForm] = useState({
     title:                initial?.title                ?? '',
     description:          initial?.description          ?? '',
+    hook:                 initial?.hook                 ?? '',
     status:               initial?.status               ?? 'todo',
     priority:             initial?.priority             ?? 'medium',
     task_type:            initial?.task_type            ?? '',
@@ -137,11 +140,13 @@ function TaskForm({
     delivery_url:         initial?.delivery_url         ?? '',
     reference_image_url:  initial?.reference_image_url  ?? '',
     scheduled_publish_at: initial?.scheduled_publish_at
-      ? initial.scheduled_publish_at.slice(0, 16) // strip seconds for datetime-local
+      ? initial.scheduled_publish_at.slice(0, 16)
       : '',
   })
   const [loading, setLoading] = useState(false)
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })) }
+
+  const showHook = HOOK_TASK_TYPES.has(form.task_type)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -156,6 +161,47 @@ function TaskForm({
         <Label>Title *</Label>
         <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Task title" required />
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Task Type</Label>
+          <Select value={form.task_type} onValueChange={(v) => set('task_type', v)}>
+            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+            <SelectContent>
+              {TASK_TYPE_OPTIONS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Client</Label>
+          <Select value={form.client_id || undefined} onValueChange={(v) => set('client_id', v)}>
+            <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+            <SelectContent>
+              {clients.filter(c => c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Hook — only for reel_video and ai_video */}
+      {showHook && (
+        <div className="space-y-2 rounded-xl bg-orange-500/5 border border-orange-500/20 p-3">
+          <Label className="flex items-center gap-1.5 text-orange-300">
+            <Flame className="h-3.5 w-3.5" /> Hook
+          </Label>
+          <Textarea
+            value={form.hook}
+            onChange={(e) => set('hook', e.target.value)}
+            placeholder="الـ hook الجذاب — الجملة الأولى أو الفكرة التي تشد الجمهور في أول 3 ثواني..."
+            rows={3}
+            dir="rtl"
+            className="bg-slate-900 border-orange-500/20 focus:border-orange-400/50 placeholder-slate-600 text-sm"
+          />
+          <p className="text-[11px] text-orange-400/60">أهم عنصر في الـ {form.task_type === 'reel_video' ? 'Reel' : 'AI Video'} — احرص على وضوحه</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>Description</Label>
         <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Task details…" rows={2} />
@@ -176,28 +222,6 @@ function TaskForm({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {PRIORITY_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Task Type</Label>
-          <Select value={form.task_type} onValueChange={(v) => set('task_type', v)}>
-            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-            <SelectContent>
-              {TASK_TYPE_OPTIONS.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Client</Label>
-          <Select value={form.client_id || undefined} onValueChange={(v) => set('client_id', v)}>
-            <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-            <SelectContent>
-              {clients.filter(c => c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -259,6 +283,153 @@ function TaskForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// ── Task Detail Modal ─────────────────────────────────────────────────────────
+
+function TaskDetailModal({
+  task,
+  isAdmin,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  task: Task
+  isAdmin: boolean
+  onClose: () => void
+  onEdit: (t: Task) => void
+  onDelete: (id: string) => void
+}) {
+  const status   = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
+  const typeConf = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
+  const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low
+  const due      = task.due_date ? dueDateLabel(task.due_date) : null
+  const { Icon: StatusIcon } = status
+  const showHook = task.task_type ? HOOK_TASK_TYPES.has(task.task_type) : false
+
+  return (
+    <div className="space-y-5">
+      {/* Header badges */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {typeConf && (
+          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${typeConf.badge}`}>
+            <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
+          </span>
+        )}
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.badge}`}>
+          <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
+            style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
+          {status.label}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <div className={`h-2.5 w-2.5 rounded-full ${priority.dot}`} />
+          <span className={`text-xs font-bold ${priority.color}`}>{priority.label}</span>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div>
+        <h2 className="text-xl font-bold text-white leading-snug">{task.title}</h2>
+        {task.client?.name && (
+          <p className="text-sm text-slate-400 mt-1">{task.client.name}</p>
+        )}
+      </div>
+
+      {/* Hook section — prominent for reel/ai_video */}
+      {showHook && (
+        <div className={`rounded-xl p-4 border ${task.hook ? 'bg-orange-500/8 border-orange-500/25' : 'bg-slate-800/40 border-slate-700/40 border-dashed'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <Flame className={`h-4 w-4 ${task.hook ? 'text-orange-400' : 'text-slate-600'}`} />
+            <span className={`text-xs font-bold uppercase tracking-widest ${task.hook ? 'text-orange-300' : 'text-slate-600'}`}>Hook</span>
+          </div>
+          {task.hook ? (
+            <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-wrap" dir="rtl">{task.hook}</p>
+          ) : (
+            <p className="text-xs text-slate-600 italic">لم يُحدد hook بعد</p>
+          )}
+        </div>
+      )}
+
+      {/* Description */}
+      {task.description && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">Description</p>
+          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap" dir="rtl">{task.description}</p>
+        </div>
+      )}
+
+      {/* Meta grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {task.assignee?.display_name && (
+          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/40">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Assigned to</p>
+            <p className="text-sm font-semibold text-white">{task.assignee.display_name}</p>
+          </div>
+        )}
+        {due && (
+          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/40">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Due Date</p>
+            <p className={`text-sm font-semibold ${due.color}`}>{due.text}</p>
+          </div>
+        )}
+        {task.scheduled_publish_at && (
+          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/40 col-span-2">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1 flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> Scheduled Publish
+            </p>
+            <p className="text-sm font-semibold text-cyan-300">
+              {new Date(task.scheduled_publish_at).toLocaleString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Reference image */}
+      {task.reference_image_url && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">Reference</p>
+          <div className="rounded-xl overflow-hidden border border-slate-700/60">
+            <img src={task.reference_image_url} alt="Reference" className="w-full max-h-64 object-contain bg-slate-900" />
+          </div>
+        </div>
+      )}
+
+      {/* Delivery URL */}
+      {task.delivery_url && (
+        <a
+          href={task.delivery_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-colors text-sm font-semibold"
+        >
+          <ExternalLink className="h-4 w-4 shrink-0" />
+          View Delivery
+        </a>
+      )}
+
+      {/* Admin actions */}
+      {isAdmin && (
+        <div className="flex gap-2 pt-1 border-t border-slate-800">
+          <Button
+            className="flex-1 gap-1.5"
+            onClick={() => { onClose(); onEdit(task) }}
+          >
+            <Pencil className="h-4 w-4" /> Edit Task
+          </Button>
+          <Button
+            variant="ghost"
+            className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={() => { onClose(); onDelete(task.id) }}
+          >
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -339,13 +510,14 @@ function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' 
 // ── Task Card (grid + list) ────────────────────────────────────────────────────
 
 function TaskCard({
-  task, selected, onSelect, isAdmin, onEdit, onDelete, gridView, index,
+  task, selected, onSelect, isAdmin, onEdit, onDelete, onViewDetail, gridView, index,
 }: {
   task: Task; selected: boolean; gridView: boolean; index: number
   onSelect: (id: string) => void
   isAdmin: boolean
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
+  onViewDetail: (t: Task) => void
 }) {
   const status       = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.todo
   const typeConf     = task.task_type ? TYPE_CONFIG[task.task_type as keyof typeof TYPE_CONFIG] ?? null : null
@@ -354,12 +526,13 @@ function TaskCard({
   const dueStyle     = dueBorderStyle(task.due_date)
   const { Icon: StatusIcon } = status
   const assigneeName = task.assignee?.display_name
+  const hasHook      = task.task_type ? HOOK_TASK_TYPES.has(task.task_type) : false
 
   if (gridView) {
     return (
       <div
         className={`
-          group flex flex-col rounded-2xl
+          group flex flex-col rounded-2xl cursor-pointer
           border-l-[3px] border border-slate-800/80
           ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
           ${selected ? 'bg-indigo-500/[0.04] border-indigo-500/30' : 'hover:border-slate-700 hover:shadow-lg hover:shadow-black/30'}
@@ -367,6 +540,7 @@ function TaskCard({
           animate-[task-enter_0.35s_ease_both]
         `}
         style={{ animationDelay: `${index * 40}ms` }}
+        onClick={() => onViewDetail(task)}
       >
 
         {/* ── Card body ── */}
@@ -379,12 +553,18 @@ function TaskCard({
                 <typeConf.Icon className="h-3.5 w-3.5" /> {typeConf.label}
               </span>
             ) : null}
+            {hasHook && task.hook && (
+              <Flame className="h-3.5 w-3.5 text-orange-400 shrink-0" title="Has hook" />
+            )}
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.badge}`}>
               <StatusIcon className={`h-3.5 w-3.5 ${task.status === 'in_progress' ? 'animate-spin' : ''}`}
                 style={task.status === 'in_progress' ? { animationDuration: '3s' } : undefined} />
               {status.label}
             </span>
-            <button onClick={() => onSelect(task.id)} className="ml-auto p-1 text-slate-600 hover:text-indigo-400 transition-colors">
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(task.id) }}
+              className="ml-auto p-1 text-slate-600 hover:text-indigo-400 transition-colors"
+            >
               {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
             </button>
           </div>
@@ -393,9 +573,11 @@ function TaskCard({
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0 space-y-1.5">
               <h3 className="font-bold text-white text-[15px] leading-snug line-clamp-2 tracking-tight">{task.title}</h3>
-              {task.description && (
+              {task.hook ? (
+                <p className="text-[13px] text-orange-300/70 line-clamp-1 leading-relaxed italic">{task.hook}</p>
+              ) : task.description ? (
                 <p className="text-[13px] text-slate-400 line-clamp-2 leading-relaxed">{task.description}</p>
-              )}
+              ) : null}
             </div>
             {task.reference_image_url && (
               <img src={task.reference_image_url} alt=""
@@ -440,17 +622,18 @@ function TaskCard({
             <div className="flex items-center gap-1 shrink-0">
               {task.delivery_url && (
                 <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors mr-1">
                   <ExternalLink className="h-3.5 w-3.5" /> Delivery
                 </a>
               )}
               {isAdmin && (
                 <>
-                  <button onClick={() => onEdit(task)}
+                  <button onClick={(e) => { e.stopPropagation(); onEdit(task) }}
                     className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => onDelete(task.id)}
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
                     className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -468,7 +651,7 @@ function TaskCard({
   return (
     <div
       className={`
-        group flex items-stretch rounded-xl
+        group flex items-stretch rounded-xl cursor-pointer
         border-l-[3px] border border-slate-800/80
         ${dueStyle.border} ${dueStyle.bg} ${dueStyle.ring}
         ${selected ? 'bg-indigo-500/[0.03] border-indigo-500/30' : 'hover:border-slate-700 hover:shadow-md hover:shadow-black/20'}
@@ -476,11 +659,15 @@ function TaskCard({
         animate-[task-enter-list_0.35s_ease_both]
       `}
       style={{ animationDelay: `${index * 40}ms` }}
+      onClick={() => onViewDetail(task)}
     >
 
       {/* Checkbox + type icon column */}
       <div className="flex flex-col items-center justify-center gap-2 px-3.5 py-4 shrink-0 border-r border-slate-800/50">
-        <button onClick={() => onSelect(task.id)} className="text-slate-600 hover:text-indigo-400 transition-colors">
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelect(task.id) }}
+          className="text-slate-600 hover:text-indigo-400 transition-colors"
+        >
           {selected ? <CheckSquare className="h-4 w-4 text-indigo-400" /> : <Square className="h-4 w-4" />}
         </button>
         {typeConf && (
@@ -503,10 +690,14 @@ function TaskCard({
           </span>
         </div>
 
-        {/* Row 2: description */}
-        {task.description && (
+        {/* Row 2: hook or description */}
+        {task.hook ? (
+          <p className="text-[13px] text-orange-300/70 line-clamp-1 leading-relaxed italic flex items-center gap-1">
+            <Flame className="h-3 w-3 text-orange-400 shrink-0" />{task.hook}
+          </p>
+        ) : task.description ? (
           <p className="text-[13px] text-slate-400 line-clamp-1 leading-relaxed">{task.description}</p>
-        )}
+        ) : null}
 
         {/* Row 3: meta */}
         <div className="flex items-center gap-3 flex-wrap">
@@ -530,6 +721,7 @@ function TaskCard({
           )}
           {task.delivery_url && (
             <a href={task.delivery_url} target="_blank" rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
               <ExternalLink className="h-3.5 w-3.5" /> Delivery
             </a>
@@ -546,10 +738,12 @@ function TaskCard({
       {/* Admin actions */}
       {isAdmin && (
         <div className="flex items-center gap-0.5 px-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-slate-700/50" onClick={() => onEdit(task)}>
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:bg-slate-700/50"
+            onClick={(e) => { e.stopPropagation(); onEdit(task) }}>
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10" onClick={() => onDelete(task.id)}>
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10"
+            onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}>
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -575,6 +769,7 @@ export default function TasksPage() {
   const [selected,        setSelected]        = useState<Set<string>>(new Set())
   const [open,          setOpen]          = useState(false)
   const [editing,       setEditing]       = useState<Task | null>(null)
+  const [detailTask,    setDetailTask]    = useState<Task | null>(null)
   const [completedOpen, setCompletedOpen] = useState(false)
   const [userRole,      setUserRole]      = useState<string>('')
   const [guardReady,    setGuardReady]    = useState(false)
@@ -902,7 +1097,7 @@ export default function TasksPage() {
           ))}
         </div>
 
-        {/* Custom date range (shown in 'any' mode when dates set, or always for range input) */}
+        {/* Custom date range */}
         {filterDue === 'any' && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Input
@@ -932,7 +1127,7 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Status filter chips (active tasks only — done has its own section) */}
+      {/* Status filter chips */}
       <div className="flex gap-2 flex-wrap items-center">
         {filtered.length > 0 && (
           <button
@@ -1002,6 +1197,7 @@ export default function TasksPage() {
                   isAdmin={isAdmin}
                   onEdit={(t) => { setEditing(t); setOpen(true) }}
                   onDelete={handleDelete}
+                  onViewDetail={setDetailTask}
                 />
               ))}
             </div>
@@ -1036,6 +1232,7 @@ export default function TasksPage() {
                         isAdmin={isAdmin}
                         onEdit={(t) => { setEditing(t); setOpen(true) }}
                         onDelete={handleDelete}
+                        onViewDetail={setDetailTask}
                       />
                     </div>
                   ))}
@@ -1046,12 +1243,31 @@ export default function TasksPage() {
         </div>
       )}
 
+      {/* Edit / Create dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Task' : 'New Task'}</DialogTitle>
           </DialogHeader>
           <TaskForm initial={editing ?? undefined} clients={clients} members={members} onSave={handleSave} onCancel={() => setOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Task detail dialog */}
+      <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o) setDetailTask(null) }}>
+        <DialogContent className="max-w-lg w-full mx-2 sm:mx-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="sr-only">Task Details</DialogTitle>
+          </DialogHeader>
+          {detailTask && (
+            <TaskDetailModal
+              task={detailTask}
+              isAdmin={isAdmin}
+              onClose={() => setDetailTask(null)}
+              onEdit={(t) => { setEditing(t); setOpen(true) }}
+              onDelete={handleDelete}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -119,6 +119,7 @@ export interface Task {
   assignee?: TaskAssignee
   client_id?: string
   client?: Client
+  hook?: string
   delivery_url?: string
   reference_image_url?: string
   scheduled_publish_at?: string

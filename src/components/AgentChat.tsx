@@ -110,77 +110,53 @@ async function parseExcel(file: File): Promise<AttachedFile> {
   const XLSX = await import('xlsx')
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
-  if (wb.SheetNames.length === 0) throw new Error('الملف فاضي')
+  if (rows.length === 0) throw new Error('الملف فاضي')
 
-  // Identify the main content/calendar sheet (largest data sheet)
-  let mainSheetName = wb.SheetNames[0]
-  let mainRows: Record<string, unknown>[] = []
-  let totalRows = 0
+  const headers = Object.keys(rows[0])
+  const MAX_ROWS = 60
+  const displayRows = rows.slice(0, MAX_ROWS)
+  const truncated  = rows.length > MAX_ROWS
 
-  const MAX_ROWS_PER_SHEET = 40
-  const sheetSections: string[] = []
-
-  for (const sheetName of wb.SheetNames) {
-    const ws = wb.Sheets[sheetName]
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
-    const nonEmptyRows = rows.filter(r => Object.values(r).some(v => String(v).trim() !== ''))
-    if (nonEmptyRows.length === 0) continue
-
-    // Track which sheet has the most rows (likely the content calendar)
-    if (nonEmptyRows.length > mainRows.length) {
-      mainRows = nonEmptyRows
-      mainSheetName = sheetName
-    }
-    totalRows += nonEmptyRows.length
-
-    const displayRows = nonEmptyRows.slice(0, MAX_ROWS_PER_SHEET)
-    const truncated = nonEmptyRows.length > MAX_ROWS_PER_SHEET
-    const headers = Object.keys(nonEmptyRows[0] ?? {})
-
-    const formattedRows = displayRows.map((row) => {
-      const pairs = headers
-        .filter(h => String(row[h] ?? '').trim() !== '')
-        .map(h => `    ${h}: ${String(row[h]).trim()}`)
-      return pairs.join('\n')
-    }).filter(Boolean).join('\n  ---\n')
-
-    sheetSections.push(
-      `\n╔══ ${sheetName} ══╗\n` +
-      (truncated ? `  (عارض أول ${MAX_ROWS_PER_SHEET} من ${nonEmptyRows.length} صف)\n` : '') +
-      `  الأعمدة: ${headers.join(' | ')}\n\n` +
-      `${formattedRows}`
-    )
-  }
-
-  if (mainRows.length === 0) throw new Error('الملف فاضي')
+  // Format each row as labeled key→value pairs so the agent can clearly map columns
+  const formattedRows = displayRows.map((row, idx) => {
+    const pairs = headers
+      .filter(h => String(row[h] ?? '').trim() !== '')
+      .map(h => `  ${h}: ${String(row[h]).trim()}`)
+    return `◆ قطعة ${idx + 1}:\n${pairs.join('\n')}`
+  }).join('\n\n')
 
   const fullText =
-    `📋 ملف: "${file.name}" — ${wb.SheetNames.length} sheets — ${totalRows} صف إجمالي\n` +
-    `الـ Sheets: ${wb.SheetNames.join(' | ')}\n` +
-    sheetSections.join('\n')
+    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى${truncated ? ` (عارض أول ${MAX_ROWS} فقط)` : ''}\n` +
+    `الأعمدة المتاحة: ${headers.join(' | ')}\n\n` +
+    `═══ البيانات ═══\n${formattedRows}`
 
-  const mainHeaders = Object.keys(mainRows[0] ?? {})
-  return { name: file.name, rowCount: totalRows, headers: mainHeaders, fullText }
+  return { name: file.name, rowCount: rows.length, headers, fullText }
+}
+
+const INITIAL_MESSAGE: ChatMessage = {
+  role: 'assistant',
+  text: 'أهلاً! أنا مديرك التنفيذي الذكي — 37 صلاحية تنفيذية كاملة.\n\n**ارفع خطة الميديا باير وأنا أتعامل مع كل حاجة:**\n• 🎯 إنشاء الكمبانيات + خطط المحتوى + التاسكات دفعة واحدة\n• 👥 توزيع الفريق بناءً على الأعباء الفعلية\n• 📦 متابعة استهلاك باقات العملاء + تنبيه التجديد\n• 💰 إنشاء فواتير + تذكيرات دفع ذكية للعملاء\n• ⚠️ مراقبة التأخيرات + إيميلات مخصصة للفريق\n• 📊 تقارير يومية + تقارير للعملاء على إيميلهم\n• 🧠 ذاكرة دائمة بين الجلسات\n\n**أنت تركز على السيلز — أنا أدير الباقي.**\nارفع ملف Excel أو اكتب أمرك.',
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AgentChat() {
   const [open, setOpen]             = useState(false)
+  const [minimized, setMinimized]   = useState(false)
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [attached, setAttached]     = useState<AttachedFile | null>(null)
   const [parseError, setParseError] = useState('')
-  const [chat, setChat]             = useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      text: 'أهلاً! أنا مديرك التنفيذي الذكي — 37 صلاحية تنفيذية كاملة.\n\n**ارفع خطة الميديا باير وأنا أتعامل مع كل حاجة:**\n• 🎯 إنشاء الكمبانيات + خطط المحتوى + التاسكات دفعة واحدة\n• 👥 توزيع الفريق بناءً على الأعباء الفعلية\n• 📦 متابعة استهلاك باقات العملاء + تنبيه التجديد\n• 💰 إنشاء فواتير + تذكيرات دفع ذكية للعملاء\n• ⚠️ مراقبة التأخيرات + إيميلات مخصصة للفريق\n• 📊 تقارير يومية + تقارير للعملاء على إيميلهم\n• 🧠 ذاكرة دائمة بين الجلسات\n\n**أنت تركز على السيلز — أنا أدير الباقي.**\nارفع ملف Excel أو اكتب أمرك.',
-    },
-  ])
+  const [chat, setChat]             = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [history, setHistory] = useState<HistoryMessage[]>([])
   const bottomRef             = useRef<HTMLDivElement>(null)
   const textareaRef           = useRef<HTMLTextAreaElement>(null)
   const fileRef               = useRef<HTMLInputElement>(null)
+
+  // Chat has content beyond the first greeting
+  const hasActiveConversation = chat.length > 1
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -217,29 +193,22 @@ export default function AgentChat() {
     if (attached) {
       const userNote = text ? `\n\nملاحظة من المدير: ${text}` : ''
       const intro =
-        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} صف في ${attached.headers.length > 0 ? 'عدة sheets' : 'sheet واحد'}\n\n` +
+        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} قطعة\n\n` +
         `${attached.fullText}` +
         `${userNote}\n\n` +
         `══════════════════════════\n` +
-        `تعليمات التحليل والتنفيذ:\n` +
-        `\n` +
+        `⚡ القاعدة الأهم: الخطة المرفوعة هي المرجع الوحيد — التزم بها 100% دون إضافة أو تعديل.\n\n` +
+        `تعليمات التنفيذ:\n` +
         `١. ابدأ بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
-        `\n` +
-        `٢. ادرس الملف بعمق — لا تبدأ التنفيذ قبل ما تفهم:\n` +
-        `   • الـ Positioning والـ USP (من sheet الـ Overview)\n` +
-        `   • الجمهور المستهدف وأهداف الشهر\n` +
-        `   • أولويات المحتوى (إيه أهم قطعة وليه)\n` +
-        `   • كل قطعة وبريفها التفصيلي من sheets الـ Reels والـ Designs\n` +
-        `\n` +
-        `٣. أنشئ التاسكات بذكاء لا ميكانيكياً:\n` +
-        `   • title = عنوان جذاب يعكس الفكرة والـ hook (مش مجرد نسخ من الملف)\n` +
-        `   • description = الـ brief الكامل + الـ hook + تفاصيل التنفيذ + الأولوية الاستراتيجية\n` +
-        `   • task_type: ريلز→reel_video | تصميم→design | فيديو AI→ai_video | stories→custom\n` +
-        `   • due_date = تاريخ التسليم الداخلي (reel = يوم النشر -3 أيام | design = -1 يوم)\n` +
-        `   • وزّع الفريق حسب الأعباء الفعلية — مش عشوائي\n` +
-        `\n` +
-        `٤. IMPORTANT: قاعدة "+5 tasks = اطلب تأكيد" لا تنطبق هنا — نفّذ كل التاسكات دفعة واحدة\n` +
-        `٥. بعد التنفيذ: notify_all_team + ملخص استراتيجي بالأرقام والأولويات`
+        `٢. اقرأ كل الـ sheets واستخرج: النوع + الهوك + البريف + تاريخ النشر + المنصات لكل قطعة\n` +
+        `٣. لو العميل مش واضح → سؤال واحد فقط ثم نفّذ فور الرد\n` +
+        `٤. أنشئ الخطة بـ create_content_plan واحدة تشمل كل قطع reel/design/ai_video:\n` +
+        `   • title: من الملف كما هو | hook: الهوك كما هو | notes: البريف الكامل\n` +
+        `   • publish_date من الملف | internal_due_date = publish − SLA (reel: -3أيام | design: -1يوم)\n` +
+        `   • assigned_to حسب الأعباء | platforms من الملف\n` +
+        `   ← create_content_plan تنشئ تلقائياً الخطة + عناصرها + تاسك مرتبط لكل عنصر\n` +
+        `٥. import_content_plan فقط لو في post/custom خارج الـ content plan\n` +
+        `٦. notify_all_team + ملخص: "✅ خطة [العميل]: Y ريلز + Z تصاميم + W AI video"`
       messageText = intro
       displayText = text ? `📊 ${attached.name} — ${attached.rowCount} قطعة | ${text}` : `📊 ${attached.name} — ${attached.rowCount} قطعة محتوى`
     }
@@ -287,16 +256,29 @@ export default function AgentChat() {
     <>
       {/* ── Floating button ─────────────────────────────────────────────────── */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          if (minimized) { setMinimized(false); setOpen(true) }
+          else setOpen(o => !o)
+        }}
         dir="rtl"
         className="fixed bottom-6 left-6 z-50 flex items-center gap-2.5 rounded-2xl bg-gradient-to-br from-violet-700 to-violet-900 px-3.5 py-2.5 text-white shadow-2xl shadow-violet-950/60 hover:from-violet-600 hover:to-violet-800 transition-all duration-200 border border-violet-600/30"
       >
-        <RobotAvatar size={26} active={loading} />
-        {!open && <span className="text-sm font-semibold hidden sm:block">المساعد الذكي</span>}
+        <div className="relative">
+          <RobotAvatar size={26} active={loading} />
+          {/* Minimized indicator: pulsing dot when conversation is active and minimized */}
+          {minimized && hasActiveConversation && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-violet-400 border-2 border-violet-900 animate-pulse" />
+          )}
+        </div>
+        {(!open || minimized) && (
+          <span className="text-sm font-semibold hidden sm:block">
+            {minimized ? 'استكمل المحادثة' : 'المساعد الذكي'}
+          </span>
+        )}
       </button>
 
       {/* ── Chat window ─────────────────────────────────────────────────────── */}
-      {open && (
+      {open && !minimized && (
         <div
           dir="rtl"
           className="fixed bottom-[5rem] left-6 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-black/70 border border-slate-700/40"
@@ -323,16 +305,21 @@ export default function AgentChat() {
             {/* Left side: actions */}
             <div className="flex items-center gap-1" dir="ltr">
               <button
-                onClick={() => { setChat([{ role: 'assistant', text: 'محادثة جديدة. أنا جاهز.' }]); setHistory([]); setAttached(null) }}
+                onClick={() => { setChat([INITIAL_MESSAGE]); setHistory([]); setAttached(null); setMinimized(false) }}
                 className="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                title="محادثة جديدة"
               >
                 جديد
               </button>
+              {/* Minimize — preserves conversation */}
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => setMinimized(true)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="تصغير"
               >
-                ✕
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                  <path d="M5 12h14" />
+                </svg>
               </button>
             </div>
           </div>

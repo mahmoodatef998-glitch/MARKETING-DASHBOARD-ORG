@@ -401,11 +401,12 @@ function AddItemDialog({
 // ─── Plan Card ────────────────────────────────────────────────────────────────
 
 function PlanCard({
-  plan, onSelect, selected,
+  plan, onSelect, selected, onDelete,
 }: {
   plan: ContentPlan
   onSelect: () => void
   selected: boolean
+  onDelete: (id: string) => void
 }) {
   const byType = CONTENT_TYPES.map(t => ({
     ...t,
@@ -416,22 +417,30 @@ function PlanCard({
     <Card
       onClick={onSelect}
       className={cn(
-        'cursor-pointer transition-all hover:border-indigo-500/50',
+        'cursor-pointer transition-all hover:border-indigo-500/50 group',
         selected ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 bg-slate-900'
       )}
     >
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="font-semibold text-slate-100 text-sm">{plan.title}</p>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-slate-100 text-sm truncate">{plan.title}</p>
             <p className="text-xs text-slate-500 mt-0.5">
               {new Date(plan.month).toLocaleString('en-US', { month: 'long', year: 'numeric' })}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', PLAN_STATUS_STYLE[plan.status])}>
               {plan.status}
             </span>
+            {/* Delete button — visible on hover */}
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(plan.id) }}
+              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Delete plan"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
             <ChevronRight className={cn('h-4 w-4 text-slate-600 transition-transform', selected && 'rotate-90 text-indigo-400')} />
           </div>
         </div>
@@ -588,6 +597,26 @@ export default function ContentPlansPage() {
     toast('Item removed', 'success')
   }
 
+  async function handleDeletePlan(planId: string) {
+    const plan = plans.find(p => p.id === planId)
+    if (!plan) return
+    const itemCount = (plan.items ?? []).length
+    const msg = itemCount > 0
+      ? `هتحذف خطة "${plan.title}" وكل الـ ${itemCount} تاسكات الجوه؟ مش هترجع تاني.`
+      : `هتحذف خطة "${plan.title}"؟`
+    if (!confirm(msg)) return
+
+    const res = await fetch(`/api/content-plans/${planId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      toast(d.error ?? 'فشل الحذف', 'error')
+      return
+    }
+    setPlans(prev => prev.filter(p => p.id !== planId))
+    if (selectedPlan?.id === planId) setSelectedPlan(null)
+    toast('تم حذف الخطة', 'success')
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -653,6 +682,7 @@ export default function ContentPlansPage() {
                 plan={plan}
                 selected={selectedPlan?.id === plan.id}
                 onSelect={() => setSelectedPlan(plan)}
+                onDelete={handleDeletePlan}
               />
             ))}
           </div>
@@ -661,14 +691,24 @@ export default function ContentPlansPage() {
           <div className="lg:col-span-3">
             {selectedPlan ? (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-100">{selectedPlan.title}</h2>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-bold text-slate-100 truncate">{selectedPlan.title}</h2>
                     <p className="text-sm text-slate-500">{(selectedPlan.items ?? []).length} items</p>
                   </div>
-                  <Button size="sm" onClick={() => setAddItemOpen(true)}>
-                    <Plus className="h-4 w-4 mr-1.5" /> Add Content
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeletePlan(selectedPlan.id)}
+                      className="text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" onClick={() => setAddItemOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1.5" /> Add Content
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Items by type */}
