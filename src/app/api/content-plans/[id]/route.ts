@@ -50,17 +50,23 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const admin = createAdminClient()
 
-  // Only allow deletion of draft plans
-  const { data: plan } = await admin
-    .from('content_plans')
-    .select('status')
-    .eq('id', id)
-    .single()
+  // Soft-delete all tasks linked through this plan's items before deleting the plan
+  const { data: items } = await admin
+    .from('content_plan_items')
+    .select('task_id')
+    .eq('plan_id', id)
+    .not('task_id', 'is', null)
 
-  if (plan?.status !== 'draft') {
-    return NextResponse.json({ error: 'Only draft plans can be deleted' }, { status: 409 })
+  const taskIds = (items ?? []).map((i: { task_id: string | null }) => i.task_id).filter(Boolean) as string[]
+
+  if (taskIds.length > 0) {
+    await admin
+      .from('tasks')
+      .update({ deleted_at: new Date().toISOString(), plan_item_id: null })
+      .in('id', taskIds)
   }
 
+  // Delete the plan — items and publish_events cascade automatically
   const { error } = await admin.from('content_plans').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
