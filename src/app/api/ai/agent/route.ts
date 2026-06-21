@@ -75,15 +75,17 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   // ── Tasks ─────────────────────────────────────────────────────────────────
   {
     name: 'get_tasks',
-    description: 'جلب التاسكات مع فلاتر اختيارية (حالة، عميل، نوع، بحث بالعنوان)',
+    description: 'جلب التاسكات مع فلاتر اختيارية (حالة، عميل، نوع، بحث بالعنوان، غير معينة)',
     parameters: schema({
       type: obj,
       properties: {
         status:      enumStr(['todo', 'in_progress', 'review', 'done', 'overdue'], 'فلتر بالحالة'),
         client_name: { type: str, description: 'اسم العميل' },
+        client_id:   { type: str, description: 'ID العميل (بديل لاسم العميل)' },
         task_type:   enumStr(['reel_video', 'design', 'ai_video', 'post', 'custom'], 'نوع التاسك'),
         search:      { type: str, description: 'بحث بكلمة في عنوان التاسك' },
-        limit:       { type: num, description: 'عدد النتائج (افتراضي 20)' },
+        unassigned:  { type: str, description: '"true" لجلب التاسكات غير المعينة فقط' },
+        limit:       { type: num, description: 'عدد النتائج (افتراضي 50)' },
       },
     }),
   },
@@ -102,6 +104,32 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         priority:    enumStr(['low', 'medium', 'high', 'urgent'], 'الأولوية'),
       },
       required: ['title', 'task_type', 'due_date'],
+    }),
+  },
+  {
+    name: 'delete_task',
+    description: 'حذف تاسك واحد نهائياً من السيستم — استخدمه عندما يطلب المدير حذف تاسك محدد. لو مش عندك الـ ID، استخدم get_tasks أولاً للبحث عنه.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        task_id: { type: str, description: 'ID التاسك المراد حذفه' },
+      },
+      required: ['task_id'],
+    }),
+  },
+  {
+    name: 'bulk_delete_tasks',
+    description: 'حذف مجموعة تاسكات دفعة واحدة — مفيد لحذف تاسكات غير معينة أو إدارية. لو المدير قال "احذف التاسكات غير المعينة لـ X" → استخدم get_tasks أولاً للحصول على الـ IDs ثم استدعِ هذه الأداة.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        task_ids: {
+          type: arr,
+          items: { type: str },
+          description: 'قائمة IDs التاسكات المراد حذفها',
+        },
+      },
+      required: ['task_ids'],
     }),
   },
   {
@@ -631,13 +659,15 @@ async function executeTool(
     case 'get_tasks': {
       let query = admin
         .from('tasks')
-        .select('id, title, status, priority, task_type, due_date, assignee:profiles!assigned_to(id, display_name, role), client:clients(id, name)')
+        .select('id, title, status, priority, task_type, due_date, assigned_to, assignee:profiles!assigned_to(id, display_name, role), client:clients(id, name)')
         .is('deleted_at', null)
         .order('due_date', { ascending: true })
-        .limit(Number(args.limit ?? 20))
+        .limit(Number(args.limit ?? 50))
 
       if (args.status)    query = query.eq('status', String(args.status))
       if (args.task_type) query = query.eq('task_type', String(args.task_type))
+      if (args.client_id) query = query.eq('client_id', String(args.client_id))
+      if (String(args.unassigned) === 'true') query = query.is('assigned_to', null)
 
       const { data, error } = await query
       if (error) return { error: error.message }
@@ -673,6 +703,25 @@ async function executeTool(
       }).select('id, title, task_type, due_date').single()
       if (error) return { error: error.message }
       return { success: true, task: data }
+    }
+
+    case 'delete_task': {
+      const taskId = String(args.task_id)
+      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).is('deleted_at', null).single()
+      if (!task) return { error: 'التاسك مش موجود أو محذوف بالفعل' }
+      const { error } = await admin.from('tasks').update({ deleted_at: now.toISOString() }).eq('id', taskId)
+      if (error) return { error: error.message }
+      return { success: true, deleted: task.title }
+    }
+
+    case 'bulk_delete_tasks': {
+      const ids = args.task_ids as string[]
+      if (!Array.isArray(ids) || ids.length === 0) return { error: 'مفيش IDs للحذف' }
+      const { data: tasks } = await admin.from('tasks').select('id, title').in('id', ids).is('deleted_at', null)
+      if (!tasks || tasks.length === 0) return { error: 'مفيش تاسكات موجودة بهذه الـ IDs' }
+      const { error } = await admin.from('tasks').update({ deleted_at: now.toISOString() }).in('id', ids)
+      if (error) return { error: error.message }
+      return { success: true, deleted_count: tasks.length, deleted_tasks: tasks.map(t => t.title) }
     }
 
     case 'import_content_plan': {
@@ -2132,8 +2181,16 @@ get_client_health دوري:
    - agent_remember, agent_recall
 
 ⚠️ يحتاج تأكيد المدير:
-   - update_invoice_status("paid") ← مالي حساس
-   - أي حذف لبيانات
+   - update_invoice_status("paid") ← مالي حساس فقط
+
+═══ قواعد الحذف ═══
+- لو المدير طلب حذف تاسكات → نفّذ مباشرة بدون سؤال
+- لا تطلب من المدير أي IDs أبداً — جلّبها أنت:
+  1. get_tasks(client_name="...", unassigned="true") أو get_tasks(task_type="custom", client_name="...")
+  2. bulk_delete_tasks(task_ids=[...كل الـ IDs اللي جبتها...])
+- لو المدير قال "احذف التاسكات غير المعينة لـ X" → خطوتان فقط: get_tasks ثم bulk_delete_tasks
+- لا تقل أبداً "لا يوجد لدي صلاحية للحذف" — delete_task و bulk_delete_tasks موجودتان
+- بعد الحذف أكّد: "✅ تم حذف X تاسك"
 
 ═══ التقارير اليومية ═══
 get_progress_report → إنجاز% + تأخيرات + مواعيد + توصيات
