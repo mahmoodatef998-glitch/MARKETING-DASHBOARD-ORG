@@ -1298,15 +1298,22 @@ export default function InvoicesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this invoice?')) return
+  async function handleDelete(id: string, status: string) {
+    const isPaid    = status === 'paid'
+    const isActive  = status === 'sent' || status === 'overdue'
+    const msg = isPaid
+      ? '⚠️ تحذير مالي\n\nهذه الفاتورة محتسبة في الإيرادات والتقارير المالية.\n\nحذفها سيشيلها فوراً من كل الأرقام — الإيرادات، الأرباح، ونسبة التحصيل.\n\nهل أنت متأكد من الحذف النهائي؟'
+      : isActive
+      ? '⚠️ هذه الفاتورة مستحقة الدفع.\n\nحذفها يشيلها من حسابات الإيرادات المنتظرة والتقارير المالية.\n\nهل أنت متأكد؟'
+      : 'حذف هذه الفاتورة نهائياً؟'
+    if (!confirm(msg)) return
     const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' })
     if (res.ok) {
-      toast('Invoice deleted', 'success')
+      toast('تم حذف الفاتورة', 'success')
       setDetailInv(null)
       load()
     } else {
-      toast('Failed to delete', 'error')
+      toast('فشل الحذف — حاول مرة تانية', 'error')
     }
   }
 
@@ -1451,7 +1458,7 @@ export default function InvoicesPage() {
             setInvoices(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
           }}
           onEdit={() => { setEditing(detailInv); setDetailInv(null); setFormOpen(true) }}
-          onDelete={() => handleDelete(detailInv.id)}
+          onDelete={() => handleDelete(detailInv.id, detailInv.status)}
           onRenew={() => { setDetailInv(null); void load() }}
         />
       )}

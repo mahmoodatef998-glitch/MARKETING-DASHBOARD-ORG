@@ -13,6 +13,8 @@ import { generateId } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
 import { generateSmartAgentEmail, generateClientReportEmail } from '@/lib/gemini'
 import { sendEmail } from '@/lib/gmail'
+import { anthropic } from '@/lib/anthropic'
+import type Anthropic from '@anthropic-ai/sdk'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const AGENT_MODEL = 'gemini-2.5-flash'
@@ -731,7 +733,7 @@ async function executeTool(
       const taskId = String(args.task_id)
 
       // Verify task exists
-      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).single()
+      const { data: task } = await admin.from('tasks').select('id, title').eq('id', taskId).is('deleted_at', null).single()
       if (!task) return { error: 'التاسك مش موجود' }
 
       const { error } = await admin.from('task_comments').insert({
@@ -753,17 +755,22 @@ async function executeTool(
         .neq('role', 'admin')
         .neq('role', 'client')
 
-      const teamWithTasks = await Promise.all(
-        (profiles ?? []).map(async (p) => {
-          const { count } = await admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', p.id)
+      const memberIds = (profiles ?? []).map(p => p.id)
+      // Single query for all active task counts — avoids N+1
+      const { data: activeTasks } = memberIds.length > 0
+        ? await admin.from('tasks')
+            .select('assigned_to')
+            .in('assigned_to', memberIds)
             .not('status', 'in', '("done","overdue")')
             .is('deleted_at', null)
-          return { ...p, active_tasks: count ?? 0 }
-        })
-      )
-      return { team: teamWithTasks }
+        : { data: [] }
+
+      const countMap: Record<string, number> = {}
+      for (const t of activeTasks ?? []) {
+        if (t.assigned_to) countMap[t.assigned_to] = (countMap[t.assigned_to] ?? 0) + 1
+      }
+
+      return { team: (profiles ?? []).map(p => ({ ...p, active_tasks: countMap[p.id] ?? 0 })) }
     }
 
     case 'get_team_delay_analysis': {
@@ -772,44 +779,45 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, upcoming, inProgress] = await Promise.all([
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review', 'overdue'])
-            .lt('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true }),
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .gte('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true })
-            .limit(5),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-        ])
+      const memberIds = (members ?? []).map(m => m.id)
 
-        const overdueTasks = (overdue.data ?? []).map(t => ({
-          ...t,
-          days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000),
-        }))
+      // Two bulk queries instead of 3 per member
+      const [overdueRes, upcomingRes] = memberIds.length > 0 ? await Promise.all([
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+          .lt('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, status, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review'])
+          .gte('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+      ]) : [{ data: [] }, { data: [] }]
+
+      const analysis = (members ?? []).map(member => {
+        const overdueTasks = (overdueRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .map(t => ({ ...t, days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000) }))
+        const upcomingTasks = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .slice(0, 5)
+        const inProgressCount = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id && t.status === 'in_progress').length
 
         return {
           member: { id: member.id, name: member.display_name, email: member.email, role: member.role },
           overdue_count:     overdueTasks.length,
-          in_progress_count: inProgress.count ?? 0,
+          in_progress_count: inProgressCount,
           overdue_tasks:     overdueTasks,
-          upcoming_tasks:    upcoming.data ?? [],
+          upcoming_tasks:    upcomingTasks,
           needs_attention:   overdueTasks.length > 0,
         }
-      }))
+      })
 
       const membersWithDelays = analysis.filter(m => m.overdue_count > 0)
       return {
@@ -825,41 +833,26 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
+      const memberIds = (members ?? []).map(m => m.id)
       const in7days = new Date(now)
       in7days.setDate(in7days.getDate() + 7)
       const in7daysStr = in7days.toISOString().split('T')[0]
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, urgent_due, in_progress, total_active] = await Promise.all([
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .lt('due_date', today)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .gte('due_date', today)
-            .lte('due_date', in7daysStr)
-            .in('status', ['todo', 'in_progress'])
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
+      // Single query for all active tasks — replaces N×4 parallel queries
+      const { data: allTasks } = memberIds.length > 0
+        ? await admin.from('tasks')
+            .select('assigned_to, status, due_date')
+            .in('assigned_to', memberIds)
             .not('status', 'in', '("done")')
-            .is('deleted_at', null),
-        ])
+            .is('deleted_at', null)
+        : { data: [] }
 
-        const overdueCount   = overdue.count ?? 0
-        const urgentCount    = urgent_due.count ?? 0
-        const inProgCount    = in_progress.count ?? 0
-        const totalActive    = total_active.count ?? 0
+      const analysis = (members ?? []).map(member => {
+        const myTasks = (allTasks ?? []).filter(t => t.assigned_to === member.id)
+        const overdueCount = myTasks.filter(t => t.due_date < today && ['todo','in_progress','review'].includes(t.status)).length
+        const urgentCount  = myTasks.filter(t => t.due_date >= today && t.due_date <= in7daysStr && ['todo','in_progress'].includes(t.status)).length
+        const inProgCount  = myTasks.filter(t => t.status === 'in_progress').length
+        const totalActive  = myTasks.length
 
         // Pressure score: 0–100
         const pressure = Math.min(100,
@@ -874,16 +867,16 @@ async function executeTool(
 
         return {
           member: { id: member.id, name: member.display_name, role: member.role },
-          pressure_score:  pressure,
-          workload_level:  level,
-          overdue_count:   overdueCount,
-          urgent_week:     urgentCount,
-          in_progress:     inProgCount,
-          total_active:    totalActive,
-          can_take_more:   pressure < 50,
-          needs_help:      pressure >= 85,
+          pressure_score: pressure,
+          workload_level: level,
+          overdue_count:  overdueCount,
+          urgent_week:    urgentCount,
+          in_progress:    inProgCount,
+          total_active:   totalActive,
+          can_take_more:  pressure < 50,
+          needs_help:     pressure >= 85,
         }
-      }))
+      })
 
       analysis.sort((a, b) => b.pressure_score - a.pressure_score)
 
@@ -1004,6 +997,7 @@ async function executeTool(
         .from('clients')
         .select('id, name, email')
         .eq('id', clientId)
+        .is('deleted_at', null)
         .single()
 
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
@@ -1058,7 +1052,7 @@ async function executeTool(
       const clientId = String(args.client_id)
 
       const [client, allTasks, invoices, meetings, campaigns, scheduledPosts, packages, billingPlan] = await Promise.all([
-        admin.from('clients').select('id, name, email, status, country, phone, notes').eq('id', clientId).single(),
+        admin.from('clients').select('id, name, email, status, country, phone, notes').eq('id', clientId).is('deleted_at', null).single(),
         admin.from('tasks').select('id, title, status, priority, task_type, due_date, updated_at').eq('client_id', clientId).is('deleted_at', null).order('due_date', { ascending: true }),
         admin.from('invoices').select('id, invoice_number, total, status, due_date, issued_date').eq('client_id', clientId).is('deleted_at', null).order('issued_date', { ascending: false }).limit(10),
         admin.from('meetings').select('id, title, scheduled_at, status, notes').eq('client_id', clientId).order('scheduled_at', { ascending: false }).limit(5),
@@ -1297,7 +1291,7 @@ async function executeTool(
     case 'send_payment_reminder': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).is('deleted_at', null).single()
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
 
       let invoicesQuery = admin.from('invoices').select('id, invoice_number, total, currency, due_date, status').eq('client_id', clientId).is('deleted_at', null).in('status', ['sent', 'overdue'])
@@ -1346,7 +1340,7 @@ async function executeTool(
     case 'create_content_plan': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const planId = generateId()
@@ -1406,7 +1400,7 @@ async function executeTool(
     case 'create_client_package': {
       const clientId = String(args.client_id)
 
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const pkgId = generateId()
@@ -1525,7 +1519,7 @@ async function executeTool(
     // ── Billing & Campaigns ───────────────────────────────────────────────────
     case 'create_invoice': {
       const clientId = String(args.client_id)
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const rawItems = args.items as Array<{ description: string; quantity: number; unit_price: number }>
@@ -1575,7 +1569,7 @@ async function executeTool(
 
     case 'create_campaign': {
       const clientId = String(args.client_id)
-      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
       const { data, error } = await admin.from('campaigns').insert({
@@ -1641,7 +1635,7 @@ async function executeTool(
       const situation = String(args.situation)
       const tone      = (args.tone as 'gentle' | 'firm' | 'urgent') ?? 'gentle'
 
-      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).single()
+      const { data: client } = await admin.from('clients').select('id, name, email').eq('id', clientId).is('deleted_at', null).single()
       if (!client?.email) return { error: 'العميل مش موجود أو مفيش إيميل' }
 
       const emailContent = await generateSmartAgentEmail({
@@ -1664,7 +1658,7 @@ async function executeTool(
 
     case 'update_client': {
       const clientId = String(args.client_id)
-      const { data: existing } = await admin.from('clients').select('id, name').eq('id', clientId).single()
+      const { data: existing } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!existing) return { error: 'العميل مش موجود' }
 
       const updates: Record<string, unknown> = { updated_at: now.toISOString() }
@@ -1919,44 +1913,45 @@ async function executeTool(
         .select('id, display_name, email, role')
         .not('role', 'in', '("admin","client")')
 
-      const analysis = await Promise.all((members ?? []).map(async (member) => {
-        const [overdue, upcoming, inProgress] = await Promise.all([
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review', 'overdue'])
-            .lt('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true }),
-          admin.from('tasks')
-            .select('id, title, due_date, priority, task_type, client:clients(name)')
-            .eq('assigned_to', member.id)
-            .in('status', ['todo', 'in_progress', 'review'])
-            .gte('due_date', today)
-            .is('deleted_at', null)
-            .order('due_date', { ascending: true })
-            .limit(5),
-          admin.from('tasks')
-            .select('id', { count: 'exact', head: true })
-            .eq('assigned_to', member.id)
-            .eq('status', 'in_progress')
-            .is('deleted_at', null),
-        ])
+      const memberIds = (members ?? []).map(m => m.id)
 
-        const overdueTasks = (overdue.data ?? []).map(t => ({
-          ...t,
-          days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000),
-        }))
+      // Two bulk queries instead of 3 per member
+      const [overdueRes, upcomingRes] = memberIds.length > 0 ? await Promise.all([
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review', 'overdue'])
+          .lt('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+        admin.from('tasks')
+          .select('id, title, due_date, priority, task_type, status, assigned_to, client:clients(name)')
+          .in('assigned_to', memberIds)
+          .in('status', ['todo', 'in_progress', 'review'])
+          .gte('due_date', today)
+          .is('deleted_at', null)
+          .order('due_date', { ascending: true }),
+      ]) : [{ data: [] }, { data: [] }]
+
+      const analysis = (members ?? []).map(member => {
+        const overdueTasks = (overdueRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .map(t => ({ ...t, days_overdue: Math.floor((now.getTime() - new Date(t.due_date).getTime()) / 86400000) }))
+        const upcomingTasks = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id)
+          .slice(0, 5)
+        const inProgressCount = (upcomingRes.data ?? [])
+          .filter(t => t.assigned_to === member.id && t.status === 'in_progress').length
 
         return {
           member: { id: member.id, name: member.display_name, email: member.email, role: member.role },
           overdue_count:     overdueTasks.length,
-          in_progress_count: inProgress.count ?? 0,
+          in_progress_count: inProgressCount,
           overdue_tasks:     overdueTasks,
-          upcoming_tasks:    upcoming.data ?? [],
+          upcoming_tasks:    upcomingTasks,
           needs_attention:   overdueTasks.length > 0,
         }
-      }))
+      })
 
       const membersWithDelays = analysis.filter(m => m.overdue_count > 0)
       return {
@@ -2154,6 +2149,87 @@ get_financial_overview → إيرادات + أرباح + مخاطر
   ⚡ EXCEPTION: رسائل [EXCEL_IMPORT] مُعفاة تماماً من قاعدة +5 تاسكات — نفّذ كل التاسكات دفعة واحدة فور استلام الملف
 - خطأ في أداة → وضّح + اقترح بديل`
 
+// ── Claude fallback loop ──────────────────────────────────────────────────────
+
+async function runClaudeLoop(
+  messages: HistoryMessage[],
+  ctx: { adminUserId: string }
+): Promise<{ reply: string; messages: HistoryMessage[] }> {
+  // Convert Gemini FUNCTION_DECLARATIONS → Anthropic tool format
+  // Gemini uses SchemaType enums ('object','string'...) which are JSON-Schema-compatible
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tools: Anthropic.Tool[] = FUNCTION_DECLARATIONS.map(fn => ({
+    name:        fn.name,
+    description: fn.description,
+    input_schema: {
+      type:       'object' as const,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      properties: (fn.parameters as any)?.properties ?? {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      required:   (fn.parameters as any)?.required   ?? [],
+    },
+  }))
+
+  // Anthropic uses 'assistant' where Gemini uses 'model'
+  type AnthrMsg = Anthropic.MessageParam
+  let currentMessages: AnthrMsg[] = messages.map(m => ({
+    role:    (m.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant',
+    content: m.text,
+  }))
+
+  const MAX_ROUNDS = 30
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const response = await anthropic.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system:     SYSTEM_PROMPT,
+      tools,
+      messages:   currentMessages,
+    })
+
+    if (response.stop_reason === 'end_turn') {
+      const textBlock = response.content.find(b => b.type === 'text') as Anthropic.TextBlock | undefined
+      const reply = textBlock?.text ?? ''
+      return {
+        reply,
+        messages: [...messages, { role: 'model', text: reply }],
+      }
+    }
+
+    if (response.stop_reason === 'tool_use') {
+      const toolBlocks = response.content.filter(b => b.type === 'tool_use') as Anthropic.ToolUseBlock[]
+
+      // Push assistant turn (may contain text + tool_use blocks)
+      currentMessages.push({ role: 'assistant', content: response.content as Anthropic.ContentBlock[] })
+
+      // Execute tools in parallel
+      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolBlocks.map(async block => {
+          let result: unknown
+          try {
+            result = await executeTool(block.name, block.input as Record<string, unknown>, ctx)
+          } catch (err) {
+            result = { error: err instanceof Error ? err.message : String(err) }
+          }
+          return {
+            type:        'tool_result' as const,
+            tool_use_id: block.id,
+            content:     JSON.stringify(result),
+          }
+        })
+      )
+
+      currentMessages.push({ role: 'user', content: toolResults })
+      continue
+    }
+
+    break
+  }
+
+  throw new Error('Claude loop exceeded max rounds')
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -2165,7 +2241,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin', 'media_buyer'].includes(profile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: { messages?: HistoryMessage[] }
   try { body = await req.json() } catch {
@@ -2185,6 +2261,8 @@ export async function POST(req: NextRequest) {
     model: AGENT_MODEL,
     tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
     systemInstruction: SYSTEM_PROMPT,
+    // Disable extended thinking to reduce per-round latency in agentic loops
+    generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as Record<string, unknown>,
   })
 
   const geminiHistory = history.map(m => ({
@@ -2232,9 +2310,15 @@ export async function POST(req: NextRequest) {
       currentMessage = functionResponses
     }
   } catch (err) {
-    console.error('[Agent] loop error:', err)
-    const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: `حدث خطأ في المساعد: ${msg}` }, { status: 500 })
+    console.error('[Agent] Gemini loop error — falling back to Claude:', err)
+    try {
+      const result = await runClaudeLoop(messages, ctx)
+      return NextResponse.json(result)
+    } catch (claudeErr) {
+      console.error('[Agent] Claude fallback also failed:', claudeErr)
+      const msg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr)
+      return NextResponse.json({ error: `حدث خطأ في المساعد: ${msg}` }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ error: 'Agent loop exceeded max rounds' }, { status: 500 })
