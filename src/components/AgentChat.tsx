@@ -106,34 +106,118 @@ function MessageText({ text }: { text: string }) {
 }
 
 // ── Excel parser ──────────────────────────────────────────────────────────────
+// Parse a sheet that has a merged-title row 0 and real headers in row 1
+function sheetToStructuredRows(XLSX: typeof import('xlsx'), ws: import('xlsx').WorkSheet): Record<string, string>[] {
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { defval: '', header: 1 }) as unknown[][]
+  if (raw.length < 2) return []
+  // Row 0 may be a merged title row; row 1 is headers
+  const headerRow = raw[1] as string[]
+  const dataRows  = raw.slice(2)
+  return dataRows
+    .map(r => {
+      const row = r as unknown[]
+      const obj: Record<string, string> = {}
+      headerRow.forEach((h, i) => {
+        const key = String(h ?? '').trim()
+        if (!key || key.startsWith('__')) return
+        const val = String(row[i] ?? '').trim()
+        if (val) obj[key] = val
+      })
+      return obj
+    })
+    .filter(obj => Object.keys(obj).length > 0)
+}
+
 async function parseExcel(file: File): Promise<AttachedFile> {
   const XLSX = await import('xlsx')
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
-  if (rows.length === 0) throw new Error('الملف فاضي')
+  // Keywords to identify each sheet type (Arabic + English variants)
+  const calendarKeywords = ['calendar', 'تقويم', 'content calendar']
+  const reelKeywords     = ['reel', 'ريل', 'reels', 'ريلز', 'فيديو']
+  const designKeywords   = ['design', 'ديزاين', 'designs', 'تصميم']
+  const hookKeywords     = ['hook', 'هوك', 'caption', 'كابشن']
 
-  const headers = Object.keys(rows[0])
-  const MAX_ROWS = 60
-  const displayRows = rows.slice(0, MAX_ROWS)
-  const truncated  = rows.length > MAX_ROWS
+  const findSheet = (kws: string[]) =>
+    wb.SheetNames.find(n => kws.some(k => n.toLowerCase().includes(k.toLowerCase()))) ?? null
 
-  // Format each row as labeled key→value pairs so the agent can clearly map columns
-  const formattedRows = displayRows.map((row, idx) => {
-    const pairs = headers
-      .filter(h => String(row[h] ?? '').trim() !== '')
-      .map(h => `  ${h}: ${String(row[h]).trim()}`)
-    return `◆ قطعة ${idx + 1}:\n${pairs.join('\n')}`
-  }).join('\n\n')
+  const calSheet    = findSheet(calendarKeywords)
+  const reelSheet   = findSheet(reelKeywords)
+  const designSheet = findSheet(designKeywords)
+  const hookSheet   = findSheet(hookKeywords)
+
+  const sections: string[] = []
+  let totalRows = 0
+
+  // Helper: format rows as ◆ blocks
+  const formatRows = (rows: Record<string, string>[], label: string) => {
+    if (!rows.length) return ''
+    totalRows += rows.length
+    const lines = rows.map((row, idx) => {
+      const pairs = Object.entries(row).map(([k, v]) => `  ${k}: ${v}`)
+      return `◆ ${label} ${idx + 1}:\n${pairs.join('\n')}`
+    }).join('\n\n')
+    return `═══ ${label} (${rows.length} عنصر) ═══\n${lines}`
+  }
+
+  // 1. Content Calendar (primary)
+  if (calSheet) {
+    const rows = sheetToStructuredRows(XLSX, wb.Sheets[calSheet])
+    const block = formatRows(rows, 'قطعة محتوى')
+    if (block) sections.push(block)
+  }
+
+  // 2. Reels Brief
+  if (reelSheet && reelSheet !== calSheet) {
+    const rows = sheetToStructuredRows(XLSX, wb.Sheets[reelSheet])
+    const block = formatRows(rows, 'ريل')
+    if (block) sections.push(block)
+  }
+
+  // 3. Designs Brief
+  if (designSheet && designSheet !== calSheet) {
+    const rows = sheetToStructuredRows(XLSX, wb.Sheets[designSheet])
+    const block = formatRows(rows, 'ديزاين')
+    if (block) sections.push(block)
+  }
+
+  // 4. Hooks bank
+  if (hookSheet && ![calSheet, reelSheet, designSheet].includes(hookSheet)) {
+    const rows = sheetToStructuredRows(XLSX, wb.Sheets[hookSheet])
+    const block = formatRows(rows, 'هوك')
+    if (block) sections.push(block)
+  }
+
+  // Fallback: if no recognized sheets found, read first sheet normally
+  if (sections.length === 0) {
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+    if (rows.length === 0) throw new Error('الملف فاضي')
+    const headers = Object.keys(rows[0])
+    totalRows = rows.length
+    const formattedRows = rows.slice(0, 60).map((row, idx) => {
+      const pairs = headers.filter(h => String(row[h] ?? '').trim() !== '').map(h => `  ${h}: ${String(row[h]).trim()}`)
+      return `◆ قطعة ${idx + 1}:\n${pairs.join('\n')}`
+    }).join('\n\n')
+    sections.push(`═══ البيانات ═══\n${formattedRows}`)
+    const headers0 = headers
+    return {
+      name: file.name, rowCount: totalRows, headers: headers0,
+      fullText: `📋 ملف: "${file.name}" — ${totalRows} صف\nالأعمدة: ${headers0.join(' | ')}\n\n${sections.join('\n\n')}`
+    }
+  }
+
+  const sheetsFound = [calSheet, reelSheet, designSheet, hookSheet].filter(Boolean)
+  const allHeaders = sheetsFound.map(s => `[${s}]`).join(', ')
 
   const fullText =
-    `📋 ملف: "${file.name}" — ${rows.length} قطعة محتوى${truncated ? ` (عارض أول ${MAX_ROWS} فقط)` : ''}\n` +
-    `الأعمدة المتاحة: ${headers.join(' | ')}\n\n` +
-    `═══ البيانات ═══\n${formattedRows}`
+    `📋 ملف: "${file.name}"\n` +
+    `الشيتات المقروءة: ${allHeaders}\n` +
+    `إجمالي العناصر: ${totalRows}\n\n` +
+    sections.join('\n\n')
 
-  return { name: file.name, rowCount: rows.length, headers, fullText }
+  return { name: file.name, rowCount: totalRows, headers: sheetsFound as string[], fullText }
 }
 
 const INITIAL_MESSAGE: ChatMessage = {
