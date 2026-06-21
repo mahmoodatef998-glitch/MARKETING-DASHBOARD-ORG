@@ -297,13 +297,38 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const authErr = await requireAdmin(supabase)
   if (authErr) return authErr
 
-  const { data } = await supabase.from('invoices').select('notion_id').eq('id', id).single()
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
 
-  if (data?.notion_id) {
-    try { await deleteNotionPage(data.notion_id) } catch {}
+  // Must exist and not already be soft-deleted
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('id, notion_id, status, total, invoice_number')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .single()
+
+  if (!inv) return NextResponse.json({ error: 'Invoice not found or already deleted' }, { status: 404 })
+
+  if (inv.notion_id) {
+    try { await deleteNotionPage(inv.notion_id) } catch {}
   }
 
-  const { error } = await supabase.from('invoices').update({ deleted_at: new Date().toISOString() }).eq('id', id)
+  const { error } = await supabase
+    .from('invoices')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+
+  try {
+    await logAudit({
+      userId: currentUser?.id,
+      userEmail: currentUser?.email,
+      action: 'delete_invoice',
+      tableName: 'invoices',
+      recordId: id,
+      oldValue: { invoice_number: inv.invoice_number, status: inv.status, total: inv.total },
+    })
+  } catch {}
+
   return NextResponse.json({ success: true })
 }

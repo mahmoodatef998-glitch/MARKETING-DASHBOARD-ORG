@@ -23,24 +23,26 @@ export async function GET() {
   const thisMonth = monthRange(0)
   const lastMonth = monthRange(-1)
 
-  // ── Revenue: invoice_payments (installments) ─────────────────────────────────
-  const { data: allPayments } = await adminDb
-    .from('invoice_payments')
-    .select('amount, received_at, invoice_id')
-    .eq('status', 'paid')
-    .not('received_at', 'is', null)
+  // ── Revenue queries — parallel ────────────────────────────────────────────────
+  const [
+    { data: allPaymentsRaw },
+    { data: paidInvoicesData },
+    { data: allNonDeletedInvIds },
+  ] = await Promise.all([
+    adminDb.from('invoice_payments').select('amount, received_at, invoice_id').eq('status', 'paid').not('received_at', 'is', null),
+    adminDb.from('invoices').select('id, total, received_amount, received_at, updated_at').eq('status', 'paid').is('deleted_at', null),
+    // Needed to exclude payments for soft-deleted invoices from revenue calculations
+    adminDb.from('invoices').select('id').is('deleted_at', null),
+  ])
 
-  // ── Revenue: paid invoices with no installment records (mark_paid / mark_received) ─
-  const { data: paidInvoicesData } = await adminDb
-    .from('invoices')
-    .select('id, total, received_amount, received_at, updated_at')
-    .eq('status', 'paid')
-    .is('deleted_at', null)
+  const nonDeletedInvSet = new Set((allNonDeletedInvIds ?? []).map(i => i.id))
+  // Payments belonging to deleted invoices must not count toward revenue
+  const allPayments = (allPaymentsRaw ?? []).filter((p: { invoice_id: string }) => nonDeletedInvSet.has(p.invoice_id))
 
   // Avoid double-counting invoices that already have invoice_payments records
   type PaymentRow = { amount: number; received_at: string; invoice_id: string }
   const invoiceIdsWithPayments = new Set(
-    (allPayments ?? []).map((p: PaymentRow) => p.invoice_id)
+    allPayments.map((p: PaymentRow) => p.invoice_id)
   )
 
   type PaidInvRow = { id: string; total: number; received_amount?: number; received_at?: string; updated_at: string }
@@ -53,7 +55,7 @@ export async function GET() {
 
   // Combined — installment payments + directly-paid invoices
   const allRevenueItems = [
-    ...((allPayments ?? []) as PaymentRow[]).map(p => ({ amount: p.amount, received_at: p.received_at })),
+    ...(allPayments as PaymentRow[]).map(p => ({ amount: p.amount, received_at: p.received_at })),
     ...directPaidItems,
   ]
 
