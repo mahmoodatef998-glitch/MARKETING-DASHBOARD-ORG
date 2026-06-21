@@ -14,12 +14,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const [ready,      setReady]      = useState(DEMO)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [role,       setRole]       = useState<string | null>(null)
 
   useEffect(() => {
     if (DEMO) return
-    getSupabaseClient().auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/login')
-      else setReady(true)
+    getSupabaseClient().auth.getSession().then(async ({ data }) => {
+      if (!data.session) { router.replace('/login'); return }
+      try {
+        const res = await fetch('/api/profile')
+        if (res.ok) {
+          const p = await res.json()
+          setRole(p.role ?? null)
+        }
+      } catch { /* non-critical */ }
+      setReady(true)
     })
   }, [router])
 
@@ -53,7 +61,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-      <AgentChat />
+      {(role === 'admin' || role === 'media_buyer' || DEMO) && <AgentChat />}
     </ToastProvider>
   )
 }
