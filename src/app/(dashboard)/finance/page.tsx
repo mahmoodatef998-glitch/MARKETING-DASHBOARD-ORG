@@ -178,9 +178,10 @@ function AddExpenseForm({ onSave, onCancel }: { onSave: (e: Partial<Expense>) =>
 
 // ── Edit Expense Modal ────────────────────────────────────────────────────────
 
-function EditExpenseModal({ expense, onSave, onClose }: {
+function EditExpenseModal({ expense, onSave, onDelete, onClose }: {
   expense: Expense
   onSave: (id: string, updates: Partial<Expense>) => Promise<void>
+  onDelete: (id: string) => Promise<void>
   onClose: () => void
 }) {
   const [form, setForm] = useState({
@@ -191,7 +192,8 @@ function EditExpenseModal({ expense, onSave, onClose }: {
     notes:     expense.notes ?? '',
     recurring: expense.recurring,
   })
-  const [saving, setSaving] = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
   function set(k: string, v: string | boolean) { setForm(f => ({ ...f, [k]: v })) }
 
   async function submit(e: React.FormEvent) {
@@ -204,14 +206,36 @@ function EditExpenseModal({ expense, onSave, onClose }: {
     setSaving(false)
   }
 
+  async function handleDelete() {
+    if (!confirm(`حذف "${expense.title}"؟`)) return
+    setDeleting(true)
+    await onDelete(expense.id)
+    setDeleting(false)
+  }
+
+  const catMeta2 = CATEGORIES.find(c => c.value === expense.category) ?? CATEGORIES[5]
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md w-full mx-2 sm:mx-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Pencil className="h-4 w-4 text-slate-400" /> Edit Expense
+            <Pencil className="h-4 w-4 text-slate-400" /> تفاصيل المصروف
           </DialogTitle>
         </DialogHeader>
+
+        {/* Summary strip */}
+        <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${catMeta2.color}`}>
+          <div className="h-8 w-8 rounded-lg flex items-center justify-center border shrink-0">
+            {catMeta2.icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{expense.title}</p>
+            <p className="text-xs opacity-70">{catMeta2.label} · {expense.date}</p>
+          </div>
+          <p className="text-sm font-bold shrink-0">{formatCurrency(expense.amount)}</p>
+        </div>
+
         <form onSubmit={submit} className="space-y-3 pt-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5 col-span-2">
@@ -248,11 +272,18 @@ function EditExpenseModal({ expense, onSave, onClose }: {
               onChange={e => set('recurring', e.target.checked)} className="rounded" />
             <label htmlFor="edit-recurring" className="text-xs text-slate-400">Recurring monthly expense</label>
           </div>
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving} size="sm">
-              {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : 'Save Changes'}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
+            <button type="button" onClick={handleDelete} disabled={deleting}
+              className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors px-2 py-1.5 rounded hover:bg-red-500/10">
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Delete Expense
+            </button>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving} size="sm">
+                {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
@@ -450,9 +481,8 @@ export default function FinancePage() {
   }
 
   async function handleDeleteExpense(id: string) {
-    if (!confirm('Delete this expense?')) return
     const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
-    if (res.ok) { toast('Expense deleted', 'success'); void loadData() }
+    if (res.ok) { toast('Expense deleted', 'success'); setEditingExpense(null); void loadData() }
     else toast('Failed to delete', 'error')
   }
 
@@ -551,6 +581,7 @@ export default function FinancePage() {
         <EditExpenseModal
           expense={editingExpense}
           onSave={handleEditExpense}
+          onDelete={handleDeleteExpense}
           onClose={() => setEditingExpense(null)}
         />
       )}
@@ -818,12 +849,9 @@ export default function FinancePage() {
                 </div>
                 <p className="text-sm font-bold text-red-400 shrink-0">{formatCurrency(exp.amount)}</p>
                 <button onClick={() => setEditingExpense(exp)}
+                  title="Edit / Delete"
                   className="p-1.5 rounded text-slate-400 hover:text-indigo-400 transition-colors shrink-0">
                   <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => handleDeleteExpense(exp.id)}
-                  className="p-1.5 rounded text-slate-400 hover:text-red-400 transition-colors shrink-0">
-                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             )
