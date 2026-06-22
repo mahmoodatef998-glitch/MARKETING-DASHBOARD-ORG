@@ -1510,11 +1510,36 @@ async function executeTool(
       const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
       if (!client) return { error: 'العميل مش موجود' }
 
+      // Always normalize month to YYYY-MM-01 to avoid duplicate key from format mismatch
+      const rawMonth = String(args.month)
+      const monthNorm = /^\d{4}-\d{2}/.test(rawMonth) ? rawMonth.slice(0, 7) + '-01' : rawMonth
+
+      // Auto-delete any existing plan for same client+month before inserting
+      const { data: existingPlan } = await admin
+        .from('content_plans')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('month', monthNorm)
+        .maybeSingle()
+
+      if (existingPlan) {
+        const { data: exItems } = await admin
+          .from('content_plan_items')
+          .select('task_id')
+          .eq('plan_id', existingPlan.id)
+          .not('task_id', 'is', null)
+        const exTaskIds = (exItems ?? []).map((i: { task_id: string | null }) => i.task_id).filter(Boolean) as string[]
+        if (exTaskIds.length > 0) {
+          await admin.from('tasks').update({ deleted_at: now.toISOString(), plan_item_id: null, updated_at: now.toISOString() }).in('id', exTaskIds)
+        }
+        await admin.from('content_plans').delete().eq('id', existingPlan.id)
+      }
+
       const planId = generateId()
       const { error: planErr } = await admin.from('content_plans').insert({
         id:         planId,
         client_id:  clientId,
-        month:      String(args.month),
+        month:      monthNorm,
         title:      String(args.title),
         status:     'active',
         notes:      args.notes ? String(args.notes) : null,
