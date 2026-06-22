@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS public.billing_plans (
   cycle_type        text NOT NULL
                     CHECK (cycle_type IN ('monthly','biweekly','every_10_days','custom_days','manual')),
   amount            numeric(12,2) NOT NULL DEFAULT 0,
-  currency          text NOT NULL DEFAULT 'USD',
+  currency          text NOT NULL DEFAULT 'AED',
   custom_days       integer,
   next_invoice_date date NOT NULL,
   is_active         boolean NOT NULL DEFAULT true,
@@ -423,7 +423,7 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
   start_date  date NOT NULL,
   end_date    date NOT NULL,
   budget      numeric(12,2),
-  currency    text NOT NULL DEFAULT 'USD',
+  currency    text NOT NULL DEFAULT 'AED',
   status      text NOT NULL DEFAULT 'draft'
               CHECK (status IN ('draft','active','paused','completed')),
   created_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,

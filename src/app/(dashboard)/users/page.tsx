@@ -651,11 +651,11 @@ export default function UsersPage() {
                               onChange={e => setForm(p => ({ ...p, billing_currency: e.target.value }))}
                               className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
                             >
-                              <option value="USD">USD $</option>
+                              <option value="AED">AED د.إ</option>
                               <option value="EGP">EGP</option>
+                              <option value="USD">USD $</option>
                               <option value="EUR">EUR €</option>
                               <option value="GBP">GBP £</option>
-                              <option value="AED">AED</option>
                             </select>
                           </div>
                         </div>

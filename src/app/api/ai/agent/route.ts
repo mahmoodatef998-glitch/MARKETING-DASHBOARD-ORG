@@ -500,6 +500,7 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       properties: {
         client_id:  { type: str, description: 'ID العميل' },
         due_date:   { type: str, description: 'موعد السداد YYYY-MM-DD' },
+        currency:   { type: str, description: 'العملة (افتراضي AED) — AED | EGP | USD | EUR | GBP' },
         notes:      { type: str, description: 'ملاحظات على الفاتورة' },
         tax:        { type: num, description: 'نسبة الضريبة % (افتراضي 0)' },
         items: {
@@ -1988,13 +1989,14 @@ async function executeTool(
         subtotal,
         tax,
         total,
+        currency:       args.currency ? String(args.currency) : 'AED',
         status:         'draft',
         due_date:       String(args.due_date),
         issued_date:    now.toISOString(),
         notes:          args.notes ? String(args.notes) : null,
         created_at:     now.toISOString(),
         updated_at:     now.toISOString(),
-      }).select('id, invoice_number, total').single()
+      }).select('id, invoice_number, total, currency').single()
 
       if (error) return { error: error.message }
       return {
@@ -2002,6 +2004,7 @@ async function executeTool(
         client: client.name,
         invoice_number: inv.invoice_number,
         total,
+        currency: inv.currency,
         status: 'draft',
         next_step: 'استخدم update_invoice_status("sent") لإرساله للعميل',
       }
