@@ -816,11 +816,11 @@ export default function FinancePage() {
                 </div>
                 <p className="text-sm font-bold text-red-400 shrink-0">{formatCurrency(exp.amount)}</p>
                 <button onClick={() => setEditingExpense(exp)}
-                  className="p-1.5 rounded text-slate-600 hover:text-indigo-400 transition-colors shrink-0">
+                  className="p-1.5 rounded text-slate-400 hover:text-indigo-400 transition-colors shrink-0">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button onClick={() => handleDeleteExpense(exp.id)}
-                  className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors shrink-0">
+                  className="p-1.5 rounded text-slate-400 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
