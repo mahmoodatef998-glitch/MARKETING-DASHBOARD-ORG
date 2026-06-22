@@ -516,11 +516,11 @@ export default function FinancePage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-100">Financial Intelligence</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
-            <span>MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span></span>
+            <span title="3-month average of actual paid revenue">MRR <span className="text-indigo-400 font-semibold">{formatCurrency(d.mrr)}</span></span>
             <span className="text-slate-700">·</span>
-            <span>ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span></span>
+            <span title="MRR × 12">ARR <span className="text-indigo-400 font-semibold">{formatCurrency(d.arr)}</span></span>
             <span className="text-slate-700">·</span>
-            <span>Collection <span className="text-green-400 font-semibold">{d.collectionRate}%</span></span>
+            <span title="Paid invoices ÷ (Paid + Outstanding)">Collection <span className={`font-semibold ${d.collectionRate >= 80 ? 'text-green-400' : d.collectionRate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{d.collectionRate}%</span></span>
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

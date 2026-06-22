@@ -103,33 +103,29 @@ export async function GET() {
     s + (i.total - (i.received_amount ?? 0)), 0)
   const overdueInvoices = (openInvoices ?? []).filter((i: { status: string }) => i.status === 'overdue')
 
-  // ── MRR from active billing plans ───────────────────────────────────────────
-  const { data: activePlans } = await adminDb
-    .from('billing_plans')
-    .select('amount, cycle_type, custom_days, currency')
-    .eq('is_active', true)
-
-  const mrr = (activePlans ?? []).reduce((s: number, p: { amount: number; cycle_type: string; custom_days?: number }) => {
-    const monthly = p.cycle_type === 'monthly' ? p.amount
-      : p.cycle_type === 'biweekly' ? p.amount * 2.17
-      : p.cycle_type === 'every_10_days' ? p.amount * 3
-      : p.cycle_type === 'custom_days' && p.custom_days ? p.amount * (30 / p.custom_days)
-      : 0
-    return s + monthly
-  }, 0)
+  // ── MRR — 3-month rolling average of actual paid revenue ────────────────────
+  // More reliable than billing_plans amounts which may be misconfigured.
+  const m3start = monthRange(-2).from
+  const last3Revenue = allRevenueItems
+    .filter(p => p.received_at >= m3start)
+    .reduce((s, p) => s + p.amount, 0)
+  const mrr = last3Revenue / 3
 
   // ── Collection rate ──────────────────────────────────────────────────────────
+  // Uses same outstanding figure shown in the KPI card for consistency.
+  // outstanding = sum of (total − received_amount) for all active sent/overdue invoices.
   const { data: allInvoices } = await adminDb
     .from('invoices')
     .select('status, total')
     .is('deleted_at', null)
     .neq('status', 'draft')
 
-  const totalInvoiced = (allInvoices ?? []).reduce((s: number, i: { total: number }) => s + i.total, 0)
-  const totalPaidInv  = (allInvoices ?? [])
+  const totalPaidInv = (allInvoices ?? [])
     .filter((i: { status: string }) => i.status === 'paid')
     .reduce((s: number, i: { total: number }) => s + i.total, 0)
-  const collectionRate = totalInvoiced > 0 ? Math.round((totalPaidInv / totalInvoiced) * 100) : 0
+  // Denominator = paid invoices + remaining outstanding (not yet collected)
+  const collectionBase = totalPaidInv + outstanding
+  const collectionRate = collectionBase > 0 ? Math.round((totalPaidInv / collectionBase) * 100) : 0
 
   // ── Top clients by revenue ───────────────────────────────────────────────────
   const { data: paidInvoices } = await adminDb
