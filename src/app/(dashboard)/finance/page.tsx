@@ -269,7 +269,7 @@ interface FinancialData {
   arr:       number
   collectionRate: number
   cashFlow:  Array<{ month: string; revenue: number; expenses: number; profit: number }>
-  topClients: Array<{ name: string; revenue: number }>
+  topClients: Array<{ id: string; name: string; revenue: number }>
   overdueInvoices: Array<{ invoice_number: string; client: string; total: number; due_date: string }>
   recentExpenses: Expense[]
   pnl: {
@@ -479,6 +479,13 @@ export default function FinancePage() {
       toast('Action failed', 'error')
     }
     setActionLoading(null)
+  }
+
+  async function handleDeleteClient(id: string, name: string) {
+    if (!confirm(`Delete client "${name}"? This will soft-delete the client record.`)) return
+    const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' })
+    if (res.ok) { toast(`Client "${name}" deleted`, 'success'); void loadData() }
+    else toast('Failed to delete client', 'error')
   }
 
   async function generateDueInvoices() {
@@ -837,7 +844,7 @@ export default function FinancePage() {
             {d.topClients.map((c, i) => {
               const maxRev = d.topClients[0].revenue
               return (
-                <div key={i} className="flex items-center gap-3">
+                <div key={c.id || i} className="flex items-center gap-2">
                   <span className="text-xs text-slate-600 w-4 shrink-0">{i + 1}</span>
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between">
@@ -848,6 +855,13 @@ export default function FinancePage() {
                       <div className="h-full bg-indigo-500/60 rounded-full" style={{ width: `${(c.revenue / maxRev) * 100}%` }} />
                     </div>
                   </div>
+                  {c.id && (
+                    <button onClick={() => handleDeleteClient(c.id, c.name)}
+                      title={`Delete ${c.name}`}
+                      className="p-1 rounded text-slate-700 hover:text-red-400 transition-colors shrink-0">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               )
             })}
