@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { dbError } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -8,27 +8,28 @@ function getIp(req: NextRequest) {
   return req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
 }
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
+async function requireAdmin() {
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { err: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), user: null }
+  if (!user) return { err: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return { err: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), user: null }
-  return { err: null, user }
+  if (profile?.role !== 'admin') return { err: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { err: null }
 }
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(getIp(req), { limit: 60, window: 60_000 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
-  const supabase = await createServerClient()
-  const { err } = await requireAdmin(supabase)
+  const { err } = await requireAdmin()
   if (err) return err
 
+  const admin = createAdminClient()
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to   = searchParams.get('to')
 
-  let query = supabase.from('expenses').select('*').order('date', { ascending: false })
+  let query = admin.from('expenses').select('*').order('date', { ascending: false })
   if (from) query = query.gte('date', from)
   if (to)   query = query.lte('date', to)
 
@@ -41,8 +42,7 @@ export async function POST(req: NextRequest) {
   const rl = rateLimit(getIp(req), { limit: 30, window: 60_000 })
   if (!rl.ok) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
-  const supabase = await createServerClient()
-  const { err } = await requireAdmin(supabase)
+  const { err } = await requireAdmin()
   if (err) return err
 
   const body = await req.json().catch(() => ({}))
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'title, amount, date are required' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('expenses')
     .insert({
       title,

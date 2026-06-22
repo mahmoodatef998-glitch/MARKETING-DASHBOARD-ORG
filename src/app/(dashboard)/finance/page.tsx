@@ -149,9 +149,10 @@ function AddExpenseForm({ onSave, onCancel }: { onSave: (e: Partial<Expense>) =>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Category</Label>
-          <Select value={form.category || undefined} onValueChange={v => set('category', v)}>
+          <Select value={form.category || '_none'} onValueChange={v => set('category', v === '_none' ? '' : v)}>
             <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="_none">— None —</SelectItem>
               {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -229,9 +230,10 @@ function EditExpenseModal({ expense, onSave, onClose }: {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Category</Label>
-              <Select value={form.category || undefined} onValueChange={v => set('category', v)}>
+              <Select value={form.category || '_none'} onValueChange={v => set('category', v === '_none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
                   {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>

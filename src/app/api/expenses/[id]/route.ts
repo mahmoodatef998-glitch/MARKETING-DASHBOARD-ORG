@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { dbError } from '@/lib/utils'
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClient>>) {
+async function requireAdmin() {
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
@@ -13,14 +14,14 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createServerClient()
-  const authErr = await requireAdmin(supabase)
+  const authErr = await requireAdmin()
   if (authErr) return authErr
 
   const body = await req.json().catch(() => ({}))
   const { title, amount, category, date, notes, recurring } = body
 
-  const { data, error } = await supabase
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('expenses')
     .update({
       title,
@@ -41,11 +42,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createServerClient()
-  const authErr = await requireAdmin(supabase)
+  const authErr = await requireAdmin()
   if (authErr) return authErr
 
-  const { error } = await supabase.from('expenses').delete().eq('id', id)
+  const admin = createAdminClient()
+  const { error } = await admin.from('expenses').delete().eq('id', id)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }
