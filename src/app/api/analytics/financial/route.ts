@@ -130,19 +130,23 @@ export async function GET() {
   // ── Top clients by revenue ───────────────────────────────────────────────────
   const { data: paidInvoices } = await adminDb
     .from('invoices')
-    .select('total, received_amount, client:clients(name)')
+    .select('total, received_amount, client_id, client:clients(id, name)')
     .eq('status', 'paid')
     .is('deleted_at', null)
 
-  const clientRevMap: Record<string, number> = {}
-  type PaidInvoiceRow = { total: number; received_amount?: number; client: { name: string } | { name: string }[] | null }
+  const clientRevMap: Record<string, { revenue: number; id: string }> = {}
+  type PaidInvoiceRow = { total: number; received_amount?: number; client_id: string; client: { id: string; name: string } | { id: string; name: string }[] | null }
   for (const inv of (paidInvoices ?? []) as unknown as PaidInvoiceRow[]) {
-    const clientName = Array.isArray(inv.client) ? inv.client[0]?.name : inv.client?.name
-    const name = clientName ?? 'Unknown'
-    clientRevMap[name] = (clientRevMap[name] ?? 0) + (inv.received_amount ?? inv.total)
+    const clientObj = Array.isArray(inv.client) ? inv.client[0] : inv.client
+    const name = clientObj?.name ?? 'Unknown'
+    const id   = clientObj?.id ?? inv.client_id ?? ''
+    if (!clientRevMap[id]) clientRevMap[id] = { revenue: 0, id }
+    clientRevMap[id].revenue += (inv.received_amount ?? inv.total)
+    // Store name separately — use id as key to avoid merging different clients with same name
+    ;(clientRevMap[id] as { revenue: number; id: string; name?: string }).name = name
   }
-  const topClients = Object.entries(clientRevMap)
-    .map(([name, revenue]) => ({ name, revenue }))
+  const topClients = Object.values(clientRevMap)
+    .map(c => ({ id: c.id, name: (c as { revenue: number; id: string; name?: string }).name ?? 'Unknown', revenue: c.revenue }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5)
 
