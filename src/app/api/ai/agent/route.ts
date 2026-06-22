@@ -481,6 +481,18 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: 'delete_invoice',
+    description: 'حذف فاتورة نهائياً — يُستخدم لحذف الفواتير المكررة أو الخاطئة. الفواتير المدفوعة لا يمكن حذفها.',
+    parameters: schema({
+      type: obj,
+      properties: {
+        invoice_id: { type: str, description: 'ID الفاتورة المراد حذفها' },
+        reason:     { type: str, description: 'سبب الحذف' },
+      },
+      required: ['invoice_id'],
+    }),
+  },
+  {
     name: 'create_invoice',
     description: 'إنشاء فاتورة جديدة لعميل مع بنود تفصيلية',
     parameters: schema({
@@ -1910,6 +1922,37 @@ async function executeTool(
     }
 
     // ── Billing & Campaigns ───────────────────────────────────────────────────
+    case 'delete_invoice': {
+      const invoiceId = String(args.invoice_id)
+
+      const { data: inv } = await admin
+        .from('invoices')
+        .select('id, invoice_number, status, total, client:clients(name)')
+        .eq('id', invoiceId)
+        .is('deleted_at', null)
+        .single()
+
+      if (!inv) return { error: 'الفاتورة مش موجودة أو محذوفة بالفعل' }
+      if (inv.status === 'paid') return { error: 'لا يمكن حذف فاتورة مدفوعة — أنشئ إشعار دائن إذا لزم' }
+
+      const { error } = await admin.from('invoices').update({
+        deleted_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      }).eq('id', invoiceId)
+
+      if (error) return { error: error.message }
+
+      return {
+        success: true,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: (inv.client as any)?.name ?? 'غير محدد',
+        invoice_number: inv.invoice_number,
+        old_status: inv.status,
+        total: inv.total,
+        message: 'تم الحذف — الفاتورة لن تظهر في أي تقارير أو حسابات',
+      }
+    }
+
     case 'create_invoice': {
       const clientId = String(args.client_id)
       const { data: client } = await admin.from('clients').select('id, name').eq('id', clientId).is('deleted_at', null).single()
@@ -1928,10 +1971,14 @@ async function executeTool(
       const tax      = Number(args.tax ?? 0)
       const total    = subtotal + (subtotal * tax) / 100
 
-      // Generate next invoice number
-      const { data: lastInv } = await admin.from('invoices').select('invoice_number').order('created_at', { ascending: false }).limit(1).single()
-      const lastNum = lastInv?.invoice_number?.replace(/[^0-9]/g, '') ?? '0'
-      const invoiceNumber = `INV-${String(Number(lastNum) + 1).padStart(4, '0')}`
+      // Find the true max INV-XXXX number across all invoices to avoid collisions.
+      // Ordering by created_at is unreliable when non-INV prefixes exist (e.g. ADV-XXXXX).
+      const { data: allInvNums } = await admin.from('invoices').select('invoice_number').like('invoice_number', 'INV-%')
+      const maxInvNum = (allInvNums ?? []).reduce((max, row) => {
+        const n = Number((row.invoice_number ?? '').replace(/[^0-9]/g, '') || '0')
+        return n > max ? n : max
+      }, 0)
+      const invoiceNumber = `INV-${String(maxInvNum + 1).padStart(4, '0')}`
 
       const { data: inv, error } = await admin.from('invoices').insert({
         id:             generateId(),
