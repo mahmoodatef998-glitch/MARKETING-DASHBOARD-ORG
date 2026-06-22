@@ -664,16 +664,38 @@ export default function FinancePage() {
 
           {/* Cost rows */}
           <div className="border-l-2 border-red-500/30 ml-2 pl-3 space-y-1.5">
-            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
-              <span className="min-w-0">Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})</span>
+            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+              <span className="min-w-0 flex items-center gap-1.5">
+                Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})
+                <button onClick={() => setShowSettings(true)}
+                  title="Edit rate in Financial Settings"
+                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </span>
               <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.designCost)}</span>
             </div>
-            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
-              <span className="min-w-0">Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})</span>
+            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+              <span className="min-w-0 flex items-center gap-1.5">
+                Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})
+                <button onClick={() => setShowSettings(true)}
+                  title="Edit rate in Financial Settings"
+                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </span>
               <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
             </div>
-            <div className="flex items-start justify-between gap-2 text-xs text-slate-500">
-              <span>Operational expenses</span>
+            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                Operational expenses
+                <button
+                  onClick={() => { setShowForm(true); document.getElementById('expenses-section')?.scrollIntoView({ behavior: 'smooth' }) }}
+                  title="Add or edit expenses below"
+                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </span>
               <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.operationalExpenses)}</span>
             </div>
           </div>
@@ -734,7 +756,7 @@ export default function FinancePage() {
       )}
 
       {/* ── Expenses ── */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+      <div id="expenses-section" className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-300">Expenses This Month</p>
           <Button size="sm" onClick={() => setShowForm(v => !v)}
