@@ -160,6 +160,29 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: 'delete_task',
+    description: 'حذف تاسك نهائياً (soft delete) — استخدم فقط بطلب صريح من المدير',
+    parameters: schema({
+      type: obj,
+      properties: {
+        task_id: { type: str, description: 'ID التاسك المراد حذفه' },
+        reason:  { type: str, description: 'سبب الحذف' },
+      },
+      required: ['task_id'],
+    }),
+  },
+  {
+    name: 'remove_plan_item',
+    description: 'حذف قطعة محتوى من خطة موجودة — يحذف العنصر والتاسك المرتبط به',
+    parameters: schema({
+      type: obj,
+      properties: {
+        item_id: { type: str, description: 'ID عنصر الخطة المراد حذفه' },
+      },
+      required: ['item_id'],
+    }),
+  },
+  {
     name: 'add_task_comment',
     description: 'إضافة ملاحظة أو تعليق داخلي على تاسك — يظهر للفريق في صفحة التاسك',
     parameters: schema({
@@ -795,6 +818,49 @@ async function executeTool(
       })
       if (error) return { error: error.message }
       return { success: true, task_title: task.title }
+    }
+
+    case 'delete_task': {
+      const taskId = String(args.task_id)
+      const { data: task } = await admin.from('tasks').select('id, title, plan_item_id').eq('id', taskId).is('deleted_at', null).single()
+      if (!task) return { error: 'التاسك مش موجود أو محذوف بالفعل' }
+
+      const { error } = await admin.from('tasks').update({
+        deleted_at:   now.toISOString(),
+        plan_item_id: null,
+        updated_at:   now.toISOString(),
+      }).eq('id', taskId)
+      if (error) return { error: error.message }
+
+      // If linked to a plan item, clear task_id reference
+      if (task.plan_item_id) {
+        await admin.from('content_plan_items').update({ task_id: null, updated_at: now.toISOString() }).eq('id', task.plan_item_id)
+      }
+      return { success: true, deleted_task: task.title }
+    }
+
+    case 'remove_plan_item': {
+      const itemId = String(args.item_id)
+      const { data: item } = await admin
+        .from('content_plan_items')
+        .select('id, title, task_id')
+        .eq('id', itemId)
+        .single()
+      if (!item) return { error: 'العنصر مش موجود' }
+
+      // Soft-delete linked task first
+      if (item.task_id) {
+        await admin.from('tasks').update({
+          deleted_at:   now.toISOString(),
+          plan_item_id: null,
+          updated_at:   now.toISOString(),
+        }).eq('id', item.task_id)
+      }
+
+      // Delete the plan item
+      const { error } = await admin.from('content_plan_items').delete().eq('id', itemId)
+      if (error) return { error: error.message }
+      return { success: true, removed_item: item.title }
     }
 
     // ── Team ──────────────────────────────────────────────────────────────────
@@ -2385,14 +2451,20 @@ get_client_health دوري:
 
 ═══ القرارات التنفيذية الكاملة ═══
 ✅ نفّذ مباشرة:
-   - create_task, update_task, approve_task, add_task_comment
-   - create_content_plan, import_content_plan, create_campaign
+   - create_task, update_task, approve_task, add_task_comment, delete_task
+   - create_content_plan, update_content_plan, import_content_plan, create_campaign
+   - remove_plan_item (لحذف قطعة من خطة موجودة مع تاسكها)
    - create_meeting, create_client_package, update_client_package, create_invoice
    - update_invoice_status("sent" أو "overdue")
    - update_client (status, notes, phone, email)
    - notify_user, notify_all_team, send_smart_email
    - send_client_report, send_client_email, send_payment_reminder
    - agent_remember, agent_recall
+
+⚡ قواعد الاستقلالية — نفّذ بدون سؤال:
+   - Excel import: اكتشف العميل تلقائياً من اسم الملف + get_clients — لا تسأل إلا لو في تشابه حقيقي
+   - توزيع الفريق: استخدم get_workload_analysis واختر can_take_more:true تلقائياً
+   - تاريخ الاستحقاق: السيرفر يحسب due_date من publish_date تلقائياً — مرر publish_date فقط
 
 ⚠️ يحتاج تأكيد المدير:
    - update_invoice_status("paid") ← مالي حساس

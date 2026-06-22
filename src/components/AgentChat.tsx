@@ -276,20 +276,23 @@ export default function AgentChat() {
 
     if (attached) {
       const userNote = text ? `\n\nملاحظة من المدير: ${text}` : ''
+      // Extract likely client name from filename for auto-detection
+      const fileNameHint = attached.name.replace(/[-_]?(content.?plan|خطة|plan|july|june|يوليو|يونيو|\d{4}|\d+).*/gi, '').replace(/[-_.]/g, ' ').trim()
       const intro =
-        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} قطعة\n\n` +
+        `[EXCEL_IMPORT] استلمت ملف خطة محتوى: "${attached.name}" — ${attached.rowCount} قطعة\n` +
+        `اسم العميل المحتمل من الملف: "${fileNameHint}"\n\n` +
         `${attached.fullText}` +
         `${userNote}\n\n` +
         `══════════════════════════\n` +
         `⚡ القاعدة الأهم: الخطة المرفوعة هي المرجع الوحيد — التزم بها 100% دون إضافة أو تعديل.\n\n` +
         `تعليمات التنفيذ:\n` +
-        `١. ابدأ بـ get_clients + get_team_members + get_workload_analysis (معاً)\n` +
-        `٢. اقرأ كل الـ sheets واستخرج: النوع + الهوك + البريف + تاريخ النشر + المنصات لكل قطعة\n` +
-        `٣. لو العميل مش واضح → سؤال واحد فقط ثم نفّذ فور الرد\n` +
+        `١. نفّذ get_clients + get_team_members + get_workload_analysis معاً الآن\n` +
+        `٢. ابحث عن اسم العميل تلقائياً من اسم الملف "${fileNameHint}" في قائمة العملاء — لا تسأل إلا لو في أكثر من عميل محتمل\n` +
+        `٣. استخرج من الملف: النوع + الهوك + البريف + تاريخ النشر + المنصات لكل قطعة\n` +
         `٤. أنشئ الخطة بـ create_content_plan واحدة تشمل كل قطع reel/design/ai_video:\n` +
         `   • title: من الملف كما هو | hook: الهوك كما هو | notes: البريف الكامل\n` +
-        `   • publish_date من الملف | internal_due_date = publish − SLA (reel: -3أيام | design: -1يوم)\n` +
-        `   • assigned_to حسب الأعباء | platforms من الملف\n` +
+        `   • publish_date من الملف فقط — السيرفر يحسب due_date تلقائياً (لا تحسب internal_due_date)\n` +
+        `   • assigned_to حسب الأعباء بدون سؤال | platforms من الملف\n` +
         `   ← create_content_plan تنشئ تلقائياً الخطة + عناصرها + تاسك مرتبط لكل عنصر\n` +
         `٥. import_content_plan فقط لو في post/custom خارج الـ content plan\n` +
         `٦. notify_all_team + ملخص: "✅ خطة [العميل]: Y ريلز + Z تصاميم + W AI video"`
