@@ -10,6 +10,7 @@ import {
   type Part,
 } from '@google/generative-ai'
 import { generateId } from '@/lib/utils'
+import { nextInvoiceNumber } from '@/lib/invoice-number'
 import { rateLimit } from '@/lib/rate-limit'
 import { generateSmartAgentEmail, generateClientReportEmail } from '@/lib/gemini'
 import { sendEmail } from '@/lib/gmail'
@@ -1972,14 +1973,7 @@ async function executeTool(
       const tax      = Number(args.tax ?? 0)
       const total    = subtotal + (subtotal * tax) / 100
 
-      // Find the true max INV-XXXX number across all invoices to avoid collisions.
-      // Ordering by created_at is unreliable when non-INV prefixes exist (e.g. ADV-XXXXX).
-      const { data: allInvNums } = await admin.from('invoices').select('invoice_number').like('invoice_number', 'INV-%')
-      const maxInvNum = (allInvNums ?? []).reduce((max, row) => {
-        const n = Number((row.invoice_number ?? '').replace(/[^0-9]/g, '') || '0')
-        return n > max ? n : max
-      }, 0)
-      const invoiceNumber = `INV-${String(maxInvNum + 1).padStart(4, '0')}`
+      const invoiceNumber = await nextInvoiceNumber(admin)
 
       const { data: inv, error } = await admin.from('invoices').insert({
         id:             generateId(),

@@ -3,7 +3,9 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { createNotionInvoice } from '@/lib/notion'
-import { generateId, generateInvoiceNumber, dbError } from '@/lib/utils'
+import { generateId, dbError } from '@/lib/utils'
+import { nextInvoiceNumber } from '@/lib/invoice-number'
+import { createAdminClient } from '@/lib/supabase-server'
 import { InvoiceCreateSchema, parseBody } from '@/lib/validation'
 import { DEMO_INVOICES } from '@/lib/demo-data'
 import { rateLimit } from '@/lib/rate-limit'
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   const invoice: Invoice = {
     id:             generateId(),
-    invoice_number: b.invoice_number ?? generateInvoiceNumber(),
+    invoice_number: b.invoice_number ?? await nextInvoiceNumber(createAdminClient()),
     client_id:      b.client_id,
     items:          b.items.map(i => ({
       id:          generateId(),
