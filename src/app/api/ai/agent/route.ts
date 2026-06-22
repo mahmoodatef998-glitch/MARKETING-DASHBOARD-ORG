@@ -194,6 +194,18 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       required: ['task_id', 'comment'],
     }),
   },
+  {
+    name: 'delete_content_plan',
+    description: 'حذف خطة محتوى كاملة مع كل عناصرها والتاسكات المرتبطة — استخدم لما تحتاج تحذف خطة قديمة وتنشئ جديدة بدلها لنفس الشهر',
+    parameters: schema({
+      type: obj,
+      properties: {
+        plan_id: { type: str, description: 'ID الخطة المراد حذفها' },
+        reason:  { type: str, description: 'سبب الحذف' },
+      },
+      required: ['plan_id'],
+    }),
+  },
 
   // ── Team ──────────────────────────────────────────────────────────────────
   {
@@ -861,6 +873,45 @@ async function executeTool(
       const { error } = await admin.from('content_plan_items').delete().eq('id', itemId)
       if (error) return { error: error.message }
       return { success: true, removed_item: item.title }
+    }
+
+    case 'delete_content_plan': {
+      const planId = String(args.plan_id)
+
+      // Verify plan exists
+      const { data: plan } = await admin
+        .from('content_plans')
+        .select('id, title, client_id')
+        .eq('id', planId)
+        .single()
+      if (!plan) return { error: 'الخطة مش موجودة' }
+
+      // Soft-delete all tasks linked through this plan's items
+      const { data: items } = await admin
+        .from('content_plan_items')
+        .select('task_id')
+        .eq('plan_id', planId)
+        .not('task_id', 'is', null)
+
+      const taskIds = (items ?? []).map((i: { task_id: string | null }) => i.task_id).filter(Boolean) as string[]
+      if (taskIds.length > 0) {
+        await admin.from('tasks').update({
+          deleted_at:   now.toISOString(),
+          plan_item_id: null,
+          updated_at:   now.toISOString(),
+        }).in('id', taskIds)
+      }
+
+      // Delete the plan — items and publish_events cascade automatically
+      const { error } = await admin.from('content_plans').delete().eq('id', planId)
+      if (error) return { error: error.message }
+
+      return {
+        success: true,
+        deleted_plan: plan.title,
+        tasks_removed: taskIds.length,
+        message: 'تم الحذف — يمكنك الآن إنشاء خطة جديدة لنفس الشهر',
+      }
     }
 
     // ── Team ──────────────────────────────────────────────────────────────────
@@ -2347,12 +2398,17 @@ reel_video=ريلز | design=تصميم | ai_video=فيديو AI | post=منشو
 
 قاعدة مهمة: لا تفسّر الخطة ولا تضيف عليها — ما في الملف هو كل شيء.
 
-═══ تحديث خطة محتوى موجودة ═══
-⚡ لو المدير قال "عدّل الخطة" أو "ضيف قطعة" أو "غيّر تاريخ" → استخدم update_content_plan مش create_content_plan
-
+═══ تحديث أو استبدال خطة محتوى موجودة ═══
 متى تستخدم كل أداة:
   • create_content_plan → لما الخطة مش موجودة أصلاً (شهر جديد / عميل جديد)
-  • update_content_plan → لما الخطة موجودة وتحتاج تعديل (إضافة قطع / تغيير تواريخ / تحديث حالة)
+  • update_content_plan → لما الخطة موجودة وتحتاج تعديل جزئي (إضافة قطع / تغيير تواريخ)
+  • delete_content_plan ثم create_content_plan → لو المدير قال "امسح القديمة وابني جديدة" أو ظهر خطأ "duplicate key" أو "unique constraint"
+
+⚠️ لو فشل create_content_plan بسبب "duplicate key value violates unique constraint":
+  ١. استدعي get_content_plans(client_id=...) عشان تجيب plan_id الخطة الموجودة
+  ٢. استدعي delete_content_plan(plan_id=...) لحذفها بدون سؤال
+  ٣. أعد create_content_plan مباشرةً بنفس البيانات
+  لا تسأل المدير ولا تقترح شهراً مختلفاً — امسح وأنشئ من تلقاء نفسك
 
 للتحديث:
 ١. get_content_plans(client_id=...) لجلب plan_id الخطة الموجودة
@@ -2454,6 +2510,7 @@ get_client_health دوري:
    - create_task, update_task, approve_task, add_task_comment, delete_task
    - create_content_plan, update_content_plan, import_content_plan, create_campaign
    - remove_plan_item (لحذف قطعة من خطة موجودة مع تاسكها)
+   - delete_content_plan (حذف خطة كاملة مع كل تاسكاتها — استخدم لو في تعارض في الشهر قبل ما تنشئ جديدة)
    - create_meeting, create_client_package, update_client_package, create_invoice
    - update_invoice_status("sent" أو "overdue")
    - update_client (status, notes, phone, email)
