@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, Sparkles,
   Plus, Trash2, Loader2, RefreshCw, CheckCircle2, X, Settings,
-  Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, Zap,
+  Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, Zap, Pencil,
 } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import type { Expense, ExpenseCategory, FinancialAnalysis, FinancialSettings } from '@/types'
@@ -175,6 +175,89 @@ function AddExpenseForm({ onSave, onCancel }: { onSave: (e: Partial<Expense>) =>
   )
 }
 
+// ── Edit Expense Modal ────────────────────────────────────────────────────────
+
+function EditExpenseModal({ expense, onSave, onClose }: {
+  expense: Expense
+  onSave: (id: string, updates: Partial<Expense>) => Promise<void>
+  onClose: () => void
+}) {
+  const [form, setForm] = useState({
+    title:     expense.title,
+    amount:    String(expense.amount),
+    category:  (expense.category ?? '') as ExpenseCategory | '',
+    date:      expense.date,
+    notes:     expense.notes ?? '',
+    recurring: expense.recurring,
+  })
+  const [saving, setSaving] = useState(false)
+  function set(k: string, v: string | boolean) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setSaving(true)
+    await onSave(expense.id, {
+      ...form,
+      amount:   Number(form.amount),
+      category: (form.category as ExpenseCategory) || undefined,
+    })
+    setSaving(false)
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md w-full mx-2 sm:mx-auto" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Pencil className="h-4 w-4 text-slate-400" /> Edit Expense
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3 pt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs">Title *</Label>
+              <Input value={form.title} onChange={e => set('title', e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Amount *</Label>
+              <Input type="number" min={0.01} step="0.01" value={form.amount}
+                onChange={e => set('amount', e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Date *</Label>
+              <Input type="date" value={form.date} onChange={e => set('date', e.target.value)}
+                className="text-slate-300" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category</Label>
+              <Select value={form.category || undefined} onValueChange={v => set('category', v)}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="edit-recurring" checked={form.recurring}
+              onChange={e => set('recurring', e.target.checked)} className="rounded" />
+            <label htmlFor="edit-recurring" className="text-xs text-slate-400">Recurring monthly expense</label>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" disabled={saving} size="sm">
+              {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : 'Save Changes'}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 interface FinancialData {
@@ -318,8 +401,9 @@ export default function FinancePage() {
   const [analysis,     setAnalysis]     = useState<FinancialAnalysis | null>(null)
   const [loading,      setLoading]      = useState(true)
   const [aiLoading,    setAiLoading]    = useState(false)
-  const [showForm,     setShowForm]     = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
+  const [showForm,      setShowForm]      = useState(false)
+  const [showSettings,  setShowSettings]  = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [generating,   setGenerating]   = useState(false)
 
@@ -368,6 +452,14 @@ export default function FinancePage() {
     const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
     if (res.ok) { toast('Expense deleted', 'success'); void loadData() }
     else toast('Failed to delete', 'error')
+  }
+
+  async function handleEditExpense(id: string, updates: Partial<Expense>) {
+    const res = await fetch(`/api/expenses/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+    })
+    if (res.ok) { toast('Expense updated ✓', 'success'); setEditingExpense(null); void loadData() }
+    else toast('Failed to update expense', 'error')
   }
 
   async function handleAction(rec: FinancialAnalysis['recommendations'][0], idx: number) {
@@ -446,6 +538,13 @@ export default function FinancePage() {
       </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          onSave={handleEditExpense}
+          onClose={() => setEditingExpense(null)}
+        />
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -687,6 +786,10 @@ export default function FinancePage() {
                   <p className="text-xs text-slate-500">{formatDate(exp.date)}{exp.recurring ? ' · Recurring' : ''}</p>
                 </div>
                 <p className="text-sm font-bold text-red-400 shrink-0">{formatCurrency(exp.amount)}</p>
+                <button onClick={() => setEditingExpense(exp)}
+                  className="p-1.5 rounded text-slate-600 hover:text-indigo-400 transition-colors shrink-0">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
                 <button onClick={() => handleDeleteExpense(exp.id)}
                   className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 className="h-3.5 w-3.5" />
