@@ -37,74 +37,9 @@ export async function GET(req: NextRequest) {
   // ── Wrap entire cron in try/catch so failures trigger an admin alert ─────────
   try {
 
-  const d48h = new Date(now); d48h.setDate(d48h.getDate() + 2)
-  const d24h = new Date(now); d24h.setDate(d24h.getDate() + 1)
-  const date48h = toDateStr(d48h)
-  const date24h = toDateStr(d24h)
-
   const results: { type: string; recipient: string; status: string }[] = []
 
-  // ── Helper: send task email and log it ────────────────────────────────────
-  async function sendTaskEmail(opts: {
-    taskId:    string
-    email:     string
-    name:      string
-    type:      'task_reminder_48h' | 'task_reminder_24h' | 'task_confirmation' | 'task_completed'
-    details:   string
-    flagField?: 'reminder_48h_sent_at' | 'reminder_24h_sent_at' | 'confirmation_sent_at'
-  }) {
-    const { taskId, email, name, type, details, flagField } = opts
-    try {
-      const { subject, body } = await generateEmailContent({ type, recipientName: name, details })
-      await sendEmail({ to: email, subject, body })
-
-      await supabase.from('automation_logs').insert({
-        type,
-        recipient_email: email,
-        subject,
-        status:     'sent',
-        task_id:    taskId,
-        created_at: now.toISOString(),
-      })
-
-      if (flagField) {
-        await supabase.from('tasks').update({ [flagField]: now.toISOString() }).eq('id', taskId)
-      }
-
-      results.push({ type, recipient: email, status: 'sent' })
-      // Slack mirror for 48h/24h reminders
-      if (type === 'task_reminder_48h' || type === 'task_reminder_24h') {
-        try { await sendSlack(`⏰ *${type === 'task_reminder_48h' ? '48h' : '24h'} reminder* sent to ${name}: task "${opts.details.split('\n')[0].replace('Task: ', '')}"`) } catch {}
-      }
-    } catch (err: any) {
-      await supabase.from('automation_logs').insert({
-        type,
-        recipient_email: email,
-        subject:    type.replace(/_/g, ' '),
-        status:     'failed',
-        error:      err.message,
-        task_id:    taskId,
-        created_at: now.toISOString(),
-      })
-      results.push({ type, recipient: email, status: 'failed' })
-    }
-  }
-
-  // ── Helper: build task detail string ─────────────────────────────────────
-  function taskDetails(task: any): string {
-    const parts = [
-      `Task: ${task.title}`,
-      task.description ? `Description: ${task.description}` : null,
-      `Priority: ${task.priority}`,
-      `Due date: ${task.due_date}`,
-      `Status: ${task.status}`,
-      task.client?.name  ? `Client: ${task.client.name}` : null,
-      task.client?.email ? `Client email: ${task.client.email}` : null,
-    ]
-    return parts.filter(Boolean).join('\n')
-  }
-
-  // ── 1. Auto-generate invoices from billing plans ───────────────────────────
+// ── 1. Auto-generate invoices from billing plans ───────────────────────────
   // Send invoice 2 days before the due date so the client has time to pay
   const d2before = new Date(now); d2before.setDate(d2before.getDate() + 2)
   const date2before = toDateStr(d2before)
@@ -333,84 +268,6 @@ export async function GET(req: NextRequest) {
       } catch {}
       results.push({ type: 'task_reminder', recipient: task.assigned_to, status: 'failed' })
     }
-  }
-
-  // ── 4. 48-hour advance reminders ──────────────────────────────────────────
-  const { data: tasks48h } = await supabase
-    .from('tasks')
-    .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
-    .eq('due_date', date48h)
-    .is('reminder_48h_sent_at', null)
-    .is('deleted_at', null)
-    .not('status', 'in', '("done","overdue")')
-    .not('assigned_to', 'is', null)
-
-  for (const task of tasks48h ?? []) {
-    const { data: authUser } = await supabase.auth.admin.getUserById(task.assigned_to).catch(() => ({ data: null }))
-    const email = authUser?.user?.email
-    const name  = task.assignee?.display_name ?? email ?? 'Team Member'
-    if (!email) continue
-
-    await sendTaskEmail({
-      taskId:    task.id,
-      email,
-      name,
-      type:      'task_reminder_48h',
-      details:   taskDetails(task),
-      flagField: 'reminder_48h_sent_at',
-    })
-  }
-
-  // ── 5. 24-hour advance reminders ──────────────────────────────────────────
-  const { data: tasks24h } = await supabase
-    .from('tasks')
-    .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
-    .eq('due_date', date24h)
-    .is('reminder_24h_sent_at', null)
-    .is('deleted_at', null)
-    .not('status', 'in', '("done","overdue")')
-    .not('assigned_to', 'is', null)
-
-  for (const task of tasks24h ?? []) {
-    const { data: authUser } = await supabase.auth.admin.getUserById(task.assigned_to).catch(() => ({ data: null }))
-    const email = authUser?.user?.email
-    const name  = task.assignee?.display_name ?? email ?? 'Team Member'
-    if (!email) continue
-
-    await sendTaskEmail({
-      taskId:    task.id,
-      email,
-      name,
-      type:      'task_reminder_24h',
-      details:   taskDetails(task),
-      flagField: 'reminder_24h_sent_at',
-    })
-  }
-
-  // ── 6. Same-day confirmation requests ─────────────────────────────────────
-  const { data: tasksToday } = await supabase
-    .from('tasks')
-    .select('*, assignee:profiles!assigned_to(id, display_name), client:clients(id, name, email)')
-    .eq('due_date', today)
-    .is('confirmation_sent_at', null)
-    .is('deleted_at', null)
-    .not('status', 'in', '("done","overdue")')
-    .not('assigned_to', 'is', null)
-
-  for (const task of tasksToday ?? []) {
-    const { data: authUser } = await supabase.auth.admin.getUserById(task.assigned_to).catch(() => ({ data: null }))
-    const email = authUser?.user?.email
-    const name  = task.assignee?.display_name ?? email ?? 'Team Member'
-    if (!email) continue
-
-    await sendTaskEmail({
-      taskId:    task.id,
-      email,
-      name,
-      type:      'task_confirmation',
-      details:   taskDetails(task),
-      flagField: 'confirmation_sent_at',
-    })
   }
 
   // ── 7. Weekly client report (Sundays only) ────────────────────────────────
