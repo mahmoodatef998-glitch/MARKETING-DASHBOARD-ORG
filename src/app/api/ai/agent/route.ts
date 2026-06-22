@@ -1472,16 +1472,14 @@ async function executeTool(
         })
       }
 
+      // Insert tasks FIRST — content_plan_items.task_id FK requires tasks to exist
+      let tasksCreated = 0
+      const { error: tasksErr } = await admin.from('tasks').insert(taskRows)
+      if (tasksErr) return { error: tasksErr.message }
+      tasksCreated = taskRows.length
+
       const { error: itemsErr } = await admin.from('content_plan_items').insert(itemRows)
       if (itemsErr) return { error: itemsErr.message }
-
-      // Create linked tasks — non-fatal if fails
-      let tasksCreated = 0
-      try {
-        const { error: tasksErr } = await admin.from('tasks').insert(taskRows)
-        if (!tasksErr) tasksCreated = taskRows.length
-        else console.error('[create_content_plan] tasks insert failed:', tasksErr.message)
-      } catch {}
 
       return {
         success: true,
@@ -1574,15 +1572,14 @@ async function executeTool(
           })
         }
 
+        // Insert tasks FIRST — content_plan_items.task_id FK requires tasks to exist
+        const { error: addTasksErr } = await admin.from('tasks').insert(newTaskRows)
+        if (addTasksErr) return { error: addTasksErr.message }
+        tasksAdded = newTaskRows.length
+
         const { error: addItemsErr } = await admin.from('content_plan_items').insert(newItemRows)
         if (addItemsErr) return { error: addItemsErr.message }
         itemsAdded = newItemRows.length
-
-        try {
-          const { error: addTasksErr } = await admin.from('tasks').insert(newTaskRows)
-          if (!addTasksErr) tasksAdded = newTaskRows.length
-          else console.error('[update_content_plan] tasks insert failed:', addTasksErr.message)
-        } catch {}
       }
 
       // Update existing items
