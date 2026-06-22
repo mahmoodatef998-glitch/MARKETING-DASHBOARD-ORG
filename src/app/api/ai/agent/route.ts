@@ -1514,15 +1514,18 @@ async function executeTool(
       const rawMonth = String(args.month)
       const monthNorm = /^\d{4}-\d{2}/.test(rawMonth) ? rawMonth.slice(0, 7) + '-01' : rawMonth
 
-      // Auto-delete any existing plan for same client+month before inserting
-      const { data: existingPlan } = await admin
+      // Auto-delete ALL existing plans for same client in the same calendar month.
+      // Use a date range (YYYY-MM-01 to YYYY-MM-last) to catch plans stored with non-01 day values.
+      const [yNum, mNum] = monthNorm.split('-').map(Number)
+      const monthEnd = new Date(yNum, mNum, 0).toISOString().split('T')[0]
+      const { data: existingPlans } = await admin
         .from('content_plans')
         .select('id')
         .eq('client_id', clientId)
-        .eq('month', monthNorm)
-        .maybeSingle()
+        .gte('month', monthNorm)
+        .lte('month', monthEnd)
 
-      if (existingPlan) {
+      for (const existingPlan of existingPlans ?? []) {
         const { data: exItems } = await admin
           .from('content_plan_items')
           .select('task_id')
@@ -1608,20 +1611,31 @@ async function executeTool(
           due_date:        taskDueDate,
           assigned_to:     item.assigned_to ? String(item.assigned_to) : null,
           client_id:       clientId,
-          plan_item_id:    itemId,
+          plan_item_id:    null, // linked in step 3 after items are inserted
           created_at:      now.toISOString(),
           updated_at:      now.toISOString(),
         })
       }
 
-      // Insert tasks FIRST — content_plan_items.task_id FK requires tasks to exist
+      // Step 1: Insert tasks with plan_item_id=null — breaks circular FK dependency
+      // (tasks.plan_item_id → content_plan_items.id, but items don't exist yet)
       let tasksCreated = 0
       const { error: tasksErr } = await admin.from('tasks').insert(taskRows)
       if (tasksErr) return { error: tasksErr.message }
       tasksCreated = taskRows.length
 
+      // Step 2: Insert content_plan_items with task_id — FK satisfied since tasks exist
       const { error: itemsErr } = await admin.from('content_plan_items').insert(itemRows)
       if (itemsErr) return { error: itemsErr.message }
+
+      // Step 3: Link tasks back to their plan items now that both sides exist
+      await Promise.all(
+        itemRows.map(item =>
+          admin.from('tasks')
+            .update({ plan_item_id: String(item.id), updated_at: now.toISOString() })
+            .eq('id', String(item.task_id))
+        )
+      )
 
       return {
         success: true,
@@ -1708,20 +1722,30 @@ async function executeTool(
             due_date:        taskDueDate,
             assigned_to:     item.assigned_to ? String(item.assigned_to) : null,
             client_id:       plan.client_id,
-            plan_item_id:    itemId,
+            plan_item_id:    null, // linked in step 3 after items are inserted
             created_at:      now.toISOString(),
             updated_at:      now.toISOString(),
           })
         }
 
-        // Insert tasks FIRST — content_plan_items.task_id FK requires tasks to exist
+        // Step 1: Insert tasks with plan_item_id=null — breaks circular FK dependency
         const { error: addTasksErr } = await admin.from('tasks').insert(newTaskRows)
         if (addTasksErr) return { error: addTasksErr.message }
         tasksAdded = newTaskRows.length
 
+        // Step 2: Insert content_plan_items with task_id — FK satisfied since tasks exist
         const { error: addItemsErr } = await admin.from('content_plan_items').insert(newItemRows)
         if (addItemsErr) return { error: addItemsErr.message }
         itemsAdded = newItemRows.length
+
+        // Step 3: Link tasks back to their plan items now that both sides exist
+        await Promise.all(
+          newItemRows.map(item =>
+            admin.from('tasks')
+              .update({ plan_item_id: String(item.id), updated_at: now.toISOString() })
+              .eq('id', String(item.task_id))
+          )
+        )
       }
 
       // Update existing items
