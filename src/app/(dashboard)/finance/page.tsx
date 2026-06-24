@@ -520,6 +520,17 @@ export default function FinancePage() {
     else toast('Failed to delete client', 'error')
   }
 
+  async function handleZeroRate(field: 'cost_per_design' | 'media_buyer_rate_per_client', label: string) {
+    if (!confirm(`Remove "${label}" from P&L? Sets the rate to 0. Can be restored in Financial Settings.`)) return
+    const res = await fetch('/api/settings/financial', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: 0 }),
+    })
+    if (res.ok) { toast(`${label} removed from P&L`, 'success'); void loadData() }
+    else toast('Failed to update', 'error')
+  }
+
   async function generateDueInvoices() {
     setGenerating(true)
     const res = await fetch('/api/invoices/auto-generate', { method: 'POST' })
@@ -704,40 +715,56 @@ export default function FinancePage() {
 
           {/* Cost rows */}
           <div className="border-l-2 border-red-500/30 ml-2 pl-3 space-y-1.5">
-            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-              <span className="min-w-0 flex items-center gap-1.5">
-                Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})
-                <button onClick={() => setShowSettings(true)}
-                  title="Edit rate in Financial Settings"
-                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </span>
-              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.designCost)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-              <span className="min-w-0 flex items-center gap-1.5">
-                Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})
-                <button onClick={() => setShowSettings(true)}
-                  title="Edit rate in Financial Settings"
-                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </span>
-              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                Operational expenses
-                <button
-                  onClick={() => { setShowForm(true); document.getElementById('expenses-section')?.scrollIntoView({ behavior: 'smooth' }) }}
-                  title="Add or edit expenses below"
-                  className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </span>
-              <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.operationalExpenses)}</span>
-            </div>
+            {d.pnl.designCost > 0 && (
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="min-w-0 flex items-center gap-1.5">
+                  Design costs ({d.pnl.designTaskCount} designs × AED {d.pnl.designTaskCount > 0 ? Math.round(d.pnl.designCost / d.pnl.designTaskCount) : 0})
+                  <button onClick={() => setShowSettings(true)}
+                    title="Edit rate in Financial Settings"
+                    className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button onClick={() => handleZeroRate('cost_per_design', 'Design costs')}
+                    title="Remove from P&L"
+                    className="p-0.5 rounded text-slate-700 hover:text-red-400 transition-colors">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+                <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.designCost)}</span>
+              </div>
+            )}
+            {d.pnl.mediaBuyerCost > 0 && (
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="min-w-0 flex items-center gap-1.5">
+                  Media buyer ({d.pnl.activeClientCount} clients × AED {d.pnl.activeClientCount > 0 ? Math.round(d.pnl.mediaBuyerCost / d.pnl.activeClientCount) : 0})
+                  <button onClick={() => setShowSettings(true)}
+                    title="Edit rate in Financial Settings"
+                    className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button onClick={() => handleZeroRate('media_buyer_rate_per_client', 'Media buyer')}
+                    title="Remove from P&L"
+                    className="p-0.5 rounded text-slate-700 hover:text-red-400 transition-colors">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+                <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.mediaBuyerCost)}</span>
+              </div>
+            )}
+            {d.pnl.operationalExpenses > 0 && (
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  Operational expenses
+                  <button
+                    onClick={() => { setShowForm(true); document.getElementById('expenses-section')?.scrollIntoView({ behavior: 'smooth' }) }}
+                    title="Add or edit expenses below"
+                    className="p-0.5 rounded text-slate-700 hover:text-indigo-400 transition-colors">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </span>
+                <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.operationalExpenses)}</span>
+              </div>
+            )}
           </div>
 
           {/* Net profit */}
