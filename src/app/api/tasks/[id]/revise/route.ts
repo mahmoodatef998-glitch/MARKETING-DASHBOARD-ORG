@@ -20,7 +20,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq('id', user.id)
     .single()
 
-  const { data: task, error: fetchErr } = await supabase
+  const admin = createAdminClient()
+
+  const { data: task, error: fetchErr } = await admin
     .from('tasks')
     .select('id, title, client_id, assigned_to, status, client:clients(name)')
     .eq('id', id)
@@ -29,13 +31,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  if (profile?.role !== 'admin' && task.client_id !== profile?.client_id) {
+  const canRevise = profile?.role === 'admin' || profile?.role === 'media_buyer' || task.client_id === profile?.client_id
+  if (!canRevise) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const admin = createAdminClient()
-
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('tasks')
     .update({
       status:             'in_progress',
