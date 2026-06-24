@@ -391,7 +391,7 @@ export default function ApprovalsPage() {
     </div>
   )
 
-  const isAdmin = userRole === 'admin'
+  const isAdmin = userRole === 'admin' || userRole === 'media_buyer'
 
   const statCounts = {
     pending:        tasks.filter((t) => t.approval_status === 'pending').length,

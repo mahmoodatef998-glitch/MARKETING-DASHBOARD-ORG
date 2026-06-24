@@ -29,8 +29,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  // Only allow if admin or the task's client
-  if (profile?.role !== 'admin' && task.client_id !== profile?.client_id) {
+  // Allow admin, media_buyer, or the task's own client
+  const canApprove = profile?.role === 'admin' || profile?.role === 'media_buyer' || task.client_id === profile?.client_id
+  if (!canApprove) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -38,9 +39,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Task already approved' }, { status: 409 })
   }
 
+  const isElevatedRole = profile?.role === 'admin' || profile?.role === 'media_buyer'
   const updates: Record<string, unknown> = {
     status:             'done',
-    approval_status:    profile?.role === 'admin' ? 'admin_approved' : 'client_approved',
+    approval_status:    isElevatedRole ? 'admin_approved' : 'client_approved',
     client_approved_at: new Date().toISOString(),
     updated_at:         new Date().toISOString(),
   }
@@ -56,8 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Send push notification to all admins when client approves (not admin self-approve)
-  if (profile?.role !== 'admin' && updates.approval_status === 'client_approved') {
+  // Send push notification to all admins when client approves (not admin/media_buyer self-approve)
+  if (!isElevatedRole && updates.approval_status === 'client_approved') {
     try {
       const admin = createAdminClient()
       const { data: subs } = await admin
