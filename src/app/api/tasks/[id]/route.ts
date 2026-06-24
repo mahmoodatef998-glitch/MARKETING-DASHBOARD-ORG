@@ -26,10 +26,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+  const admin = createAdminClient()
+
   // Team members can only update tasks assigned to them
   if (['video_maker', 'designer', 'ai_video'].includes(putProfile?.role ?? '')) {
-    const adminCheck = createAdminClient()
-    const { data: taskCheck } = await adminCheck
+    const { data: taskCheck } = await admin
       .from('tasks')
       .select('assigned_to')
       .eq('id', id)
@@ -61,7 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Fetch old state before update
-  const { data: oldTask } = await supabase
+  const { data: oldTask } = await admin
     .from('tasks')
     .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at, started_at')
     .eq('id', id)
@@ -82,7 +83,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     updated.completed_at = now
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('tasks')
     .update(updated)
     .eq('id', id)
@@ -331,17 +332,18 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: delProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (delProfile?.role !== 'admin') {
+  if (delProfile?.role !== 'admin' && delProfile?.role !== 'media_buyer') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data } = await supabase.from('tasks').select('notion_id').eq('id', id).single()
+  const admin = createAdminClient()
+  const { data } = await admin.from('tasks').select('notion_id').eq('id', id).single()
 
   if (data?.notion_id) {
     try { await deleteNotionPage(data.notion_id) } catch {}
   }
 
-  const { error } = await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id)
+  const { error } = await admin.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }
