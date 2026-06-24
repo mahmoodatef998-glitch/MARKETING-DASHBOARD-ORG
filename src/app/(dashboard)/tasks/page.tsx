@@ -785,7 +785,7 @@ export default function TasksPage() {
     })
   }, [router])
 
-  const isAdmin = userRole === 'admin'
+  const isAdmin = userRole === 'admin' || userRole === 'media_buyer'
 
   const load = useCallback(async () => {
     const [tr, cr, mr] = await Promise.all([
