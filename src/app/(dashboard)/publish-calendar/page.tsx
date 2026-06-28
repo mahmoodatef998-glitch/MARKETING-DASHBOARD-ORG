@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Camera, Globe, Music2, RefreshCw, CheckCircle2, CheckSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,15 @@ interface PublishEvent {
       client: { id: string; name: string }
     }
   }
+}
+
+interface ScheduledTask {
+  id:                   string
+  title:                string
+  scheduled_publish_at: string
+  status:               string
+  task_type:            string | null
+  client?:              { id: string; name: string } | null
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -297,11 +306,118 @@ function DayEventsModal({ date, events, onClose, onSelectEvent }: {
 
 
 
+// ─── Task Chip ────────────────────────────────────────────────────────────────
+
+function TaskChip({ task, onClick }: { task: ScheduledTask; onClick: (e: React.MouseEvent) => void }) {
+  const isDone = task.status === 'done'
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full text-left rounded-md px-1.5 py-1 border text-[10px] leading-tight transition-all hover:opacity-90 active:scale-95',
+        isDone
+          ? 'bg-green-500/15 border-green-500/30'
+          : 'bg-indigo-500/15 border-indigo-500/30'
+      )}
+    >
+      <div className="flex items-center gap-1 mb-0.5">
+        <CheckSquare className={cn('h-2.5 w-2.5 shrink-0', isDone ? 'text-green-400' : 'text-indigo-400')} />
+        <span className={cn('font-semibold truncate', isDone ? 'text-green-400' : 'text-indigo-400')}>
+          {fmtTime(task.scheduled_publish_at)}
+        </span>
+        <span className="ml-auto shrink-0 px-1 rounded text-[9px] bg-indigo-500/20 text-indigo-400">task</span>
+      </div>
+      {task.client?.name && (
+        <p className={cn('truncate', isDone ? 'text-green-300/70' : 'text-slate-400')}>{task.client.name}</p>
+      )}
+      <p className={cn('truncate', isDone ? 'text-green-400/50' : 'text-slate-500')}>{task.title}</p>
+    </button>
+  )
+}
+
+// ─── Task Detail Panel ────────────────────────────────────────────────────────
+
+function TaskDetail({ task, onClose }: { task: ScheduledTask; onClose: () => void }) {
+  const isDone = task.status === 'done'
+  const TYPE_LABELS: Record<string, string> = {
+    reel_video: 'Reel', design: 'Design', ai_video: 'AI Video', post: 'Post', custom: 'Custom',
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={cn(
+        'bg-slate-900 rounded-2xl w-full max-w-sm p-5 space-y-4 border transition-colors',
+        isDone ? 'border-green-500/40' : 'border-indigo-500/40'
+      )}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              'w-9 h-9 rounded-xl flex items-center justify-center border',
+              isDone ? 'bg-green-500/20 border-green-500/40' : 'bg-indigo-500/20 border-indigo-500/40'
+            )}>
+              <CheckSquare className={cn('h-4 w-4', isDone ? 'text-green-400' : 'text-indigo-400')} />
+            </div>
+            <div>
+              <p className={cn('text-sm font-bold', isDone ? 'text-green-400' : 'text-indigo-400')}>
+                Scheduled Task {isDone && '— Done ✓'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {new Date(task.scheduled_publish_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                {' '}{fmtTime(task.scheduled_publish_at)}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
+        </div>
+
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-slate-500">Task</span>
+            <span className="text-slate-200 font-medium truncate max-w-[60%] text-right">{task.title}</span>
+          </div>
+          {task.client?.name && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">Client</span>
+              <span className="text-slate-200">{task.client.name}</span>
+            </div>
+          )}
+          {task.task_type && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">Type</span>
+              <span className="text-slate-400">{TYPE_LABELS[task.task_type] ?? task.task_type}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-slate-500">Status</span>
+            <span className={cn(
+              'px-2 py-0.5 rounded-full text-xs font-medium border',
+              task.status === 'done' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+              task.status === 'in_progress' ? 'bg-violet-500/20 text-violet-400 border-violet-500/30' :
+              task.status === 'review' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+              'bg-slate-700 text-slate-400 border-slate-600'
+            )}>
+              {task.status.replace('_', ' ')}
+            </span>
+          </div>
+        </div>
+
+        <a
+          href="/tasks"
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm font-semibold text-indigo-400 hover:bg-indigo-600/30 transition-colors"
+        >
+          View in Tasks →
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export default function PublishCalendarPage() {
   const router = useRouter()
   const now    = new Date()
 
   const [events,        setEvents]        = useState<PublishEvent[]>([])
+  const [tasks,         setTasks]         = useState<ScheduledTask[]>([])
   const [clients,       setClients]       = useState<Client[]>([])
   const [loading,       setLoading]       = useState(true)
   const [loadError,     setLoadError]     = useState<string | null>(null)
@@ -313,6 +429,7 @@ export default function PublishCalendarPage() {
   const [filterStatus,  setFilterStatus]  = useState('all')
   const [filterType,    setFilterType]    = useState('all')
   const [selectedEvent, setSelectedEvent] = useState<PublishEvent | null>(null)
+  const [selectedTask,  setSelectedTask]  = useState<ScheduledTask | null>(null)
   const [selectedDay,   setSelectedDay]   = useState<string | null>(null)
 
   useEffect(() => {
@@ -351,8 +468,26 @@ export default function PublishCalendarPage() {
     setLoading(false)
   }, [year, month, filterClient, filterPlat, filterStatus, filterType])
 
+  const loadTasks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tasks')
+      if (!res.ok) return
+      const all: ScheduledTask[] = await res.json()
+      // Keep only tasks with scheduled_publish_at in the current month
+      const from = new Date(year, month, 1)
+      const to   = new Date(year, month + 1, 1)
+      setTasks(all.filter(t =>
+        t.scheduled_publish_at &&
+        new Date(t.scheduled_publish_at) >= from &&
+        new Date(t.scheduled_publish_at) < to
+      ))
+    } catch {
+      setTasks([])
+    }
+  }, [year, month])
+
   useEffect(() => { void loadClients() }, [loadClients])
-  useEffect(() => { void loadEvents()  }, [loadEvents])
+  useEffect(() => { void loadEvents(); void loadTasks() }, [loadEvents, loadTasks])
 
   function prevMonth() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) } else setMonth(m => m - 1)
@@ -367,6 +502,14 @@ export default function PublishCalendarPage() {
     const day = toYMD(new Date(ev.scheduled_at))
     if (!eventsByDay[day]) eventsByDay[day] = []
     eventsByDay[day].push(ev)
+  }
+
+  // Build day→tasks map
+  const tasksByDay: Record<string, ScheduledTask[]> = {}
+  for (const t of tasks) {
+    const day = toYMD(new Date(t.scheduled_publish_at))
+    if (!tasksByDay[day]) tasksByDay[day] = []
+    tasksByDay[day].push(t)
   }
 
   function handleMarkPublished(id: string) {
@@ -395,6 +538,7 @@ export default function PublishCalendarPage() {
 
   const totalEvents = events.length
   const readyCount  = events.filter(e => e.status === 'ready').length
+  const totalScheduledTasks = tasks.length
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
@@ -404,6 +548,7 @@ export default function PublishCalendarPage() {
           <h1 className="text-2xl font-bold text-slate-100">Publishing Calendar</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {totalEvents} event{totalEvents !== 1 ? 's' : ''}
+            {totalScheduledTasks > 0 && <span className="ml-2 text-indigo-400 font-medium">· {totalScheduledTasks} scheduled task{totalScheduledTasks !== 1 ? 's' : ''}</span>}
             {readyCount > 0 && <span className="ml-2 text-emerald-400 font-medium">· {readyCount} ready to publish</span>}
           </p>
         </div>
@@ -545,9 +690,11 @@ export default function PublishCalendarPage() {
                 {cells.map((day, idx) => {
                   const isToday = day !== null &&
                     day === now.getDate() && month === now.getMonth() && year === now.getFullYear()
-                  const ymd    = day !== null ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null
-                  const dayEvs = ymd ? (eventsByDay[ymd] ?? []) : []
-                  const allDone = dayEvs.length > 0 && dayEvs.every(e => e.status === 'published')
+                  const ymd      = day !== null ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null
+                  const dayEvs   = ymd ? (eventsByDay[ymd] ?? []) : []
+                  const dayTasks = ymd ? (tasksByDay[ymd]  ?? []) : []
+                  const allDone  = dayEvs.length > 0 && dayEvs.every(e => e.status === 'published')
+                  const hasItems = dayEvs.length > 0 || dayTasks.length > 0
 
                   return (
                     <div key={idx}
@@ -556,7 +703,7 @@ export default function PublishCalendarPage() {
                         'min-h-[100px] p-1.5 border-b border-r border-slate-800/60 transition-colors',
                         day === null && 'bg-slate-950/30',
                         allDone && 'bg-green-500/5',
-                        day !== null && dayEvs.length > 0 && 'cursor-pointer hover:bg-slate-800/30',
+                        day !== null && hasItems && 'cursor-pointer hover:bg-slate-800/30',
                       )}>
                       {day !== null && (
                         <>
@@ -587,6 +734,9 @@ export default function PublishCalendarPage() {
                                 +{dayEvs.length - 3} more
                               </button>
                             )}
+                            {dayTasks.map(t => (
+                              <TaskChip key={t.id} task={t} onClick={(e) => { e.stopPropagation(); setSelectedTask(t) }} />
+                            ))}
                           </div>
                         </>
                       )}
@@ -633,21 +783,26 @@ export default function PublishCalendarPage() {
 
               <div className="grid grid-cols-7 min-h-[300px]">
                 {weekDays.map((d, i) => {
-                  const ymd    = toYMD(d)
-                  const dayEvs = eventsByDay[ymd] ?? []
-                  const isToday = ymd === toYMD(now)
+                  const ymd      = toYMD(d)
+                  const dayEvs   = eventsByDay[ymd] ?? []
+                  const dayTasks = tasksByDay[ymd]  ?? []
+                  const isToday  = ymd === toYMD(now)
+                  const hasItems = dayEvs.length > 0 || dayTasks.length > 0
                   return (
                     <div key={i}
                       onClick={() => dayEvs.length > 0 && setSelectedDay(ymd)}
                       className={cn(
                         'p-2 border-r border-slate-800 last:border-0 space-y-1',
                         isToday && 'bg-indigo-600/5',
-                        dayEvs.length > 0 && 'cursor-pointer hover:bg-slate-800/30 transition-colors',
+                        hasItems && 'cursor-pointer hover:bg-slate-800/30 transition-colors',
                       )}>
                       {dayEvs.map(ev => (
                         <EventChip key={ev.id} event={ev} onClick={(e) => { e.stopPropagation(); setSelectedEvent(ev) }} />
                       ))}
-                      {dayEvs.length === 0 && (
+                      {dayTasks.map(t => (
+                        <TaskChip key={t.id} task={t} onClick={(e) => { e.stopPropagation(); setSelectedTask(t) }} />
+                      ))}
+                      {!hasItems && (
                         <p className="text-[10px] text-slate-700 text-center pt-4">—</p>
                       )}
                     </div>
@@ -658,7 +813,7 @@ export default function PublishCalendarPage() {
           )}
 
           {/* Empty state */}
-          {events.length === 0 && !loadError && (
+          {events.length === 0 && tasks.length === 0 && !loadError && (
             <div className="text-center py-16 text-slate-600">
               <p className="text-lg">No publish events in {new Date(year, month).toLocaleString('en-US', { month: 'long', year: 'numeric' })}</p>
               <p className="text-sm mt-1">Use the arrows above to navigate to the month your plan is scheduled for</p>
@@ -683,6 +838,14 @@ export default function PublishCalendarPage() {
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
           onMarkPublished={handleMarkPublished}
+        />
+      )}
+
+      {/* Task detail panel */}
+      {selectedTask && (
+        <TaskDetail
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
         />
       )}
     </div>
