@@ -1580,18 +1580,23 @@ export default function TeamPortalPage() {
     const task = tasks.find(t => t.id === taskId)
     if (!task) return
     if (newStatus === 'done') { setDoneModal(task); return }
-    await fetch(`/api/tasks/${taskId}`, {
+    const res = await fetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(typeof err.error === 'string' ? err.error : 'Failed to update task status')
+      return
+    }
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
   }
 
   async function confirmDone(deliveryUrl: string, schedule?: ScheduleInfo) {
     if (!doneModal) return
     const task = doneModal
-    await fetch(`/api/tasks/${task.id}`, {
+    const res = await fetch(`/api/tasks/${task.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1599,6 +1604,11 @@ export default function TeamPortalPage() {
         delivery_url: deliveryUrl || null,
       }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(typeof err.error === 'string' ? err.error : 'Failed to mark task as done')
+      return
+    }
     if (schedule && schedule.platforms.length > 0 && schedule.scheduledAt) {
       await fetch('/api/social/scheduled-posts', {
         method: 'POST',

@@ -11,6 +11,18 @@ import { logActivity } from '@/lib/activity-log'
 import { logAudit } from '@/lib/audit'
 import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
 
+const TASK_FETCH_COLUMNS =
+  'status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at'
+
+function fetchTaskForUpdate(admin: ReturnType<typeof createAdminClient>, id: string) {
+  return admin
+    .from('tasks')
+    .select(TASK_FETCH_COLUMNS)
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
@@ -51,15 +63,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = parsed.data
 
-  // Fetch old state before update — 404 if missing or soft-deleted
-  const { data: oldTask, error: fetchErr } = await admin
-    .from('tasks')
-    .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at, started_at')
-    .eq('id', id)
-    .is('deleted_at', null)
-    .single()
+  const { data: oldTask, error: fetchErr } = await fetchTaskForUpdate(admin, id)
 
-  if (fetchErr || !oldTask) {
+  if (fetchErr) {
+    const code = (fetchErr as { code?: string }).code
+    if (code === 'PGRST116') {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+    console.error('[tasks PUT] fetch failed:', fetchErr.message)
+    return NextResponse.json({ error: dbError(fetchErr) }, { status: 500 })
+  }
+  if (!oldTask) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }
 
@@ -70,24 +84,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     updated.approval_status = 'pending'
   }
 
-  // Time tracking: record when work starts and when it finishes
+  // Time tracking: record when work starts and when it finishes (optional columns — migration 004)
   const now = new Date().toISOString()
-  if (body.status === 'in_progress' && oldTask.status !== 'in_progress' && !oldTask.started_at) {
+  if (body.status === 'in_progress' && oldTask.status !== 'in_progress') {
     updated.started_at = now
   }
   if (body.status === 'done' && oldTask.status !== 'done') {
     updated.completed_at = now
   }
 
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from('tasks')
     .update(updated)
     .eq('id', id)
     .is('deleted_at', null)
     .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
-    .single()
+    .maybeSingle()
+
+  // Retry without time-tracking columns if migration 004 was not applied yet
+  if (error && /started_at|completed_at/i.test(error.message)) {
+    delete updated.started_at
+    delete updated.completed_at
+    const retry = await admin
+      .from('tasks')
+      .update(updated)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
+      .maybeSingle()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
   if (data?.notion_id) {
     try { await updateNotionTask(data.notion_id, updated) } catch {}

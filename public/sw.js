@@ -1,4 +1,4 @@
-const CACHE = 'agency-os-v4'
+const CACHE = 'agency-os-v5'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(self.skipWaiting())
@@ -16,6 +16,9 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return
   if (!e.request.url.startsWith('http')) return
   if (e.request.url.includes('/api/')) return
+  // Never cache manifest/icons — avoids serving stale 503 from Vercel SSO redirects
+  if (e.request.url.includes('/manifest.json')) return
+  if (e.request.url.includes('/icon-')) return
   // Skip HTML navigation requests — let the browser/server handle auth redirects directly
   if (e.request.mode === 'navigate') return
 
