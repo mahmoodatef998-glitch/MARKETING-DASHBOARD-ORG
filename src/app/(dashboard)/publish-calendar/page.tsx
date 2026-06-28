@@ -473,14 +473,15 @@ export default function PublishCalendarPage() {
       const res = await fetch('/api/tasks')
       if (!res.ok) return
       const all: ScheduledTask[] = await res.json()
-      // Keep only tasks with scheduled_publish_at in the current month
-      const from = new Date(year, month, 1)
-      const to   = new Date(year, month + 1, 1)
-      setTasks(all.filter(t =>
-        t.scheduled_publish_at &&
-        new Date(t.scheduled_publish_at) >= from &&
-        new Date(t.scheduled_publish_at) < to
-      ))
+      // Compare date strings directly to avoid timezone shifts
+      const fromStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      const nextMonth = month === 11 ? 0 : month + 1
+      const nextYear  = month === 11 ? year + 1 : year
+      const toStr   = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`
+      setTasks(all.filter(t => {
+        const dateStr = t.scheduled_publish_at?.slice(0, 10) ?? ''
+        return dateStr >= fromStr && dateStr < toStr
+      }))
     } catch {
       setTasks([])
     }
@@ -504,10 +505,10 @@ export default function PublishCalendarPage() {
     eventsByDay[day].push(ev)
   }
 
-  // Build day→tasks map
+  // Build day→tasks map — use string slice to avoid timezone shifts
   const tasksByDay: Record<string, ScheduledTask[]> = {}
   for (const t of tasks) {
-    const day = toYMD(new Date(t.scheduled_publish_at))
+    const day = t.scheduled_publish_at.slice(0, 10)
     if (!tasksByDay[day]) tasksByDay[day] = []
     tasksByDay[day].push(t)
   }
