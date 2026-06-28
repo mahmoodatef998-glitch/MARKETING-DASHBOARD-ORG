@@ -1243,6 +1243,7 @@ export default function TasksPage() {
                         gridView={gridView}
                         onSelect={toggleSelect}
                         isAdmin={isAdmin}
+                        canDelete={canDelete}
                         onEdit={(t) => { setEditing(t); setOpen(true) }}
                         onDelete={handleDelete}
                         onViewDetail={setDetailTask}
