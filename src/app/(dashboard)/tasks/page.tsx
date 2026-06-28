@@ -291,12 +291,14 @@ function TaskForm({
 function TaskDetailModal({
   task,
   isAdmin,
+  canDelete,
   onClose,
   onEdit,
   onDelete,
 }: {
   task: Task
   isAdmin: boolean
+  canDelete: boolean
   onClose: () => void
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
@@ -420,13 +422,15 @@ function TaskDetailModal({
           >
             <Pencil className="h-4 w-4" /> Edit Task
           </Button>
-          <Button
-            variant="ghost"
-            className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            onClick={() => { onClose(); onDelete(task.id) }}
-          >
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={() => { onClose(); onDelete(task.id) }}
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -510,11 +514,12 @@ function MemberAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' 
 // ── Task Card (grid + list) ────────────────────────────────────────────────────
 
 function TaskCard({
-  task, selected, onSelect, isAdmin, onEdit, onDelete, onViewDetail, gridView, index,
+  task, selected, onSelect, isAdmin, canDelete, onEdit, onDelete, onViewDetail, gridView, index,
 }: {
   task: Task; selected: boolean; gridView: boolean; index: number
   onSelect: (id: string) => void
   isAdmin: boolean
+  canDelete: boolean
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
   onViewDetail: (t: Task) => void
@@ -633,10 +638,12 @@ function TaskCard({
                     className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
-                    className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {canDelete && (
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -742,10 +749,12 @@ function TaskCard({
             onClick={(e) => { e.stopPropagation(); onEdit(task) }}>
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10"
-            onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canDelete && (
+            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl hover:text-red-400 hover:bg-red-500/10"
+              onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -785,7 +794,8 @@ export default function TasksPage() {
     })
   }, [router])
 
-  const isAdmin = userRole === 'admin' || userRole === 'media_buyer'
+  const isAdmin = userRole === 'admin' || userRole === 'media_buyer' || userRole === 'account_manager'
+  const canDelete = userRole === 'admin' || userRole === 'media_buyer'
 
   const load = useCallback(async () => {
     const [tr, cr, mr] = await Promise.all([
@@ -1035,9 +1045,11 @@ export default function TasksPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" variant="ghost" onClick={bulkDelete} className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10">
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
+          {canDelete && (
+            <Button size="sm" variant="ghost" onClick={bulkDelete} className="gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10">
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
           <button onClick={() => setSelected(new Set())} className="p-1 rounded text-slate-500 hover:text-slate-300">
             <X className="h-4 w-4" />
           </button>
@@ -1195,6 +1207,7 @@ export default function TasksPage() {
                   gridView={gridView}
                   onSelect={toggleSelect}
                   isAdmin={isAdmin}
+                  canDelete={canDelete}
                   onEdit={(t) => { setEditing(t); setOpen(true) }}
                   onDelete={handleDelete}
                   onViewDetail={setDetailTask}
@@ -1263,6 +1276,7 @@ export default function TasksPage() {
             <TaskDetailModal
               task={detailTask}
               isAdmin={isAdmin}
+              canDelete={canDelete}
               onClose={() => setDetailTask(null)}
               onEdit={(t) => { setEditing(t); setOpen(true) }}
               onDelete={handleDelete}

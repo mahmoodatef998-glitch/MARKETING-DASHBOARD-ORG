@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (fetchErr || !task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const canRevise = profile?.role === 'admin' || profile?.role === 'media_buyer' || task.client_id === profile?.client_id
+  const canRevise = profile?.role === 'admin' || profile?.role === 'media_buyer' || profile?.role === 'account_manager' || task.client_id === profile?.client_id
   if (!canRevise) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

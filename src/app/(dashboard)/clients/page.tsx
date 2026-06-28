@@ -41,11 +41,13 @@ export default function ClientsPage() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [profileClient, setProfileClient] = useState<Client | null>(null)
   const [guardReady, setGuardReady] = useState(false)
+  const [userRole, setUserRole] = useState('')
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
       const role = p?.role ?? ''
-      if (role !== 'admin') { router.replace('/dashboard'); return }
+      if (!['admin', 'account_manager'].includes(role)) { router.replace('/dashboard'); return }
+      setUserRole(role)
       setGuardReady(true)
     })
   }, [router])
@@ -196,10 +198,12 @@ export default function ClientsPage() {
                       onClick={() => { setEditing(client); setOpen(true) }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100"
-                      onClick={() => handleDelete(client.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {userRole === 'admin' && (
+                      <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100"
+                        onClick={() => handleDelete(client.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
 

@@ -29,7 +29,13 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await supabase.from('profiles').select('role, client_id').eq('id', user.id).single()
 
-  let query = supabase.from('invoices').select('*, client:clients(*)').is('deleted_at', null).order('created_at', { ascending: false })
+  // Only authorized roles can see invoices (client, admin, account_manager)
+  if (!['admin', 'account_manager', 'client'].includes(profile?.role ?? '')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const adminDb = createAdminClient()
+  let query = adminDb.from('invoices').select('*, client:clients(*)').is('deleted_at', null).order('created_at', { ascending: false })
 
   // Clients only see their own invoices
   if (profile?.role === 'client') {

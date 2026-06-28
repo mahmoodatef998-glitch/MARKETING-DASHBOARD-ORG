@@ -306,7 +306,7 @@ export default function ApprovalsPage() {
     if (guardReady) fetchTasks(filter)
   }, [filter, fetchTasks, guardReady])
 
-  async function handleAction(taskId: string, action: 'revision_requested' | 'admin_approve') {
+  async function handleAction(taskId: string, action: 'revision_requested' | 'admin_approve' | 'client_approve') {
     setActionLoading(taskId + action)
     try {
       const body: Record<string, string> = { task_id: taskId, action }
@@ -391,7 +391,8 @@ export default function ApprovalsPage() {
     </div>
   )
 
-  const isAdmin = userRole === 'admin' || userRole === 'media_buyer'
+  const isAdmin = userRole === 'admin' || userRole === 'media_buyer' || userRole === 'account_manager'
+  const canAdminApprove = userRole === 'admin' || userRole === 'media_buyer'
 
   const statCounts = {
     pending:        tasks.filter((t) => t.approval_status === 'pending').length,
@@ -583,7 +584,7 @@ export default function ApprovalsPage() {
                     </div>
                   )}
 
-                  {/* Action row — admin only */}
+                  {/* Action row */}
                   {isAdmin && !isAdminApproved && (
                     <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-700">
                       <input
@@ -607,22 +608,41 @@ export default function ApprovalsPage() {
                         )}
                         Revision
                       </button>
-                      <button
-                        onClick={() => handleAction(task.id, 'admin_approve')}
-                        disabled={actionLoading === task.id + 'admin_approve'}
-                        className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
-                          isClientApproved
-                            ? 'bg-green-600 hover:bg-green-500 text-white border-green-500'
-                            : 'bg-green-500/15 hover:bg-green-500/25 text-green-400 border-green-500/30'
-                        }`}
-                      >
-                        {actionLoading === task.id + 'admin_approve' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <FileCheck className="h-3.5 w-3.5" />
-                        )}
-                        {isDesign ? 'Approve + 15 AED' : 'Approve'}
-                      </button>
+                      {canAdminApprove ? (
+                        <button
+                          onClick={() => handleAction(task.id, 'admin_approve')}
+                          disabled={actionLoading === task.id + 'admin_approve'}
+                          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+                            isClientApproved
+                              ? 'bg-green-600 hover:bg-green-500 text-white border-green-500'
+                              : 'bg-green-500/15 hover:bg-green-500/25 text-green-400 border-green-500/30'
+                          }`}
+                        >
+                          {actionLoading === task.id + 'admin_approve' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <FileCheck className="h-3.5 w-3.5" />
+                          )}
+                          {isDesign ? 'Approve + 15 AED' : 'Approve'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAction(task.id, 'client_approve')}
+                          disabled={actionLoading === task.id + 'client_approve' || isClientApproved}
+                          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+                            isClientApproved
+                              ? 'bg-green-600 text-white border-green-500 opacity-60 cursor-not-allowed'
+                              : 'bg-green-500/15 hover:bg-green-500/25 text-green-400 border-green-500/30'
+                          }`}
+                        >
+                          {actionLoading === task.id + 'client_approve' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <FileCheck className="h-3.5 w-3.5" />
+                          )}
+                          {isClientApproved ? 'Client Approved ✓' : 'Approve'}
+                        </button>
+                      )}
                     </div>
                   )}
 

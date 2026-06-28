@@ -26,6 +26,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const raw = await req.json().catch(() => null)
   if (!raw) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+  // account_manager cannot mark tasks as done
+  if (putProfile?.role === 'account_manager' && raw.status === 'done') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const admin = createAdminClient()
 
   // Team members can only update tasks assigned to them

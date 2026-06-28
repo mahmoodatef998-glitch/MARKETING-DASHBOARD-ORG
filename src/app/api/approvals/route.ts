@@ -100,7 +100,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'media_buyer'
+  const isAccountManager = profile?.role === 'account_manager'
   const isClient = profile?.role === 'client'
 
   // Clients must only touch tasks belonging to their own client
@@ -110,12 +111,13 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  if (!isAdmin && !isClient) {
+  if (!isAdmin && !isAccountManager && !isClient) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   if (action === 'client_approve') {
-    if (!isClient) return NextResponse.json({ error: 'Only clients can client_approve' }, { status: 403 })
+    // account_manager can also give client_approved
+    if (!isClient && !isAccountManager) return NextResponse.json({ error: 'Only clients or account managers can client_approve' }, { status: 403 })
 
     const { error: updateError } = await admin
       .from('tasks')

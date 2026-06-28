@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (!p.role) { router.replace('/login'); return }
         // Enforce portal boundaries — wrong role → correct portal
         if (p.role === 'client') { router.replace('/client-portal'); return }
-        if (!['admin', 'media_buyer'].includes(p.role)) { router.replace('/team-portal'); return }
+        if (!['admin', 'media_buyer', 'account_manager'].includes(p.role)) { router.replace('/team-portal'); return }
         setRole(p.role)
       } catch {
         router.replace('/login'); return
@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-      {(role === 'admin' || role === 'media_buyer' || DEMO) && <AgentChat />}
+      {(role === 'admin' || role === 'media_buyer' || role === 'account_manager' || DEMO) && <AgentChat />}
     </ToastProvider>
   )
 }

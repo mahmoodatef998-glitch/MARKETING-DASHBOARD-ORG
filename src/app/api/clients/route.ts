@@ -23,7 +23,7 @@ export async function GET() {
     if (error) return NextResponse.json({ error: dbError(error) }, { status: 500 })
     return NextResponse.json(data)
   }
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin', 'account_manager'].includes(profile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { data, error } = await admin
     .from('clients')
     .select('*, billing_plans(id, cycle_type, amount, currency, custom_days, next_invoice_date, is_active)')
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin', 'account_manager'].includes(callerProfile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const rawBody = await req.json().catch(() => null)
   const { billing_plan, package: packageData, ...clientBody } = rawBody ?? {}

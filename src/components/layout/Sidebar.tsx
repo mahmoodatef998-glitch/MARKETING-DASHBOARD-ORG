@@ -44,14 +44,14 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/client-portal',    label: 'My Portal',        icon: User,            roles: ['client'] },
   { href: '/dashboard',        label: 'Dashboard',        icon: LayoutDashboard, roles: null },
   { href: '/reports',          label: 'Reports',          icon: BarChart2,       roles: ['admin'] },
-  { href: '/clients',          label: 'Clients',          icon: Users,           roles: ['admin'] },
+  { href: '/clients',          label: 'Clients',          icon: Users,           roles: ['admin', 'account_manager'] },
   { href: '/team',             label: 'Team',             icon: UserCheck,       roles: ['admin'] },
   { href: '/tasks',            label: 'Tasks',            icon: CheckSquare,     roles: null },
   { href: '/approvals',        label: 'Approvals',        icon: FileCheck,       roles: null },
   { href: '/meetings',         label: 'Meetings',         icon: CalendarDays,    roles: ['admin'] },
   // ── Finance ──────────────────────────────────────────────────────────────────
   { href: '/finance',          label: 'Overview',         icon: TrendingUp,      roles: ['admin'],                        sectionLabel: 'Finance' },
-  { href: '/invoices',         label: 'Invoices',         icon: FileText,        roles: ['admin'] },
+  { href: '/invoices',         label: 'Invoices',         icon: FileText,        roles: ['admin', 'account_manager'] },
   { href: '/billing',          label: 'History',          icon: CreditCard,      roles: ['admin'] },
   // ── Content ──────────────────────────────────────────────────────────────────
   { href: '/content-plans',    label: 'Content Plans',    icon: LayoutList,      roles: ['admin', 'media_buyer'],         sectionLabel: 'Content' },

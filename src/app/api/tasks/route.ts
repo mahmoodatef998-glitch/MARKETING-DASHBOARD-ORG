@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!['admin', 'media_buyer'].includes(callerProfile?.role ?? '')) {
+  if (!['admin', 'media_buyer', 'account_manager'].includes(callerProfile?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

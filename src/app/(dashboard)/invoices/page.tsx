@@ -249,8 +249,8 @@ function InvoiceDetailsModal({
   allInvoices: Invoice[]
   onClose: () => void
   onUpdate: (updated: Invoice) => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
   onRenew: () => void
 }) {
   const { toast } = useToast()
@@ -852,14 +852,16 @@ function InvoiceDetailsModal({
             onClick={() => window.open(`/api/invoices/${inv.id}/pdf`, '_blank')}>
             <Download className="h-4 w-4" /> PDF
           </Button>
-          {!isPaid && (
+          {!isPaid && onEdit && (
             <Button variant="ghost" className="gap-2" onClick={onEdit}>
               <Pencil className="h-4 w-4" /> Edit
             </Button>
           )}
-          <Button variant="ghost" className="gap-2 hover:text-red-400 ml-auto" onClick={onDelete}>
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
+          {onDelete && (
+            <Button variant="ghost" className="gap-2 hover:text-red-400 ml-auto" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
         </div>
 
         {/* ── Renew Modal ── */}
@@ -1252,11 +1254,13 @@ export default function InvoicesPage() {
   const [editing,   setEditing]   = useState<Invoice | null>(null)
   const [detailInv, setDetailInv] = useState<Invoice | null>(null)
   const [guardReady, setGuardReady] = useState(false)
+  const [userRole, setUserRole] = useState('')
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(p => {
       const role = p?.role ?? ''
-      if (role !== 'admin') { router.replace('/dashboard'); return }
+      if (!['admin', 'account_manager'].includes(role)) { router.replace('/dashboard'); return }
+      setUserRole(role)
       setGuardReady(true)
     })
   }, [router])
@@ -1371,9 +1375,11 @@ export default function InvoicesPage() {
             className="gap-1.5 text-slate-400 hover:text-slate-100 flex-1 sm:flex-none">
             <Download className="h-4 w-4" /> Export
           </Button>
-          <Button onClick={() => { setEditing(null); setFormOpen(true) }} className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
-            <Plus className="h-4 w-4" /> New Invoice
-          </Button>
+          {userRole === 'admin' && (
+            <Button onClick={() => { setEditing(null); setFormOpen(true) }} className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
+              <Plus className="h-4 w-4" /> New Invoice
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1420,9 +1426,11 @@ export default function InvoicesPage() {
               <Card>
                 <CardContent className="py-10 text-center">
                   <p className="text-slate-400 text-sm">No pending invoices.</p>
-                  <Button className="mt-3" onClick={() => { setEditing(null); setFormOpen(true) }}>
-                    <Plus className="h-4 w-4" /> Create Invoice
-                  </Button>
+                  {userRole === 'admin' && (
+                    <Button className="mt-3" onClick={() => { setEditing(null); setFormOpen(true) }}>
+                      <Plus className="h-4 w-4" /> Create Invoice
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -1457,8 +1465,8 @@ export default function InvoicesPage() {
             setDetailInv(updated)
             setInvoices(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
           }}
-          onEdit={() => { setEditing(detailInv); setDetailInv(null); setFormOpen(true) }}
-          onDelete={() => handleDelete(detailInv.id, detailInv.status)}
+          onEdit={userRole === 'admin' ? () => { setEditing(detailInv); setDetailInv(null); setFormOpen(true) } : undefined}
+          onDelete={userRole === 'admin' ? () => handleDelete(detailInv.id, detailInv.status) : undefined}
           onRenew={() => { setDetailInv(null); void load() }}
         />
       )}

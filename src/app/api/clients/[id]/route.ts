@@ -14,10 +14,18 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerClie
   return null
 }
 
+async function requireAdminOrAccountManager(supabase: Awaited<ReturnType<typeof createServerClient>>) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!['admin', 'account_manager'].includes(profile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return null
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const authErr = await requireAdmin(supabase)
+  const authErr = await requireAdminOrAccountManager(supabase)
   if (authErr) return authErr
 
   const body = await req.json()
@@ -33,14 +41,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     updated_at: new Date().toISOString(),
   }
 
+  const adminDb = createAdminClient()
+
   // Fetch current state for audit log
-  const { data: oldClient } = await supabase
+  const { data: oldClient } = await adminDb
     .from('clients')
     .select('name, email, phone, status, country, notes')
     .eq('id', id)
     .single()
 
-  const { data, error } = await supabase
+  const { data, error } = await adminDb
     .from('clients')
     .update(updated)
     .eq('id', id)
@@ -51,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Upsert billing plan
   if (billing_plan !== undefined) {
-    const { data: existing } = await supabase
+    const { data: existing } = await adminDb
       .from('billing_plans')
       .select('id')
       .eq('client_id', id)
@@ -62,10 +72,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!billing_plan?.cycle_type) {
       // User cleared the billing plan — deactivate existing
       if (existing) {
-        await supabase.from('billing_plans').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', existing.id)
+        await adminDb.from('billing_plans').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', existing.id)
       }
     } else if (existing) {
-      await supabase.from('billing_plans').update({
+      await adminDb.from('billing_plans').update({
         cycle_type:        billing_plan.cycle_type,
         amount:            Number(billing_plan.amount),
         currency:          billing_plan.currency ?? 'AED',
@@ -75,7 +85,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         updated_at:        new Date().toISOString(),
       }).eq('id', existing.id)
     } else {
-      await supabase.from('billing_plans').insert({
+      await adminDb.from('billing_plans').insert({
         id:                generateId(),
         client_id:         id,
         cycle_type:        billing_plan.cycle_type,
