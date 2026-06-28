@@ -6,7 +6,7 @@ import { sendEmail } from '@/lib/gmail'
 import { generateEmailContent } from '@/lib/gemini'
 import { dbError } from '@/lib/utils'
 import { sendSlack } from '@/lib/slack'
-import { parseBody, TaskUpdateSchema } from '@/lib/validation'
+import { parseBody, TaskUpdateSchema, buildTaskUpdatePayload } from '@/lib/validation'
 import { logActivity } from '@/lib/activity-log'
 import { logAudit } from '@/lib/audit'
 import { sendPushNotification, type PushSubscription } from '@/lib/webpush'
@@ -50,41 +50,32 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 422 })
 
   const body = parsed.data
-  const updated: Record<string, unknown> = {
-    title:               body.title,
-    description:         body.description         || null,
-    status:              body.status,
-    priority:            body.priority,
-    task_type:           body.task_type           || null,
-    due_date:            body.due_date            || null,
-    assigned_to:         body.assigned_to         || null,
-    client_id:           body.client_id           || null,
-    hook:                  body.hook                  || null,
-    delivery_url:          body.delivery_url          || null,
-    reference_image_url:   body.reference_image_url   || null,
-    scheduled_publish_at:  body.scheduled_publish_at  || null,
-    updated_at:            new Date().toISOString(),
-  }
 
-  // Fetch old state before update
-  const { data: oldTask } = await admin
+  // Fetch old state before update — 404 if missing or soft-deleted
+  const { data: oldTask, error: fetchErr } = await admin
     .from('tasks')
     .select('status, client_id, title, description, priority, due_date, assigned_to, scheduled_publish_at, started_at')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
 
+  if (fetchErr || !oldTask) {
+    return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+  }
+
+  const updated = buildTaskUpdatePayload(body)
+
   // Auto-queue for admin approval when any task is marked done
-  if (body.status === 'done' && oldTask?.status !== 'done') {
+  if (body.status === 'done' && oldTask.status !== 'done') {
     updated.approval_status = 'pending'
   }
 
   // Time tracking: record when work starts and when it finishes
   const now = new Date().toISOString()
-  if (body.status === 'in_progress' && oldTask?.status !== 'in_progress' && !oldTask?.started_at) {
+  if (body.status === 'in_progress' && oldTask.status !== 'in_progress' && !oldTask.started_at) {
     updated.started_at = now
   }
-  if (body.status === 'done' && oldTask?.status !== 'done') {
+  if (body.status === 'done' && oldTask.status !== 'done') {
     updated.completed_at = now
   }
 
@@ -92,6 +83,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .from('tasks')
     .update(updated)
     .eq('id', id)
+    .is('deleted_at', null)
     .select('*, client:clients(id, name, email), assignee:profiles!assigned_to(id, display_name)')
     .single()
 

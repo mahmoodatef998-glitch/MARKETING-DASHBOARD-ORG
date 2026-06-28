@@ -12,6 +12,7 @@ vi.mock('@/lib/gmail',   () => ({ sendEmail: vi.fn() }))
 vi.mock('@/lib/gemini',  () => ({ generateEmailContent: vi.fn(() => Promise.resolve({ subject: 'S', body: 'B' })) }))
 vi.mock('@/lib/webpush', () => ({ sendPushNotification: vi.fn() }))
 vi.mock('@/lib/activity-log', () => ({ logActivity: vi.fn() }))
+vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }))
 
 // ─── Mock infrastructure ───────────────────────────────────────────────────────
 type MockResult = { data: unknown; error: unknown; count?: number | null }
@@ -128,7 +129,7 @@ describe('GET /api/tasks', () => {
     const { GET } = await import('./route')
     queueAdmin()
     const tasks = [{ id: 't1', title: 'Task 1', deleted_at: null }]
-    serverQueue.push({ data: tasks, error: null })
+    adminQueue.push({ data: tasks, error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual(tasks)
@@ -137,7 +138,7 @@ describe('GET /api/tasks', () => {
   it('admin: null data returns empty array', async () => {
     const { GET } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: null, error: null })
+    adminQueue.push({ data: null, error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
@@ -146,7 +147,7 @@ describe('GET /api/tasks', () => {
   it('media_buyer gets all tasks with filters', async () => {
     const { GET } = await import('./route')
     queueMediaBuyer()
-    serverQueue.push({ data: [{ id: 't2' }], error: null })
+    adminQueue.push({ data: [{ id: 't2' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(200)
   })
@@ -154,7 +155,7 @@ describe('GET /api/tasks', () => {
   it('video_maker gets tasks (no role restriction on GET)', async () => {
     const { GET } = await import('./route')
     queueVideoMaker()
-    serverQueue.push({ data: [{ id: 't3', assigned_to: 'user-vm' }], error: null })
+    adminQueue.push({ data: [{ id: 't3', assigned_to: 'user-vm' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(200)
   })
@@ -162,7 +163,7 @@ describe('GET /api/tasks', () => {
   it('client with client_id sees own tasks', async () => {
     const { GET } = await import('./route')
     queueClient('client-1')
-    serverQueue.push({ data: [{ id: 't4', client_id: 'client-1' }], error: null })
+    adminQueue.push({ data: [{ id: 't4', client_id: 'client-1' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(200)
   })
@@ -178,7 +179,7 @@ describe('GET /api/tasks', () => {
   it('500 on DB error', async () => {
     const { GET } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: null, error: { message: 'connection failed' } })
+    adminQueue.push({ data: null, error: { message: 'connection failed' } })
     const res = await GET(makeReq('GET', 'http://x/api/tasks'))
     expect(res.status).toBe(500)
   })
@@ -186,7 +187,7 @@ describe('GET /api/tasks', () => {
   it('admin can filter by status param', async () => {
     const { GET } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: [{ id: 't5', status: 'done' }], error: null })
+    adminQueue.push({ data: [{ id: 't5', status: 'done' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks?status=done'))
     expect(res.status).toBe(200)
   })
@@ -194,7 +195,7 @@ describe('GET /api/tasks', () => {
   it('admin can filter by client_id param', async () => {
     const { GET } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: [{ id: 't6', client_id: 'c1' }], error: null })
+    adminQueue.push({ data: [{ id: 't6', client_id: 'c1' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks?client_id=c1'))
     expect(res.status).toBe(200)
   })
@@ -202,7 +203,7 @@ describe('GET /api/tasks', () => {
   it('admin can filter by approval_status param', async () => {
     const { GET } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: [{ id: 't7', approval_status: 'pending' }], error: null })
+    adminQueue.push({ data: [{ id: 't7', approval_status: 'pending' }], error: null })
     const res = await GET(makeReq('GET', 'http://x/api/tasks?approval_status=pending'))
     expect(res.status).toBe(200)
   })
@@ -229,7 +230,7 @@ describe('POST /api/tasks', () => {
   it('201 when media_buyer creates a task', async () => {
     const { POST } = await import('./route')
     queueMediaBuyer()
-    serverQueue.push({ data: null, error: null }) // tasks.insert
+    adminQueue.push({ data: null, error: null }) // tasks.insert
     const res = await POST(makeReq('POST', 'http://x/api/tasks', { title: 'Media Buy Task' }))
     expect(res.status).toBe(201)
   })
@@ -259,7 +260,7 @@ describe('POST /api/tasks', () => {
   it('201 creates task with minimal valid body', async () => {
     const { POST } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: null, error: null }) // tasks.insert
+    adminQueue.push({ data: null, error: null }) // tasks.insert
     const res = await POST(makeReq('POST', 'http://x/api/tasks', { title: 'Design Logo' }))
     expect(res.status).toBe(201)
     const body = await res.json()
@@ -272,7 +273,7 @@ describe('POST /api/tasks', () => {
   it('201 respects explicit status and priority', async () => {
     const { POST } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: null, error: null })
+    adminQueue.push({ data: null, error: null })
     const res = await POST(makeReq('POST', 'http://x/api/tasks', { title: 'Urgent Task', status: 'in_progress', priority: 'urgent' }))
     expect(res.status).toBe(201)
     const body = await res.json()
@@ -283,7 +284,7 @@ describe('POST /api/tasks', () => {
   it('500 on DB insert error', async () => {
     const { POST } = await import('./route')
     queueAdmin()
-    serverQueue.push({ data: null, error: { message: 'db connection error' } })
+    adminQueue.push({ data: null, error: { message: 'db connection error' } })
     const res = await POST(makeReq('POST', 'http://x/api/tasks', { title: 'Test' }))
     expect(res.status).toBe(500)
   })
@@ -336,9 +337,9 @@ describe('PUT /api/tasks/[id]', () => {
     // task assignment check — matches user-vm
     adminQueue.push({ data: { assigned_to: 'user-vm' }, error: null })
     // old task fetch (for activity log)
-    serverQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: 'user-vm', scheduled_publish_at: null }, error: null })
+    adminQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: 'user-vm', scheduled_publish_at: null, started_at: null }, error: null })
     // task update result
-    serverQueue.push({ data: { id: 't1', title: 'Updated Title', status: 'in_progress', client: null, assignee: null }, error: null })
+    adminQueue.push({ data: { id: 't1', title: 'Updated Title', status: 'in_progress', client: null, assignee: null }, error: null })
     const res = await PUT(makeReq('PUT', 'http://x/api/tasks/t1', validUpdate), await idParams('t1'))
     expect(res.status).toBe(200)
   })
@@ -347,22 +348,40 @@ describe('PUT /api/tasks/[id]', () => {
     const { PUT } = await import('./[id]/route')
     queueAdmin()
     // old task fetch
-    serverQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: null, scheduled_publish_at: null }, error: null })
+    adminQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: null, scheduled_publish_at: null, started_at: null }, error: null })
     // task update
-    serverQueue.push({ data: { id: 't1', ...validUpdate, client: null, assignee: null }, error: null })
+    adminQueue.push({ data: { id: 't1', ...validUpdate, client: null, assignee: null }, error: null })
     const res = await PUT(makeReq('PUT', 'http://x/api/tasks/t1', validUpdate), await idParams('t1'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.status).toBe('in_progress')
   })
 
+  it('200 when admin updates status only (partial payload)', async () => {
+    const { PUT } = await import('./[id]/route')
+    queueAdmin()
+    adminQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: null, scheduled_publish_at: null, started_at: null }, error: null })
+    adminQueue.push({ data: { id: 't1', title: 'T', status: 'review', priority: 'medium', client: null, assignee: null }, error: null })
+    const res = await PUT(makeReq('PUT', 'http://x/api/tasks/t1', { status: 'review' }), await idParams('t1'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).status).toBe('review')
+  })
+
+  it('404 when task not found', async () => {
+    const { PUT } = await import('./[id]/route')
+    queueAdmin()
+    adminQueue.push({ data: null, error: { message: 'not found', code: 'PGRST116' } })
+    const res = await PUT(makeReq('PUT', 'http://x/api/tasks/t1', validUpdate), await idParams('t1'))
+    expect(res.status).toBe(404)
+  })
+
   it('500 on DB update error', async () => {
     const { PUT } = await import('./[id]/route')
     queueAdmin()
     // old task fetch
-    serverQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: null, scheduled_publish_at: null }, error: null })
+    adminQueue.push({ data: { status: 'todo', client_id: null, title: 'T', description: null, priority: 'medium', due_date: null, assigned_to: null, scheduled_publish_at: null, started_at: null }, error: null })
     // update fails
-    serverQueue.push({ data: null, error: { message: 'db error' } })
+    adminQueue.push({ data: null, error: { message: 'db error' } })
     const res = await PUT(makeReq('PUT', 'http://x/api/tasks/t1', validUpdate), await idParams('t1'))
     expect(res.status).toBe(500)
   })
@@ -389,8 +408,8 @@ describe('DELETE /api/tasks/[id]', () => {
   it('200 when admin soft-deletes a task', async () => {
     const { DELETE } = await import('./[id]/route')
     queueAdmin()
-    serverQueue.push({ data: { notion_id: null }, error: null }) // select notion_id
-    serverQueue.push({ data: null, error: null })                // update deleted_at
+    adminQueue.push({ data: { notion_id: null }, error: null }) // select notion_id
+    adminQueue.push({ data: null, error: null })                // update deleted_at
     const res = await DELETE(makeReq('DELETE', 'http://x/api/tasks/t1'), await idParams('t1'))
     expect(res.status).toBe(200)
     expect((await res.json()).success).toBe(true)
@@ -399,8 +418,8 @@ describe('DELETE /api/tasks/[id]', () => {
   it('500 on DB soft-delete error', async () => {
     const { DELETE } = await import('./[id]/route')
     queueAdmin()
-    serverQueue.push({ data: { notion_id: null }, error: null }) // select notion_id
-    serverQueue.push({ data: null, error: { message: 'db error' } })
+    adminQueue.push({ data: { notion_id: null }, error: null }) // select notion_id
+    adminQueue.push({ data: null, error: { message: 'db error' } })
     const res = await DELETE(makeReq('DELETE', 'http://x/api/tasks/t1'), await idParams('t1'))
     expect(res.status).toBe(500)
   })

@@ -1583,11 +1583,7 @@ export default function TeamPortalPage() {
     await fetch(`/api/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...task, status: newStatus,
-        task_type: task.task_type ?? null, due_date: task.due_date ?? null,
-        assigned_to: task.assigned_to ?? null, client_id: task.client_id ?? null,
-      }),
+      body: JSON.stringify({ status: newStatus }),
     })
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
   }
@@ -1599,9 +1595,8 @@ export default function TeamPortalPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...task, status: 'done', delivery_url: deliveryUrl || null,
-        task_type: task.task_type ?? null, due_date: task.due_date ?? null,
-        assigned_to: task.assigned_to ?? null, client_id: task.client_id ?? null,
+        status: 'done',
+        delivery_url: deliveryUrl || null,
       }),
     })
     if (schedule && schedule.platforms.length > 0 && schedule.scheduledAt) {

@@ -15,12 +15,33 @@ export const TaskCreateSchema = z.object({
   assigned_to:  e2n(z.string().uuid().nullable().optional()),
   client_id:    e2n(z.string().uuid().nullable().optional()),
   hook:                  e2n(z.string().max(2000).nullable().optional()),
-  delivery_url:          e2n(z.string().url().max(2048).nullable().optional()),
-  reference_image_url:   e2n(z.string().url().max(2048).nullable().optional()),
+  // Stored as plain text — strict .url() rejects common Drive/Dropbox links pasted without https://
+  delivery_url:          e2n(z.string().max(2048).nullable().optional()),
+  reference_image_url:   e2n(z.string().max(2048).nullable().optional()),
   scheduled_publish_at:  e2n(z.string().nullable().optional()),
 })
 
 export const TaskUpdateSchema = TaskCreateSchema.partial()
+
+/** Build a Supabase update object — only includes fields present in the parsed body. */
+export function buildTaskUpdatePayload(body: z.infer<typeof TaskUpdateSchema>): Record<string, unknown> {
+  const updated: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+  if (body.title !== undefined) updated.title = body.title
+  if (body.status !== undefined) updated.status = body.status
+  if (body.priority !== undefined) updated.priority = body.priority
+  if (body.description !== undefined) updated.description = body.description ?? null
+  if (body.task_type !== undefined) updated.task_type = body.task_type ?? null
+  if (body.due_date !== undefined) updated.due_date = body.due_date ?? null
+  if (body.assigned_to !== undefined) updated.assigned_to = body.assigned_to ?? null
+  if (body.client_id !== undefined) updated.client_id = body.client_id ?? null
+  if (body.hook !== undefined) updated.hook = body.hook ?? null
+  if (body.delivery_url !== undefined) updated.delivery_url = body.delivery_url ?? null
+  if (body.reference_image_url !== undefined) updated.reference_image_url = body.reference_image_url ?? null
+  if (body.scheduled_publish_at !== undefined) updated.scheduled_publish_at = body.scheduled_publish_at ?? null
+
+  return updated
+}
 
 // ── Client ────────────────────────────────────────────────────────────────────
 export const ClientCreateSchema = z.object({

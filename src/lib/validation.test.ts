@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBody, TaskCreateSchema, ClientCreateSchema, InvoiceCreateSchema, CommentCreateSchema } from './validation'
+import { parseBody, TaskCreateSchema, ClientCreateSchema, InvoiceCreateSchema, CommentCreateSchema, buildTaskUpdatePayload } from './validation'
 
 describe('TaskCreateSchema', () => {
   it('accepts valid task', () => {
@@ -18,9 +18,16 @@ describe('TaskCreateSchema', () => {
     const r = parseBody(TaskCreateSchema, { title: 'Test', priority: 'critical' })
     expect(r.success).toBe(false)
   })
-  it('rejects invalid delivery_url', () => {
-    const r = parseBody(TaskCreateSchema, { title: 'Test', delivery_url: 'not-a-url' })
-    expect(r.success).toBe(false)
+  it('accepts delivery links without strict URL format', () => {
+    const r = parseBody(TaskCreateSchema, { title: 'Test', delivery_url: 'drive.google.com/file/d/abc123' })
+    expect(r.success).toBe(true)
+  })
+})
+
+describe('buildTaskUpdatePayload', () => {
+  it('updates only fields present in the body', () => {
+    const payload = buildTaskUpdatePayload({ status: 'review' })
+    expect(payload).toEqual({ updated_at: expect.any(String), status: 'review' })
   })
 })
 

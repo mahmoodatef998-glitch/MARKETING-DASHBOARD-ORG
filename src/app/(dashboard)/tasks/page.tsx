@@ -822,18 +822,39 @@ export default function TasksPage() {
   }, [load])
 
   async function handleSave(data: Partial<Task>) {
+    const payload = {
+      title:                data.title,
+      description:          data.description          || null,
+      hook:                 data.hook                 || null,
+      status:               data.status,
+      priority:             data.priority,
+      task_type:            data.task_type            || null,
+      due_date:             data.due_date             || null,
+      assigned_to:          data.assigned_to          || null,
+      client_id:            data.client_id            || null,
+      delivery_url:         data.delivery_url         || null,
+      reference_image_url:  data.reference_image_url  || null,
+      scheduled_publish_at: data.scheduled_publish_at || null,
+    }
+
     if (editing) {
       const res = await fetch(`/api/tasks/${editing.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
       if (res.ok) { toast('Task updated', 'success'); setOpen(false); load() }
-      else toast('Failed to update', 'error')
+      else {
+        const err = await res.json().catch(() => ({}))
+        toast(typeof err.error === 'string' ? err.error : 'Failed to update', 'error')
+      }
     } else {
       const res = await fetch('/api/tasks', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
       if (res.ok) { toast('Task created', 'success'); setOpen(false); load() }
-      else toast('Failed to create', 'error')
+      else {
+        const err = await res.json().catch(() => ({}))
+        toast(typeof err.error === 'string' ? err.error : 'Failed to create', 'error')
+      }
     }
   }
 
@@ -873,44 +894,33 @@ export default function TasksPage() {
   }
 
   async function bulkSetStatus(status: string) {
-    await Promise.all([...selected].map((id) => {
-      const task = tasks.find(t => t.id === id)
-      if (!task) return Promise.resolve()
-      return fetch(`/api/tasks/${id}`, {
+    const results = await Promise.all([...selected].map(async (id) => {
+      const res = await fetch(`/api/tasks/${id}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ...task,
-          status,
-          task_type:   task.task_type   ?? null,
-          due_date:    task.due_date    ?? null,
-          assigned_to: task.assigned_to ?? null,
-          client_id:   task.client_id   ?? null,
-        }),
+        body:    JSON.stringify({ status }),
       })
+      return res.ok
     }))
-    toast(`${selected.size} task(s) updated`, 'success')
+    const ok = results.filter(Boolean).length
+    if (ok === selected.size) toast(`${selected.size} task(s) updated`, 'success')
+    else toast(`${ok} of ${selected.size} task(s) updated`, ok > 0 ? 'success' : 'error')
     setSelected(new Set())
     load()
   }
 
   async function bulkReassign(memberId: string) {
-    await Promise.all([...selected].map((id) => {
-      const task = tasks.find(t => t.id === id)
-      if (!task) return Promise.resolve()
-      return fetch(`/api/tasks/${id}`, {
+    const results = await Promise.all([...selected].map(async (id) => {
+      const res = await fetch(`/api/tasks/${id}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ...task,
-          assigned_to: memberId,
-          task_type:   task.task_type ?? null,
-          due_date:    task.due_date  ?? null,
-          client_id:   task.client_id ?? null,
-        }),
+        body:    JSON.stringify({ assigned_to: memberId }),
       })
+      return res.ok
     }))
-    toast(`${selected.size} task(s) reassigned`, 'success')
+    const ok = results.filter(Boolean).length
+    if (ok === selected.size) toast(`${selected.size} task(s) reassigned`, 'success')
+    else toast(`${ok} of ${selected.size} task(s) reassigned`, ok > 0 ? 'success' : 'error')
     setSelected(new Set())
     load()
   }
