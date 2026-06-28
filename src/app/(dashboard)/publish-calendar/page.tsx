@@ -310,6 +310,8 @@ function DayEventsModal({ date, events, onClose, onSelectEvent }: {
 
 function TaskChip({ task, onClick }: { task: ScheduledTask; onClick: (e: React.MouseEvent) => void }) {
   const isDone = task.status === 'done'
+  const pub = task.scheduled_publish_at
+  const hasTime = pub.includes('T') && !pub.endsWith('T00:00:00') && !pub.endsWith('T00:00:00Z')
   return (
     <button
       onClick={onClick}
@@ -323,9 +325,14 @@ function TaskChip({ task, onClick }: { task: ScheduledTask; onClick: (e: React.M
       <div className="flex items-center gap-1 mb-0.5">
         <CheckSquare className={cn('h-2.5 w-2.5 shrink-0', isDone ? 'text-green-400' : 'text-indigo-400')} />
         <span className={cn('font-semibold truncate', isDone ? 'text-green-400' : 'text-indigo-400')}>
-          {fmtTime(task.scheduled_publish_at)}
+          {hasTime ? fmtTime(pub) : 'Publish'}
         </span>
-        <span className="ml-auto shrink-0 px-1 rounded text-[9px] bg-indigo-500/20 text-indigo-400">task</span>
+        <span className={cn(
+          'ml-auto shrink-0 px-1 rounded text-[9px]',
+          isDone ? 'bg-green-500/20 text-green-400' : 'bg-indigo-500/20 text-indigo-400'
+        )}>
+          {isDone ? '✓ done' : 'publish'}
+        </span>
       </div>
       {task.client?.name && (
         <p className={cn('truncate', isDone ? 'text-green-300/70' : 'text-slate-400')}>{task.client.name}</p>
@@ -342,6 +349,11 @@ function TaskDetail({ task, onClose }: { task: ScheduledTask; onClose: () => voi
   const TYPE_LABELS: Record<string, string> = {
     reel_video: 'Reel', design: 'Design', ai_video: 'AI Video', post: 'Post', custom: 'Custom',
   }
+  // Parse publish date using UTC to avoid timezone shifts
+  const pubDate = task.scheduled_publish_at
+  const pubDateStr = new Date(pubDate + (pubDate.includes('T') ? '' : 'T00:00:00Z'))
+    .toLocaleDateString('en-US', { dateStyle: 'medium', timeZone: 'UTC' })
+  const hasTime = pubDate.includes('T') && !pubDate.endsWith('T00:00:00') && !pubDate.endsWith('T00:00:00Z')
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -360,10 +372,6 @@ function TaskDetail({ task, onClose }: { task: ScheduledTask; onClose: () => voi
             <div>
               <p className={cn('text-sm font-bold', isDone ? 'text-green-400' : 'text-indigo-400')}>
                 Scheduled Task {isDone && '— Done ✓'}
-              </p>
-              <p className="text-xs text-slate-500">
-                {new Date(task.scheduled_publish_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}
-                {' '}{fmtTime(task.scheduled_publish_at)}
               </p>
             </div>
           </div>
@@ -387,6 +395,14 @@ function TaskDetail({ task, onClose }: { task: ScheduledTask; onClose: () => voi
               <span className="text-slate-400">{TYPE_LABELS[task.task_type] ?? task.task_type}</span>
             </div>
           )}
+          {/* Publish Date — always from scheduled_publish_at, never due_date */}
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500">Publish Date</span>
+            <span className="text-indigo-300 font-medium text-right">
+              {pubDateStr}
+              {hasTime && <span className="ml-1 text-slate-400">@ {fmtTime(pubDate)}</span>}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Status</span>
             <span className={cn(
