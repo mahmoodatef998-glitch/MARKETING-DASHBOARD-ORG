@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { BillingCycle } from '@/types'
 
-type UserRole = 'video_maker' | 'designer' | 'ai_video' | 'media_buyer' | 'client'
+type UserRole = 'video_maker' | 'designer' | 'ai_video' | 'media_buyer' | 'account_manager' | 'client'
 
 interface AppUser {
   id: string
@@ -22,19 +22,21 @@ interface AppUser {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  video_maker: 'Video Maker',
-  designer:    'Designer',
-  ai_video:    'AI Video',
-  media_buyer: 'Media Buyer',
-  client:      'Client',
+  video_maker:     'Video Maker',
+  designer:        'Designer',
+  ai_video:        'AI Video',
+  media_buyer:     'Media Buyer',
+  account_manager: 'Account Manager',
+  client:          'Client',
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  video_maker: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  designer:    'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  ai_video:    'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  media_buyer: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  client:      'bg-green-500/10 text-green-400 border-green-500/20',
+  video_maker:     'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  designer:        'bg-pink-500/10 text-pink-400 border-pink-500/20',
+  ai_video:        'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  media_buyer:     'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  account_manager: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  client:          'bg-green-500/10 text-green-400 border-green-500/20',
 }
 
 const BILLING_CYCLES: { value: BillingCycle; label: string }[] = [
@@ -53,8 +55,8 @@ const TASK_TYPES = [
   { value: 'custom',     label: 'Custom'       },
 ]
 
-const TEAM_ROLES: UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer']
-const ALL_ROLES:  UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'client']
+const TEAM_ROLES: UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'account_manager']
+const ALL_ROLES:  UserRole[] = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'account_manager', 'client']
 
 type PkgItemForm = { task_type: string; label: string; total_quantity: string }
 

@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     package: packageData,
   } = await req.json()
 
-  const VALID_ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'client']
+  const VALID_ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'account_manager', 'client']
   if (!VALID_ROLES.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }

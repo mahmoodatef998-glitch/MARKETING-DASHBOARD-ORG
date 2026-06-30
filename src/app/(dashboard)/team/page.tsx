@@ -12,12 +12,13 @@ import { Search, Pencil, Trash2, Mail, Loader2, UserPlus, LayoutGrid, BarChart2,
 import type { TeamMember, Task } from '@/types'
 
 // Must match the UserRole values used in profiles table
-const ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer'] as const
+const ROLES = ['video_maker', 'designer', 'ai_video', 'media_buyer', 'account_manager'] as const
 const ROLE_LABELS: Record<string, string> = {
-  video_maker: 'Video Maker',
-  designer:    'Designer',
-  ai_video:    'AI Video',
-  media_buyer: 'Media Buyer',
+  video_maker:     'Video Maker',
+  designer:        'Designer',
+  ai_video:        'AI Video',
+  media_buyer:     'Media Buyer',
+  account_manager: 'Account Manager',
 }
 
 function TeamForm({
@@ -84,10 +85,11 @@ function TeamForm({
 }
 
 const roleColors: Record<string, string> = {
-  video_maker: 'bg-purple-500/20 text-purple-400',
-  designer:    'bg-pink-500/20 text-pink-400',
-  ai_video:    'bg-cyan-500/20 text-cyan-400',
-  media_buyer: 'bg-orange-500/20 text-orange-400',
+  video_maker:     'bg-purple-500/20 text-purple-400',
+  designer:        'bg-pink-500/20 text-pink-400',
+  ai_video:        'bg-cyan-500/20 text-cyan-400',
+  media_buyer:     'bg-orange-500/20 text-orange-400',
+  account_manager: 'bg-blue-500/20 text-blue-400',
 }
 
 interface WorkloadStats {

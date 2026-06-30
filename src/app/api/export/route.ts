@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 
 function toCSV(rows: Record<string, unknown>[], headers: string[]): string {
   const escape = (v: unknown) => {
@@ -30,15 +30,16 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin', 'media_buyer'].includes(profile?.role ?? '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const type = req.nextUrl.searchParams.get('type')
+  const admin = createAdminClient()
 
   let csv = ''
   let filename = 'export.csv'
 
   if (type === 'tasks') {
-    const { data } = await supabase
+    const { data } = await admin
       .from('tasks')
       .select('title, status, priority, task_type, due_date, created_at, assignee:profiles(display_name), client:clients(name)')
       .is('deleted_at', null)
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
     csv = toCSV(rows, ['title', 'status', 'priority', 'task_type', 'due_date', 'assignee', 'client', 'created_at'])
     filename = 'tasks.csv'
   } else if (type === 'clients') {
-    const { data } = await supabase
+    const { data } = await admin
       .from('clients')
       .select('name, email, phone, status, website, address, created_at')
       .is('deleted_at', null)
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
     csv = toCSV((data ?? []) as Record<string, unknown>[], ['name', 'email', 'phone', 'status', 'website', 'address', 'created_at'])
     filename = 'clients.csv'
   } else if (type === 'invoices') {
-    const { data } = await supabase
+    const { data } = await admin
       .from('invoices')
       .select('invoice_number, status, total, tax, due_date, issued_date, client:clients(name)')
       .is('deleted_at', null)
