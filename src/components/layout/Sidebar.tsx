@@ -51,6 +51,7 @@ const nav: { href: string; label: string; icon: React.ElementType; roles: string
   { href: '/meetings',         label: 'Meetings',         icon: CalendarDays,    roles: ['admin'] },
   // ── Finance ──────────────────────────────────────────────────────────────────
   { href: '/finance',          label: 'Overview',         icon: TrendingUp,      roles: ['admin'],                        sectionLabel: 'Finance' },
+  { href: '/monthly-report',   label: 'Monthly Report',   icon: PieChart,        roles: ['admin'] },
   { href: '/invoices',         label: 'Invoices',         icon: FileText,        roles: ['admin', 'account_manager'] },
   { href: '/billing',          label: 'History',          icon: CreditCard,      roles: ['admin'] },
   // ── Content ──────────────────────────────────────────────────────────────────
