@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Loader2, TrendingUp, TrendingDown, DollarSign, AlertTriangle, Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, Receipt, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, TrendingUp, TrendingDown, DollarSign, AlertTriangle, Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, FileText } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -15,21 +15,38 @@ const CAT_META: Record<string, { label: string; color: string }> = {
   other:      { label: 'Other',      color: 'text-slate-400 bg-slate-500/15 border-slate-500/25' },
 }
 
+const STATUS_STYLE: Record<string, string> = {
+  paid:    'bg-green-500/10 text-green-400 border-green-500/20',
+  sent:    'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  overdue: 'bg-red-500/10 text-red-400 border-red-500/20',
+}
+
 function catMeta(cat?: string) {
   return CAT_META[cat ?? 'other'] ?? CAT_META.other
+}
+
+interface InvoiceRow {
+  invoice_number: string
+  client: string
+  total: number
+  collected: number
+  status: string
+  issued_date: string
 }
 
 interface MonthlyData {
   period: { year: number; month: number; from: string; to: string; label: string }
   revenue: number
+  collected: number
+  outstanding: { total: number; overdueCount: number }
   expenses: number
   netProfit: number
-  outstanding: { total: number; overdueCount: number }
   expensesByCategory: Record<string, number>
-  paidInvoices: { invoice_number: string; client: string; total: number; received: number }[]
+  invoicesList: InvoiceRow[]
   expensesList: { id: string; title: string; amount: number; date: string; category?: string; notes?: string; recurring: boolean }[]
   pnl: {
     revenue: number
+    collected: number
     designCost: number
     mediaBuyerCost: number
     operationalExpenses: number
@@ -104,7 +121,7 @@ export default function MonthlyReportPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Monthly Report</h1>
-          <p className="text-sm text-slate-500 mt-0.5">دخل وتكاليف كل شهر</p>
+          <p className="text-sm text-slate-500 mt-0.5">دخل وتكاليف كل شهر — بناءً على تاريخ الإصدار</p>
         </div>
 
         {/* Month picker */}
@@ -135,30 +152,30 @@ export default function MonthlyReportPage() {
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
-              label="Revenue"
+              label="Revenue (Accrual)"
               value={formatCurrency(data.revenue)}
-              sub={`${data.paidInvoices.length} invoices paid`}
+              sub={`${data.invoicesList.length} invoices issued`}
               color="border-indigo-500/20"
               icon={<TrendingUp className="h-4 w-4 text-indigo-400" />}
             />
             <KpiCard
-              label="Expenses"
-              value={formatCurrency(data.expenses)}
-              sub={`${data.expensesList.length} items`}
-              color="border-red-500/20"
-              icon={<TrendingDown className="h-4 w-4 text-red-400" />}
+              label="Collected"
+              value={formatCurrency(data.collected)}
+              sub={data.revenue > 0 ? `${Math.round((data.collected / data.revenue) * 100)}% received` : undefined}
+              color="border-green-500/20"
+              icon={<DollarSign className="h-4 w-4 text-green-400" />}
             />
             <KpiCard
               label="Net Profit"
               value={formatCurrency(data.netProfit)}
-              sub={data.pnl.revenue > 0 ? `Margin: ${Math.round((data.netProfit / data.pnl.revenue) * 100)}%` : undefined}
-              color={data.netProfit >= 0 ? 'border-green-500/20' : 'border-red-500/20'}
-              icon={<DollarSign className={`h-4 w-4 ${data.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`} />}
+              sub={data.revenue > 0 ? `Margin: ${Math.round((data.netProfit / data.revenue) * 100)}%` : undefined}
+              color={data.netProfit >= 0 ? 'border-emerald-500/20' : 'border-red-500/20'}
+              icon={<DollarSign className={`h-4 w-4 ${data.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />}
             />
             <KpiCard
-              label="Outstanding"
+              label="Uncollected"
               value={formatCurrency(data.outstanding.total)}
-              sub={data.outstanding.overdueCount > 0 ? `${data.outstanding.overdueCount} overdue` : 'Current open invoices'}
+              sub={data.outstanding.overdueCount > 0 ? `${data.outstanding.overdueCount} overdue` : 'From this month\'s invoices'}
               color={data.outstanding.overdueCount > 0 ? 'border-amber-500/20' : 'border-slate-700'}
               icon={<AlertTriangle className={`h-4 w-4 ${data.outstanding.overdueCount > 0 ? 'text-amber-400' : 'text-slate-500'}`} />}
             />
@@ -171,9 +188,15 @@ export default function MonthlyReportPage() {
             </h2>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Revenue collected</span>
+                <span className="text-slate-400">Revenue (accrual)</span>
                 <span className="text-green-400 font-semibold">{formatCurrency(data.pnl.revenue)}</span>
               </div>
+              {data.pnl.collected < data.pnl.revenue && (
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span className="pl-3">↳ collected so far</span>
+                  <span className="text-emerald-400">{formatCurrency(data.pnl.collected)}</span>
+                </div>
+              )}
 
               <div className="border-l-2 border-red-500/30 ml-2 pl-3 space-y-1.5">
                 {data.pnl.designCost > 0 && (
@@ -242,33 +265,39 @@ export default function MonthlyReportPage() {
             )}
           </div>
 
-          {/* Paid Invoices */}
+          {/* Invoices issued this month */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
             <div className="flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-indigo-400" />
-              <h2 className="text-sm font-semibold text-slate-300">Paid Invoices</h2>
-              <span className="ml-auto text-xs text-slate-500">{data.paidInvoices.length} invoices · {formatCurrency(data.revenue)} collected</span>
+              <FileText className="h-4 w-4 text-indigo-400" />
+              <h2 className="text-sm font-semibold text-slate-300">Invoices Issued</h2>
+              <span className="ml-auto text-xs text-slate-500">{data.invoicesList.length} invoices · {formatCurrency(data.revenue)} total</span>
             </div>
 
-            {data.paidInvoices.length === 0 ? (
+            {data.invoicesList.length === 0 ? (
               <div className="text-center py-10 text-sm text-slate-600 border border-dashed border-slate-800 rounded-xl">
-                No payments received in {data.period.label}
+                No invoices issued in {data.period.label}
               </div>
             ) : (
               <div className="space-y-1.5">
-                {data.paidInvoices.map((inv, i) => (
+                {data.invoicesList.map((inv, i) => (
                   <div key={i} className="flex items-center gap-3 bg-slate-800/30 border border-slate-700/50 rounded-xl px-3 py-2.5">
                     <div className="h-7 w-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
                       <FileText className="h-3.5 w-3.5 text-indigo-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-200">{inv.client}</p>
-                      <p className="text-xs text-slate-500">{inv.invoice_number}</p>
+                      <p className="text-xs text-slate-500">{inv.invoice_number} · {inv.issued_date}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-green-400">{formatCurrency(inv.received)}</p>
-                      {inv.received !== inv.total && (
-                        <p className="text-xs text-slate-500">of {formatCurrency(inv.total)}</p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_STYLE[inv.status] ?? STATUS_STYLE.sent}`}>
+                      {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                    </span>
+                    <div className="text-right shrink-0 min-w-[80px]">
+                      <p className="text-sm font-bold text-slate-100">{formatCurrency(inv.total)}</p>
+                      {inv.collected < inv.total && inv.collected > 0 && (
+                        <p className="text-xs text-emerald-400">{formatCurrency(inv.collected)} paid</p>
+                      )}
+                      {inv.collected === 0 && inv.status !== 'paid' && (
+                        <p className="text-xs text-slate-500">unpaid</p>
                       )}
                     </div>
                   </div>
