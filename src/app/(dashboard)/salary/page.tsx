@@ -303,6 +303,14 @@ export default function SalaryPage() {
         </Select>
       </div>
 
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-xs text-slate-400 leading-relaxed">
+        <p className="font-semibold text-slate-300 mb-1">How to use Salary</p>
+        <p>- Record every real payout paid to team members here.</p>
+        <p>- Essam&apos;s execution cost is covered by the monthly media buyer rate in Finance settings.</p>
+        <p>- Designers&apos; execution cost is covered by the per-design rate in Finance settings.</p>
+        <p>- If you pay someone extra manually, log it here so your cash outflow stays accurate.</p>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Paid This Month', value: formatCurrency(totals.periodPaid), color: 'text-emerald-400', border: 'border-emerald-500/20', icon: Banknote },
