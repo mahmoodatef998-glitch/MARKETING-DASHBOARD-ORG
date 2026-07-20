@@ -267,7 +267,7 @@ export default function ExpensesPage() {
                 <Users className="h-4 w-4 text-orange-400" /> Team Payouts
                 <span className="text-slate-600 font-normal">({payouts.length})</span>
               </p>
-              <Link href="/team" className="text-xs text-indigo-400 hover:underline">Manage in Team →</Link>
+              <Link href="/salary" className="text-xs text-indigo-400 hover:underline">Manage in Salary →</Link>
             </div>
             {payouts.length === 0 ? (
               <p className="text-sm text-slate-500 py-4 text-center">No team payouts this month</p>
