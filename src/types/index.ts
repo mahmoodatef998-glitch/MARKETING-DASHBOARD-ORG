@@ -247,6 +247,29 @@ export interface IncomeItem {
   editable: boolean
 }
 
+// ─── Team Salary / Payouts ────────────────────────────────────────────────────
+export interface TeamPayout {
+  id: string
+  member_id: string
+  amount: number
+  currency: string
+  description?: string
+  proof_url?: string
+  paid_at: string
+  created_at: string
+  created_by?: string
+}
+
+export interface SalaryMemberSummary {
+  id: string
+  name: string
+  role: string
+  earned: number
+  paid: number
+  pending: number
+  currency: string
+}
+
 // ─── Financial AI ─────────────────────────────────────────────────────────────
 export interface FinancialInsight {
   type: 'warning' | 'info' | 'success'

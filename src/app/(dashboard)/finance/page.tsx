@@ -674,15 +674,15 @@ export default function FinancePage() {
               <p className="text-lg sm:text-xl font-bold text-amber-400 truncate">{formatCurrency(d.summary.receivables)}</p>
               <p className="text-[10px] text-slate-500">{d.outstanding.count} open · {d.outstanding.overdueCount} overdue</p>
             </div>
-            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 space-y-1 col-span-2 lg:col-span-1">
+            <Link href="/salary" className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 space-y-1 hover:bg-orange-500/10 hover:border-orange-500/30 transition-colors cursor-pointer col-span-2 lg:col-span-1">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/80">
                 <Users className="h-3 w-3" /> Payable · عليا
               </div>
               <p className="text-lg sm:text-xl font-bold text-orange-400 truncate">{formatCurrency(d.summary.payables)}</p>
               <p className="text-[10px] text-slate-500">
-                Earned {formatCurrency(d.payables?.earned ?? 0)} · Paid {formatCurrency(d.payables?.paid ?? 0)}
+                Earned {formatCurrency(d.payables?.earned ?? 0)} · Paid {formatCurrency(d.payables?.paid ?? 0)} · View →
               </p>
-            </div>
+            </Link>
           </div>
         </div>
       )}
