@@ -345,9 +345,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<FinancialSettings>({
     cost_per_design: 15,
     media_buyer_rate_per_client: 150,
-    partner1_name: 'Partner 1', partner1_share: 50,
-    partner2_name: 'Partner 2', partner2_share: 30,
-    partner3_name: 'Partner 3', partner3_share: 20,
+    partner1_name: 'Mahmoud', partner1_share: 20,
+    partner2_name: 'Mohamed Fayed', partner2_share: 30,
+    partner3_name: 'Youssef', partner3_share: 50,
   })
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
@@ -392,6 +392,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             {/* Cost rates */}
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cost Rates</p>
+              <div className="rounded-xl border border-slate-700/70 bg-slate-800/40 px-3 py-2.5 text-xs text-slate-400 leading-relaxed">
+                Use these as your execution costs before partner profit is split:
+                <span className="block mt-1 text-slate-500">- Essam (media buyer): AED 150 per active client</span>
+                <span className="block text-slate-500">- Designers: AED 15 per design delivered</span>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Cost per Design (AED)</Label>
@@ -413,6 +418,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   {totalShare}% {totalShare !== 100 && '⚠ must equal 100%'}
                 </span>
               </p>
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2.5 text-xs text-slate-400 leading-relaxed">
+                Net profit available for owners = Revenue - Design cost - Media buyer cost - Operational expenses.
+                <span className="block mt-1 text-slate-500">Suggested setup for your team: Mahmoud 20% · Mohamed Fayed 30% · Youssef 50%</span>
+              </div>
               {([
                 ['partner1_name', 'partner1_share'],
                 ['partner2_name', 'partner2_share'],
@@ -593,6 +602,9 @@ export default function FinancePage() {
   }
 
   const d = data
+  const distributableProfit = d.pnl.netProfit
+  const executionCosts = d.pnl.designCost + d.pnl.mediaBuyerCost
+  const ownerPercentTotal = d.pnl.partnerDistribution.reduce((sum, p) => sum + p.share, 0)
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -801,6 +813,13 @@ export default function FinancePage() {
       {/* ── P&L Breakdown ── */}
       <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">This Month — P&L Breakdown</h2>
+        <div className="rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2.5 text-xs text-slate-400 leading-relaxed">
+          Flow for your business:
+          <span className="block mt-1 text-slate-500">1) Total income comes from invoices + manual income.</span>
+          <span className="block text-slate-500">2) Side expenses come from Expenses.</span>
+          <span className="block text-slate-500">3) Team salary paid out is tracked in Salary.</span>
+          <span className="block text-slate-500">4) Net profit is what remains after execution and side costs, then distributed to partners by share %.</span>
+        </div>
 
         {/* Revenue row */}
         <div className="space-y-2">
@@ -899,6 +918,76 @@ export default function FinancePage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── Distribution / Owner Profit ── */}
+      <div className="rounded-2xl border border-indigo-500/20 bg-slate-900 p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Distribution / Owner Profit</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Revenue - execution costs - side expenses = distributable owner profit
+            </p>
+          </div>
+          <div className={`text-xs font-semibold ${ownerPercentTotal === 100 ? 'text-green-400' : 'text-red-400'}`}>
+            Owner shares: {ownerPercentTotal}%
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Revenue</p>
+            <p className="text-xl font-bold text-green-400 mt-1">{formatCurrency(d.pnl.revenue)}</p>
+          </div>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Execution Costs</p>
+            <p className="text-xl font-bold text-amber-400 mt-1">{formatCurrency(executionCosts)}</p>
+            <p className="text-[10px] text-slate-600 mt-1">Design + media buyer</p>
+          </div>
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Side Expenses</p>
+            <p className="text-xl font-bold text-red-400 mt-1">{formatCurrency(d.pnl.operationalExpenses)}</p>
+            <p className="text-[10px] text-slate-600 mt-1">Tools, ads, office, etc.</p>
+          </div>
+          <div className={`rounded-xl border p-4 ${distributableProfit >= 0 ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Distributable Profit</p>
+            <p className={`text-xl font-bold mt-1 ${distributableProfit >= 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+              {formatCurrency(distributableProfit)}
+            </p>
+            <p className="text-[10px] text-slate-600 mt-1">Available for owner split</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2.5 text-xs text-slate-400 leading-relaxed">
+          Your current setup:
+          <span className="block mt-1 text-slate-500">- Mahmoud: 20%</span>
+          <span className="block text-slate-500">- Mohamed Fayed: 30%</span>
+          <span className="block text-slate-500">- Youssef: 50%</span>
+          <span className="block text-slate-500 mt-1">Essam&apos;s AED 150/client and designers&apos; AED 15/design are treated as execution costs before owner distribution.</span>
+        </div>
+
+        <div className="space-y-2">
+          {d.pnl.partnerDistribution.map((p, i) => (
+            <div key={i} className="rounded-xl border border-slate-800 bg-slate-800/30 px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-slate-200 truncate">{p.name}</span>
+                  <span className="text-xs text-slate-500">{p.share}%</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-800 mt-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-indigo-500"
+                    style={{ width: `${Math.max(0, Math.min(100, p.share))}%` }}
+                  />
+                </div>
+              </div>
+              <div className={`text-right shrink-0 ${p.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <p className="text-sm font-bold">{formatCurrency(p.amount)}</p>
+                <p className="text-[10px] text-slate-600">owner share</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── AI Recommendations ── */}
