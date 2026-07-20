@@ -213,6 +213,40 @@ export interface Expense {
   updated_at: string
 }
 
+// ─── Income ───────────────────────────────────────────────────────────────────
+export type IncomeCategory = 'services' | 'refund' | 'grant' | 'investment' | 'other'
+export type IncomeSource = 'invoice' | 'manual'
+
+export interface IncomeEntry {
+  id: string
+  title: string
+  amount: number
+  category?: IncomeCategory
+  date: string
+  notes?: string
+  client_id?: string
+  created_at: string
+  updated_at: string
+}
+
+/** Unified row for the income ledger (invoice payments + manual entries) */
+export interface IncomeItem {
+  id: string
+  source: IncomeSource
+  title: string
+  amount: number
+  date: string
+  category?: string
+  notes?: string
+  client_name?: string
+  client_id?: string
+  invoice_id?: string
+  invoice_number?: string
+  payment_method?: string
+  reference?: string
+  editable: boolean
+}
+
 // ─── Financial AI ─────────────────────────────────────────────────────────────
 export interface FinancialInsight {
   type: 'warning' | 'info' | 'success'

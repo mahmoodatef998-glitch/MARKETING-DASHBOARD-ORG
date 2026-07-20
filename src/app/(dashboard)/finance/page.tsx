@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,11 +37,11 @@ function catMeta(cat?: string) {
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, sub, growth, color, icon }: {
-  label: string; value: string; sub?: string; growth?: number; color: string; icon: React.ReactNode
+function KpiCard({ label, value, sub, growth, color, icon, href }: {
+  label: string; value: string; sub?: string; growth?: number; color: string; icon: React.ReactNode; href?: string
 }) {
-  return (
-    <div className={`rounded-2xl border p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-900 ${color}`}>
+  const inner = (
+    <>
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider leading-tight">{label}</span>
         <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl flex items-center justify-center bg-slate-800/80 shrink-0">{icon}</div>
@@ -55,8 +56,11 @@ function KpiCard({ label, value, sub, growth, color, icon }: {
           {Math.abs(growth)}% vs last month
         </div>
       )}
-    </div>
+    </>
   )
+  const cls = `rounded-2xl border p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-900 ${color}${href ? ' hover:bg-slate-800/80 hover:border-opacity-60 cursor-pointer transition-colors' : ''}`
+  if (href) return <Link href={href} className={cls}>{inner}</Link>
+  return <div className={cls}>{inner}</div>
 }
 
 // ── Mini Bar Chart (pure CSS) ─────────────────────────────────────────────────
@@ -640,20 +644,20 @@ export default function FinancePage() {
             <span className="text-[10px] text-slate-600">All-time cash position</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
+            <Link href="/income" className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-colors cursor-pointer">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/80">
                 <ArrowDownLeft className="h-3 w-3" /> Income · دخل
               </div>
               <p className="text-lg sm:text-xl font-bold text-emerald-400 truncate">{formatCurrency(d.summary.totalIncome)}</p>
-              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthIncome)}</p>
-            </div>
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 space-y-1">
+              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthIncome)} · View all →</p>
+            </Link>
+            <Link href="/expenses" className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 space-y-1 hover:bg-red-500/10 hover:border-red-500/30 transition-colors cursor-pointer">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-red-400/80">
                 <ArrowUpRight className="h-3 w-3" /> Outflow · مصروف
               </div>
               <p className="text-lg sm:text-xl font-bold text-red-400 truncate">{formatCurrency(d.summary.totalOutflow)}</p>
-              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthOutflow)}</p>
-            </div>
+              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthOutflow)} · View all →</p>
+            </Link>
             <div className={`rounded-xl border p-3 space-y-1 ${d.summary.cashBalance >= 0 ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400/80">
                 <Wallet className="h-3 w-3" /> Balance · باقي
@@ -692,6 +696,7 @@ export default function FinancePage() {
           growth={d.revenue.growth}
           color="border-indigo-500/20"
           icon={<TrendingUp className="h-4 w-4 text-indigo-400" />}
+          href="/income"
         />
         <KpiCard
           label="Outflow (Month)"
@@ -703,6 +708,7 @@ export default function FinancePage() {
           ].filter(Boolean).join(' · ')}
           color="border-red-500/20"
           icon={<TrendingDown className="h-4 w-4 text-red-400" />}
+          href="/expenses"
         />
         <KpiCard
           label="Net Profit"

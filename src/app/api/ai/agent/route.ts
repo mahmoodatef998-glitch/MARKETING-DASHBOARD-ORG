@@ -2242,19 +2242,21 @@ async function executeTool(
 
     // ── Financial ─────────────────────────────────────────────────────────────
     case 'get_financial_overview': {
-      const [paid, open, expenses, payouts, earnings] = await Promise.all([
+      const [paid, open, expenses, payouts, earnings, manualIncome] = await Promise.all([
         admin.from('invoices').select('total, received_amount, currency').eq('status', 'paid').is('deleted_at', null),
         admin.from('invoices').select('total, received_amount, currency, status, client:clients(name), due_date')
           .in('status', ['sent', 'overdue']).is('deleted_at', null),
         admin.from('expenses').select('amount'),
         admin.from('team_payouts').select('amount'),
         admin.from('earnings').select('amount'),
+        admin.from('income_entries').select('amount'),
       ])
 
       const sumField = (arr: { total?: number; amount?: number; received_amount?: number }[] | null, field: 'total' | 'amount' | 'received_amount') =>
         (arr ?? []).reduce((s, r) => s + (Number(r[field]) || 0), 0)
 
       const revenue = (paid.data ?? []).reduce((s, inv) => s + (inv.received_amount ?? inv.total ?? 0), 0)
+        + sumField(manualIncome.data, 'amount')
       const receivables = (open.data ?? []).reduce((s, inv) => s + ((inv.total ?? 0) - (inv.received_amount ?? 0)), 0)
       const overdueList = (open.data ?? []).filter(i => i.status === 'overdue')
       const overdueAmount = overdueList.reduce((s, inv) => s + ((inv.total ?? 0) - (inv.received_amount ?? 0)), 0)
