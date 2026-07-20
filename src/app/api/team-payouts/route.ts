@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+  const payoutType = body.payout_type === 'partner_draw' ? 'partner_draw' : 'team_salary'
   const { data, error } = await admin
     .from('team_payouts')
     .insert({
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
       proof_url:   body.proof_url || null,
       paid_at:     body.paid_at ?? new Date().toISOString(),
       created_by:  caller.id,
+      payout_type: payoutType,
     })
     .select()
     .single()

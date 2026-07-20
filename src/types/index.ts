@@ -258,6 +258,7 @@ export interface TeamPayout {
   paid_at: string
   created_at: string
   created_by?: string
+  payout_type?: 'team_salary' | 'partner_draw'
 }
 
 export interface SalaryMemberSummary {
@@ -267,6 +268,26 @@ export interface SalaryMemberSummary {
   earned: number
   paid: number
   pending: number
+  currency: string
+}
+
+export interface PartnerDrawSummary {
+  slot: 1 | 2 | 3
+  name: string
+  share: number
+  user_id: string | null
+  /** Share of this period's distributable profit */
+  periodShare: number
+  /** Partner draws received this period */
+  periodReceived: number
+  /** periodShare − periodReceived (negative = overdrawn this period) */
+  periodRemaining: number
+  /** All-time partner draws received */
+  totalReceived: number
+  /** YTD share of distributable profit */
+  ytdShare: number
+  /** ytdShare − totalReceived (negative = عليه) */
+  balance: number
   currency: string
 }
 
@@ -391,10 +412,13 @@ export interface FinancialSettings {
   media_buyer_rate_per_client: number
   partner1_name: string
   partner1_share: number
+  partner1_user_id?: string | null
   partner2_name: string
   partner2_share: number
+  partner2_user_id?: string | null
   partner3_name: string
   partner3_share: number
+  partner3_user_id?: string | null
 }
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────

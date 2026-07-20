@@ -606,10 +606,13 @@ CREATE TABLE IF NOT EXISTS public.financial_settings (
   media_buyer_rate_per_client numeric NOT NULL DEFAULT 150,
   partner1_name              text NOT NULL DEFAULT 'Mahmoud',
   partner1_share             numeric NOT NULL DEFAULT 20,
+  partner1_user_id           uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   partner2_name              text NOT NULL DEFAULT 'Mohamed Fayed',
   partner2_share             numeric NOT NULL DEFAULT 30,
+  partner2_user_id           uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   partner3_name              text NOT NULL DEFAULT 'Youssef',
   partner3_share             numeric NOT NULL DEFAULT 50,
+  partner3_user_id           uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   updated_at                 timestamptz DEFAULT now()
 );
 INSERT INTO public.financial_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
@@ -652,7 +655,9 @@ CREATE TABLE IF NOT EXISTS public.team_payouts (
   proof_url   text,
   paid_at     timestamptz NOT NULL DEFAULT now(),
   created_by  uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  payout_type text        NOT NULL DEFAULT 'team_salary'
+              CHECK (payout_type IN ('team_salary', 'partner_draw'))
 );
 ALTER TABLE public.team_payouts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "auth_all" ON public.team_payouts;
