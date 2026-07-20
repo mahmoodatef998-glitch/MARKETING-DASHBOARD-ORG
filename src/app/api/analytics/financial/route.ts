@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { fetchRevenueItems, inDateRange } from '@/lib/income'
 
 function monthRange(offset = 0) {
   const d = new Date()
@@ -8,11 +9,6 @@ function monthRange(offset = 0) {
   const from = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
   const to   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
   return { from, to, label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }) }
-}
-
-function inDateRange(dateStr: string, from: string, to: string) {
-  // Supports both date-only (YYYY-MM-DD) and ISO timestamps
-  return dateStr >= from && dateStr <= to + 'T23:59:59Z'
 }
 
 export async function GET() {
@@ -31,9 +27,6 @@ export async function GET() {
 
   // ── Parallel data fetch ─────────────────────────────────────────────────────
   const [
-    { data: allPaymentsRaw },
-    { data: paidInvoicesData },
-    { data: allNonDeletedInvIds },
     { data: allExpenses },
     { data: allPayouts },
     { data: allEarnings },
@@ -44,9 +37,6 @@ export async function GET() {
     { data: designTasks },
     { data: activeClients },
   ] = await Promise.all([
-    adminDb.from('invoice_payments').select('amount, received_at, invoice_id').eq('status', 'paid').not('received_at', 'is', null),
-    adminDb.from('invoices').select('id, total, received_amount, received_at, updated_at').eq('status', 'paid').is('deleted_at', null),
-    adminDb.from('invoices').select('id').is('deleted_at', null),
     adminDb.from('expenses').select('*'),
     adminDb.from('team_payouts').select('amount, paid_at'),
     adminDb.from('earnings').select('amount'),
@@ -59,25 +49,8 @@ export async function GET() {
     adminDb.from('clients').select('id').eq('status', 'active').is('deleted_at', null),
   ])
 
-  // ── Revenue (cash): paid installments + paid invoices without payment rows ──
-  const nonDeletedInvSet = new Set((allNonDeletedInvIds ?? []).map(i => i.id))
-  const allPayments = (allPaymentsRaw ?? []).filter((p: { invoice_id: string }) => nonDeletedInvSet.has(p.invoice_id))
-
-  type PaymentRow = { amount: number; received_at: string; invoice_id: string }
-  const invoiceIdsWithPayments = new Set(allPayments.map((p: PaymentRow) => p.invoice_id))
-
-  type PaidInvRow = { id: string; total: number; received_amount?: number; received_at?: string; updated_at: string }
-  const directPaidItems = ((paidInvoicesData ?? []) as PaidInvRow[])
-    .filter(inv => !invoiceIdsWithPayments.has(inv.id))
-    .map(inv => ({
-      amount:      inv.received_amount ?? inv.total,
-      received_at: inv.received_at ?? inv.updated_at,
-    }))
-
-  const allRevenueItems = [
-    ...(allPayments as PaymentRow[]).map(p => ({ amount: p.amount, received_at: p.received_at })),
-    ...directPaidItems,
-  ]
+  // ── Revenue (cash): invoices + manual income ────────────────────────────────
+  const allRevenueItems = await fetchRevenueItems(adminDb)
 
   const sumRevenue = (from: string, to: string) =>
     allRevenueItems
