@@ -345,21 +345,27 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<FinancialSettings>({
     cost_per_design: 15,
     media_buyer_rate_per_client: 150,
-    partner1_name: 'Mahmoud', partner1_share: 20,
-    partner2_name: 'Mohamed Fayed', partner2_share: 30,
-    partner3_name: 'Youssef', partner3_share: 50,
+    partner1_name: 'Mahmoud', partner1_share: 20, partner1_user_id: null,
+    partner2_name: 'Mohamed Fayed', partner2_share: 30, partner2_user_id: null,
+    partner3_name: 'Youssef', partner3_share: 50, partner3_user_id: null,
   })
+  const [users, setUsers] = useState<Array<{ id: string; display_name?: string; email?: string; role?: string }>>([])
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
 
   useEffect(() => {
     fetch('/api/settings/financial')
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setForm(f => ({ ...f, ...d })) })
+      .then(d => {
+        if (!d) return
+        const { users: userList, ...settings } = d
+        setForm(f => ({ ...f, ...settings }))
+        if (Array.isArray(userList)) setUsers(userList)
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  function set(k: keyof FinancialSettings, v: string | number) {
+  function set(k: keyof FinancialSettings, v: string | number | null) {
     setForm(f => ({ ...f, [k]: v }))
   }
 
@@ -376,6 +382,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   }
 
   const totalShare = form.partner1_share + form.partner2_share + form.partner3_share
+  const partnerUserKeys = ['partner1_user_id', 'partner2_user_id', 'partner3_user_id'] as const
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -419,23 +426,41 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </span>
               </p>
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2.5 text-xs text-slate-400 leading-relaxed">
-                Net profit available for owners = Revenue - Design cost - Media buyer cost - Operational expenses.
-                <span className="block mt-1 text-slate-500">Suggested setup for your team: Mahmoud 20% · Mohamed Fayed 30% · Youssef 50%</span>
+                Link each partner to a user account so Salary can track draws against their profit share.
               </div>
               {([
                 ['partner1_name', 'partner1_share'],
                 ['partner2_name', 'partner2_share'],
                 ['partner3_name', 'partner3_share'],
               ] as [keyof FinancialSettings, keyof FinancialSettings][]).map(([nameKey, shareKey], i) => (
-                <div key={i} className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Partner {i + 1} name</Label>
-                    <Input value={String(form[nameKey])} onChange={e => set(nameKey, e.target.value)} />
+                <div key={i} className="space-y-2 rounded-xl border border-slate-800 p-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs">Partner {i + 1} name</Label>
+                      <Input value={String(form[nameKey] ?? '')} onChange={e => set(nameKey, e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Share %</Label>
+                      <Input type="number" min={0} max={100} value={Number(form[shareKey] ?? 0)}
+                        onChange={e => set(shareKey, Number(e.target.value))} />
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Share %</Label>
-                    <Input type="number" min={0} max={100} value={Number(form[shareKey])}
-                      onChange={e => set(shareKey, Number(e.target.value))} />
+                    <Label className="text-xs">Linked user (for Salary draws)</Label>
+                    <Select
+                      value={String(form[partnerUserKeys[i]] ?? '_none')}
+                      onValueChange={v => set(partnerUserKeys[i], v === '_none' ? null : v)}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">— Not linked —</SelectItem>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.display_name || u.email || u.id.slice(0, 8)}{u.role ? ` (${u.role})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ))}
