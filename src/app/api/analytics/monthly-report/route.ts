@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     { data: settingsRow },
     { data: designTasks },
     { data: activeClients },
+    { data: monthPayouts },
   ] = await Promise.all([
     admin
       .from('invoices')
@@ -41,6 +42,9 @@ export async function GET(req: NextRequest) {
     admin.from('tasks').select('id').eq('task_type', 'design').eq('status', 'done')
       .gte('updated_at', from).lte('updated_at', to + 'T23:59:59Z').is('deleted_at', null),
     admin.from('clients').select('id').eq('status', 'active').is('deleted_at', null),
+    admin.from('team_payouts').select('amount, paid_at')
+      .gte('paid_at', from)
+      .lte('paid_at', to + 'T23:59:59Z'),
   ])
 
   // Fetch installment payments for this month's invoices to get accurate collected amount
@@ -99,13 +103,15 @@ export async function GET(req: NextRequest) {
   type ExpRow = { id: string; title: string; amount: number; date: string; category?: string; notes?: string; recurring: boolean }
   const expList = (expensesRaw ?? []) as ExpRow[]
   const totalExpenses = expList.reduce((s, e) => s + e.amount, 0)
+  const teamPayoutsTotal = ((monthPayouts ?? []) as Array<{ amount: number }>).reduce((s, p) => s + p.amount, 0)
   const expByCat: Record<string, number> = {}
   for (const e of expList) {
     const cat = e.category ?? 'other'
     expByCat[cat] = (expByCat[cat] ?? 0) + e.amount
   }
+  if (teamPayoutsTotal > 0) expByCat.team_payouts = teamPayoutsTotal
 
-  // P&L
+  // P&L — design/media imputed + operational; team payouts reported separately (cash)
   const s              = settingsRow
   const costPerDesign  = Number(s?.cost_per_design ?? 15)
   const mediaBuyerRate = Number(s?.media_buyer_rate_per_client ?? 150)
@@ -131,6 +137,8 @@ export async function GET(req: NextRequest) {
     collected: totalCollected,
     outstanding: { total: monthOutstanding, overdueCount },
     expenses: totalExpenses,
+    teamPayouts: teamPayoutsTotal,
+    cashOutflow: totalExpenses + teamPayoutsTotal,
     netProfit,
     expensesByCategory: expByCat,
     invoicesList,
@@ -141,6 +149,7 @@ export async function GET(req: NextRequest) {
       designCost,
       mediaBuyerCost,
       operationalExpenses: totalExpenses,
+      teamPayouts:         teamPayoutsTotal,
       totalCosts,
       netProfit,
       designTaskCount:     (designTasks ?? []).length,

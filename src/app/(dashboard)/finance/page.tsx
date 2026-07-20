@@ -11,8 +11,9 @@ import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, Sparkles,
   Plus, Trash2, Loader2, RefreshCw, CheckCircle2, X, Settings,
   Banknote, Wrench, Megaphone, Building2, Users, MoreHorizontal, Zap, Pencil,
+  Wallet, ArrowDownLeft, ArrowUpRight, Scale,
 } from 'lucide-react'
-import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Expense, ExpenseCategory, FinancialAnalysis, FinancialSettings } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -27,6 +28,9 @@ const CATEGORIES: { value: ExpenseCategory; label: string; icon: React.ReactNode
 ]
 
 function catMeta(cat?: string) {
+  if (cat === 'team_payouts') {
+    return { value: 'other' as ExpenseCategory, label: 'Team Payouts', icon: <Users className="h-3.5 w-3.5" />, color: 'text-orange-400 bg-orange-500/15 border-orange-500/25' }
+  }
   return CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[5]
 }
 
@@ -294,22 +298,34 @@ function EditExpenseModal({ expense, onSave, onDelete, onClose }: {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 interface FinancialData {
-  revenue:   { thisMonth: number; lastMonth: number; ytd: number; growth: number }
-  expenses:  { thisMonth: number; lastMonth: number; ytd: number; byCategory: Record<string, number> }
+  revenue:   { thisMonth: number; lastMonth: number; ytd: number; allTime?: number; growth: number }
+  expenses:  { thisMonth: number; lastMonth: number; ytd: number; allTime?: number; operational?: number; teamPayouts?: number; byCategory: Record<string, number> }
   profit:    { thisMonth: number; lastMonth: number; margin: number }
+  summary: {
+    totalIncome: number
+    totalOutflow: number
+    cashBalance: number
+    receivables: number
+    payables: number
+    thisMonthIncome: number
+    thisMonthOutflow: number
+    thisMonthBalance: number
+  }
   outstanding: { total: number; count: number; overdueTotal: number; overdueCount: number }
+  payables: { total: number; earned: number; paid: number }
   mrr:       number
   arr:       number
   collectionRate: number
   cashFlow:  Array<{ month: string; revenue: number; expenses: number; profit: number }>
   topClients: Array<{ id: string; name: string; revenue: number }>
-  overdueInvoices: Array<{ invoice_number: string; client: string; total: number; due_date: string }>
+  overdueInvoices: Array<{ id?: string; invoice_number: string; client: string; total: number; due_date: string }>
   recentExpenses: Expense[]
   pnl: {
     revenue: number
     designCost: number
     mediaBuyerCost: number
     operationalExpenses: number
+    teamPayouts: number
     totalCosts: number
     netProfit: number
     designTaskCount: number
@@ -452,10 +468,15 @@ export default function FinancePage() {
       fetch('/api/analytics/financial').then(r => r.json()),
       fetch('/api/expenses').then(r => r.json()),
     ])
-    setData(finRes)
+    if (finRes?.error) {
+      toast(finRes.error, 'error')
+      setData(null)
+    } else {
+      setData(finRes)
+    }
     setExpenses(Array.isArray(expRes) ? expRes : [])
     setLoading(false)
-  }, [])
+  }, [toast])
 
   useEffect(() => { void loadData() }, [loadData])
 
@@ -502,7 +523,8 @@ export default function FinancePage() {
         const overdueIds = (data?.overdueInvoices ?? [])
         let sent = 0
         for (const inv of overdueIds) {
-          const res = await fetch(`/api/invoices/${inv.invoice_number}/send`, { method: 'POST' }).catch(() => null)
+          const invoiceKey = inv.id || inv.invoice_number
+          const res = await fetch(`/api/invoices/${invoiceKey}/send`, { method: 'POST' }).catch(() => null)
           if (res?.ok) sent++
         }
         toast(`Sent ${sent} reminder email${sent !== 1 ? 's' : ''}`, 'success')
@@ -556,7 +578,17 @@ export default function FinancePage() {
     )
   }
 
-  const d = data!
+  if (!data?.summary || !data?.pnl) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <AlertTriangle className="h-8 w-8 text-amber-400" />
+        <p className="text-sm text-slate-400">Failed to load financial data</p>
+        <Button size="sm" onClick={loadData} variant="outline">Retry</Button>
+      </div>
+    )
+  }
+
+  const d = data
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -597,10 +629,64 @@ export default function FinancePage() {
         />
       )}
 
-      {/* ── KPI Cards ── */}
+      {/* ── Full accounts snapshot: دخل / مصروف / باقي / ليا / عليا ── */}
+      {d.summary && (
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Scale className="h-4 w-4 text-slate-400" />
+              Accounts Overview
+            </h2>
+            <span className="text-[10px] text-slate-600">All-time cash position</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/80">
+                <ArrowDownLeft className="h-3 w-3" /> Income · دخل
+              </div>
+              <p className="text-lg sm:text-xl font-bold text-emerald-400 truncate">{formatCurrency(d.summary.totalIncome)}</p>
+              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthIncome)}</p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-red-400/80">
+                <ArrowUpRight className="h-3 w-3" /> Outflow · مصروف
+              </div>
+              <p className="text-lg sm:text-xl font-bold text-red-400 truncate">{formatCurrency(d.summary.totalOutflow)}</p>
+              <p className="text-[10px] text-slate-500">This month: {formatCurrency(d.summary.thisMonthOutflow)}</p>
+            </div>
+            <div className={`rounded-xl border p-3 space-y-1 ${d.summary.cashBalance >= 0 ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400/80">
+                <Wallet className="h-3 w-3" /> Balance · باقي
+              </div>
+              <p className={`text-lg sm:text-xl font-bold truncate ${d.summary.cashBalance >= 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+                {formatCurrency(d.summary.cashBalance)}
+              </p>
+              <p className="text-[10px] text-slate-500">Income − Outflow</p>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400/80">
+                <Banknote className="h-3 w-3" /> Receivable · ليا
+              </div>
+              <p className="text-lg sm:text-xl font-bold text-amber-400 truncate">{formatCurrency(d.summary.receivables)}</p>
+              <p className="text-[10px] text-slate-500">{d.outstanding.count} open · {d.outstanding.overdueCount} overdue</p>
+            </div>
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 space-y-1 col-span-2 lg:col-span-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/80">
+                <Users className="h-3 w-3" /> Payable · عليا
+              </div>
+              <p className="text-lg sm:text-xl font-bold text-orange-400 truncate">{formatCurrency(d.summary.payables)}</p>
+              <p className="text-[10px] text-slate-500">
+                Earned {formatCurrency(d.payables?.earned ?? 0)} · Paid {formatCurrency(d.payables?.paid ?? 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── KPI Cards (this month) ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Revenue"
+          label="Revenue (Month)"
           value={formatCurrency(d.revenue.thisMonth)}
           sub={`YTD: ${formatCurrency(d.revenue.ytd)}`}
           growth={d.revenue.growth}
@@ -608,9 +694,13 @@ export default function FinancePage() {
           icon={<TrendingUp className="h-4 w-4 text-indigo-400" />}
         />
         <KpiCard
-          label="Expenses"
+          label="Outflow (Month)"
           value={formatCurrency(d.expenses.thisMonth)}
-          sub={`YTD: ${formatCurrency(d.expenses.ytd)}`}
+          sub={[
+            d.expenses.operational != null ? `Ops ${formatCurrency(d.expenses.operational)}` : null,
+            (d.expenses.teamPayouts ?? 0) > 0 ? `Payouts ${formatCurrency(d.expenses.teamPayouts!)}` : null,
+            `YTD: ${formatCurrency(d.expenses.ytd)}`,
+          ].filter(Boolean).join(' · ')}
           color="border-red-500/20"
           icon={<TrendingDown className="h-4 w-4 text-red-400" />}
         />
@@ -622,7 +712,7 @@ export default function FinancePage() {
           icon={<DollarSign className={`h-4 w-4 ${d.pnl.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`} />}
         />
         <KpiCard
-          label="Outstanding"
+          label="Outstanding · ليا"
           value={formatCurrency(d.outstanding.total)}
           sub={`${d.outstanding.overdueCount} overdue · ${d.outstanding.count} open`}
           color={d.outstanding.overdueCount > 0 ? 'border-amber-500/20' : 'border-slate-700'}
@@ -765,6 +855,15 @@ export default function FinancePage() {
                 <span className="text-red-400 shrink-0">− {formatCurrency(d.pnl.operationalExpenses)}</span>
               </div>
             )}
+            {(d.pnl.teamPayouts ?? 0) > 0 && (
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="min-w-0">
+                  Team payouts
+                  <span className="text-slate-600 ml-1">(cash · in outflow, not in P&amp;L)</span>
+                </span>
+                <span className="text-slate-400 shrink-0">{formatCurrency(d.pnl.teamPayouts)}</span>
+              </div>
+            )}
           </div>
 
           {/* Net profit */}
@@ -774,17 +873,22 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* Partner distribution */}
-        {d.pnl.netProfit > 0 && (
+        {/* Partner distribution — always show shares; amounts follow net profit */}
+        {d.pnl.partnerDistribution?.length > 0 && (
           <div className="space-y-2 border-t border-slate-800 pt-3">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Profit Distribution</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">
+              Profit Distribution · تقسيم النسبة
+              {d.pnl.netProfit <= 0 && <span className="ml-2 normal-case text-slate-600">(no profit this month)</span>}
+            </p>
             {d.pnl.partnerDistribution.map((p, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="flex-1 flex items-center justify-between text-xs">
                   <span className="text-slate-300 font-medium">{p.name}</span>
                   <span className="text-slate-500">{p.share}%</span>
                 </div>
-                <span className="text-emerald-400 font-semibold text-sm w-28 text-right">{formatCurrency(p.amount)}</span>
+                <span className={`font-semibold text-sm w-28 text-right ${p.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatCurrency(p.amount)}
+                </span>
               </div>
             ))}
           </div>

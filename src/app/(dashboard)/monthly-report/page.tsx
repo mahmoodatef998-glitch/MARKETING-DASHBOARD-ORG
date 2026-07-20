@@ -40,6 +40,8 @@ interface MonthlyData {
   collected: number
   outstanding: { total: number; overdueCount: number }
   expenses: number
+  teamPayouts?: number
+  cashOutflow?: number
   netProfit: number
   expensesByCategory: Record<string, number>
   invoicesList: InvoiceRow[]
@@ -50,6 +52,7 @@ interface MonthlyData {
     designCost: number
     mediaBuyerCost: number
     operationalExpenses: number
+    teamPayouts?: number
     totalCosts: number
     netProfit: number
     designTaskCount: number
@@ -217,6 +220,12 @@ export default function MonthlyReportPage() {
                     <span className="text-red-400">− {formatCurrency(data.pnl.operationalExpenses)}</span>
                   </div>
                 )}
+                {(data.pnl.teamPayouts ?? 0) > 0 && (
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>Team payouts <span className="text-slate-600">(cash · not in P&amp;L)</span></span>
+                    <span className="text-slate-400">{formatCurrency(data.pnl.teamPayouts!)}</span>
+                  </div>
+                )}
                 {data.pnl.totalCosts === 0 && (
                   <p className="text-xs text-slate-600">No costs recorded this month</p>
                 )}
@@ -229,16 +238,21 @@ export default function MonthlyReportPage() {
             </div>
 
             {/* Partner distribution */}
-            {data.netProfit > 0 && (
+            {data.pnl.partnerDistribution.length > 0 && (
               <div className="space-y-2 border-t border-slate-800 pt-3">
-                <p className="text-xs text-slate-500 uppercase tracking-wider">توزيع الأرباح</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider">
+                  توزيع الأرباح · تقسيم النسبة
+                  {data.netProfit <= 0 && <span className="ml-2 normal-case text-slate-600">(لا ربح هذا الشهر)</span>}
+                </p>
                 {data.pnl.partnerDistribution.map((p, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="flex-1 flex items-center justify-between text-xs">
                       <span className="text-slate-300 font-medium">{p.name}</span>
                       <span className="text-slate-500">{p.share}%</span>
                     </div>
-                    <span className="text-emerald-400 font-semibold text-sm w-28 text-right">{formatCurrency(p.amount)}</span>
+                    <span className={`font-semibold text-sm w-28 text-right ${p.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(p.amount)}
+                    </span>
                   </div>
                 ))}
               </div>
