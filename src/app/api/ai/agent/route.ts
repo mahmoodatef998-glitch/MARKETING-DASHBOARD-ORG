@@ -64,7 +64,7 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: 'get_financial_overview',
-    description: 'ملخص مالي: إيرادات، فواتير مدفوعة، غير مدفوعة، المتأخرة، المصاريف، صافي الربح',
+    description: 'ملخص مالي كامل: كل الدخل، كل المصروف (تشغيلي + صرفيات فريق)، الباقي، ليا (مستحقات العملاء)، عليا (مستحقات الفريق)، صافي الربح',
     parameters: schema({ type: obj, properties: {} }),
   },
   {
@@ -2242,24 +2242,40 @@ async function executeTool(
 
     // ── Financial ─────────────────────────────────────────────────────────────
     case 'get_financial_overview': {
-      const [paid, sent, overdue, expenses] = await Promise.all([
-        admin.from('invoices').select('total, currency').eq('status', 'paid').is('deleted_at', null),
-        admin.from('invoices').select('total, currency').eq('status', 'sent').is('deleted_at', null),
-        admin.from('invoices').select('total, currency, client:clients(name), due_date').eq('status', 'overdue').is('deleted_at', null),
-        admin.from('expenses').select('amount').order('date', { ascending: false }).limit(100),
+      const [paid, open, expenses, payouts, earnings] = await Promise.all([
+        admin.from('invoices').select('total, received_amount, currency').eq('status', 'paid').is('deleted_at', null),
+        admin.from('invoices').select('total, received_amount, currency, status, client:clients(name), due_date')
+          .in('status', ['sent', 'overdue']).is('deleted_at', null),
+        admin.from('expenses').select('amount'),
+        admin.from('team_payouts').select('amount'),
+        admin.from('earnings').select('amount'),
       ])
 
-      const sum = (arr: { total?: number; amount?: number }[] | null, field: 'total' | 'amount') =>
-        (arr ?? []).reduce((s, r) => s + (r[field] ?? 0), 0)
+      const sumField = (arr: { total?: number; amount?: number; received_amount?: number }[] | null, field: 'total' | 'amount' | 'received_amount') =>
+        (arr ?? []).reduce((s, r) => s + (Number(r[field]) || 0), 0)
+
+      const revenue = (paid.data ?? []).reduce((s, inv) => s + (inv.received_amount ?? inv.total ?? 0), 0)
+      const receivables = (open.data ?? []).reduce((s, inv) => s + ((inv.total ?? 0) - (inv.received_amount ?? 0)), 0)
+      const overdueList = (open.data ?? []).filter(i => i.status === 'overdue')
+      const overdueAmount = overdueList.reduce((s, inv) => s + ((inv.total ?? 0) - (inv.received_amount ?? 0)), 0)
+      const opExpenses = sumField(expenses.data, 'amount')
+      const teamPaid = sumField(payouts.data, 'amount')
+      const totalEarned = sumField(earnings.data, 'amount')
+      const outflow = opExpenses + teamPaid
+      const payables = Math.max(0, totalEarned - teamPaid)
 
       return {
-        revenue:         sum(paid.data, 'total'),
-        outstanding:     sum(sent.data, 'total'),
-        overdue_amount:  sum(overdue.data, 'total'),
-        overdue_invoices: overdue.data ?? [],
-        expenses:        sum(expenses.data, 'amount'),
-        net_profit:      sum(paid.data, 'total') - sum(expenses.data, 'amount'),
-        cash_flow_risk:  overdue.data && overdue.data.length > 2 ? 'مرتفع — فيه فواتير متأخرة كتير' : 'منخفض',
+        revenue,                          // كل اللي دخل
+        expenses: outflow,                // كل اللي انصرف (op-ex + payouts)
+        operational_expenses: opExpenses,
+        team_payouts: teamPaid,
+        cash_balance: revenue - outflow,  // الباقي
+        outstanding: receivables,         // ليا
+        payables,                         // عليا
+        overdue_amount: overdueAmount,
+        overdue_invoices: overdueList,
+        net_profit: revenue - outflow,
+        cash_flow_risk: overdueList.length > 2 ? 'مرتفع — فيه فواتير متأخرة كتير' : 'منخفض',
       }
     }
 
